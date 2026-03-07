@@ -1,0 +1,18 @@
+# Copyright 2026 koyan9
+# SPDX-License-Identifier: Apache-2.0
+
+server:
+  port: 8088
+
+privacy:
+  guard:
+    enabled: true
+    fallback-mask-char: "*"
+    audit:
+      repository-type: IN_MEMORY
+      # JDBC 示例：
+      # repository-type: JDBC
+      # jdbc:
+      #   initialize-schema: true
+      #   dialect: H2
+      #   table-name: privacy_audit_event
