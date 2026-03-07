@@ -1,12 +1,12 @@
-﻿# spring-privacy-guard
+# spring-privacy-guard
 
 `spring-privacy-guard` is a Spring Boot privacy protection starter.
 
 ## Coordinates
 
-- `io.github.koyan9:spring-privacy-guard-parent`
-- `io.github.koyan9:spring-privacy-guard-core`
-- `io.github.koyan9:spring-privacy-guard-spring-boot-starter`
+- `io.github.koyan9:spring-privacy-guard-parent:0.1.0`
+- `io.github.koyan9:spring-privacy-guard-core:0.1.0`
+- `io.github.koyan9:spring-privacy-guard-spring-boot-starter:0.1.0`
 
 ## Capabilities
 
@@ -15,7 +15,6 @@
 - Free-text log sanitization
 - Logback layout / appender / turbo-filter integration
 - Audit publishing, persistence, querying, and stats
-- Built-in `IN_MEMORY` and `JDBC` audit repository modes
 
 ## Repo Layout
 
@@ -24,6 +23,7 @@
 - `samples/privacy-demo/`
 - `CHANGELOG.md`
 - `RELEASE_NOTES_TEMPLATE.md`
+- `RELEASE_NOTES_v0.1.0.md`
 
 ## Commands
 
