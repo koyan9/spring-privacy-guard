@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Support guide
+    url: https://github.com/koyan9/spring-privacy-guard/blob/main/SUPPORT.md
+    about: Find the right path for bug reports, feature requests, docs questions, and release help.
   - name: Security policy
     url: https://github.com/koyan9/spring-privacy-guard/blob/main/SECURITY.md
     about: Read the private vulnerability reporting guidance before opening a public issue.

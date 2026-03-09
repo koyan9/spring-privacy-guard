@@ -5,6 +5,7 @@
 - Main README: `README.md`
 - Chinese README: `README.zh-CN.md`
 - Security policy: `SECURITY.md`
+- Support guide: `SUPPORT.md`
 - Changelog: `CHANGELOG.md`
 - Current release notes: `RELEASE_NOTES_v0.2.0.md`
 - Latest GitHub release: `https://github.com/koyan9/spring-privacy-guard/releases/latest`
@@ -21,6 +22,7 @@
 - Draft release notes: `RELEASE_NOTES_v0.2.0.md`
 - GitHub release copy: `docs/GITHUB_RELEASE_COPY_v0.2.0.md`
 - GitHub metadata: `docs/GITHUB_METADATA.md`
+- GitHub label guide: `docs/GITHUB_LABELS.md`
 - Release announcement: `docs/RELEASE_ANNOUNCEMENT_v0.2.0.md`
 - Release announcement (zh-CN): `docs/RELEASE_ANNOUNCEMENT_v0.2.0.zh-CN.md`
 

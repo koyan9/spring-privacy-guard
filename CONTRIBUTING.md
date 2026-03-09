@@ -23,6 +23,12 @@
 - If you believe you found a vulnerability, follow `SECURITY.md` and avoid posting exploit details publicly.
 - Sanitize logs, payloads, tokens, and personal data before sharing samples in issues or pull requests.
 
+## Support Routing
+
+- Use `SUPPORT.md` to choose the right path for bugs, feature requests, docs questions, and release questions.
+- Use the GitHub issue templates and keep reports scoped to a single reproducible problem.
+- Maintain labels consistently using `docs/GITHUB_LABELS.md` when triaging issues or pull requests.
+
 ## Release Readiness
 
 - Follow `docs/RELEASE_CHECKLIST.md` before preparing a release

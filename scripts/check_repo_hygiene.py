@@ -17,6 +17,8 @@ CRLF_FILENAMES = {"mvnw.cmd"}
 
 REQUIRED_FILES = [
     Path("SECURITY.md"),
+    Path("SUPPORT.md"),
+    Path("docs/GITHUB_LABELS.md"),
     Path(".github/ISSUE_TEMPLATE/bug_report.md"),
     Path(".github/ISSUE_TEMPLATE/feature_request.md"),
     Path(".github/ISSUE_TEMPLATE/config.yml"),
@@ -32,12 +34,14 @@ REQUIRED_SNIPPETS = {
     Path("README.zh-CN.md"): ["docs/INDEX.md"],
     Path("docs/INDEX.md"): [
         "SECURITY.md",
+        "SUPPORT.md",
+        "docs/GITHUB_LABELS.md",
         "RELEASE_NOTES_v0.2.0.md",
         "docs/RELEASE_ANNOUNCEMENT_v0.2.0.md",
         "docs/RELEASE_ANNOUNCEMENT_v0.2.0.zh-CN.md",
     ],
     Path("AGENTS.md"): [".editorconfig", ".gitattributes"],
-    Path("CONTRIBUTING.md"): [".editorconfig", ".gitattributes", "SECURITY.md"],
+    Path("CONTRIBUTING.md"): [".editorconfig", ".gitattributes", "SECURITY.md", "SUPPORT.md", "docs/GITHUB_LABELS.md"],
 }
 
 
