@@ -1,0 +1,206 @@
+/*
+ * Copyright 2026 koyan9
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+package io.github.koyan9.privacy.audit;
+
+import org.junit.jupiter.api.Test;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class BufferedPrivacyAuditPublisherTest {
+
+    @Test
+    void flushesWhenBatchSizeIsReached() throws Exception {
+        RecordingRepository repository = new RecordingRepository(1);
+        ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+        BufferedPrivacyAuditPublisher publisher = new BufferedPrivacyAuditPublisher(
+                repository,
+                executor,
+                2,
+                Duration.ofSeconds(30),
+                2,
+                Duration.ZERO,
+                (event, retryAttempts, exception) -> {
+                }
+        );
+
+        try {
+            publisher.publish(event("first"));
+            publisher.publish(event("second"));
+
+            assertTrue(repository.await());
+            assertEquals(List.of(List.of("first", "second")), repository.resourceIdBatches());
+        } finally {
+            publisher.destroy();
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void flushesPendingEventsOnSchedule() throws Exception {
+        RecordingRepository repository = new RecordingRepository(1);
+        ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+        BufferedPrivacyAuditPublisher publisher = new BufferedPrivacyAuditPublisher(
+                repository,
+                executor,
+                10,
+                Duration.ofMillis(50),
+                2,
+                Duration.ZERO,
+                (event, retryAttempts, exception) -> {
+                }
+        );
+
+        try {
+            publisher.publish(event("scheduled"));
+
+            assertTrue(repository.await());
+            assertEquals(List.of(List.of("scheduled")), repository.resourceIdBatches());
+        } finally {
+            publisher.destroy();
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void retriesBatchBeforeSucceeding() throws Exception {
+        AtomicInteger attempts = new AtomicInteger();
+        RecordingRepository repository = new RecordingRepository(1) {
+            @Override
+            public synchronized void saveAll(List<PrivacyAuditEvent> events) {
+                if (attempts.incrementAndGet() == 1) {
+                    throw new IllegalStateException("first batch failure");
+                }
+                super.saveAll(events);
+            }
+        };
+        ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+        BufferedPrivacyAuditPublisher publisher = new BufferedPrivacyAuditPublisher(
+                repository,
+                executor,
+                2,
+                Duration.ofSeconds(30),
+                2,
+                Duration.ZERO,
+                (event, retryAttempts, exception) -> {
+                }
+        );
+
+        try {
+            publisher.publish(event("first"));
+            publisher.publish(event("second"));
+
+            assertTrue(repository.await());
+            assertEquals(2, attempts.get());
+            assertEquals(List.of(List.of("first", "second")), repository.resourceIdBatches());
+        } finally {
+            publisher.destroy();
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void sendsBatchEventsToDeadLetterHandlerWhenRetriesAreExhausted() {
+        RecordingRepository repository = new RecordingRepository(0) {
+            @Override
+            public synchronized void saveAll(List<PrivacyAuditEvent> events) {
+                throw new IllegalStateException("batch failure");
+            }
+        };
+        List<String> deadLetterResourceIds = new ArrayList<>();
+        ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+        BufferedPrivacyAuditPublisher publisher = new BufferedPrivacyAuditPublisher(
+                repository,
+                executor,
+                2,
+                Duration.ofSeconds(30),
+                2,
+                Duration.ZERO,
+                (event, attempts, exception) -> deadLetterResourceIds.add(event.resourceId())
+        );
+
+        try {
+            publisher.publish(event("first"));
+            publisher.publish(event("second"));
+            publisher.destroy();
+
+            assertThat(deadLetterResourceIds).containsExactly("first", "second");
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void flushesRemainingEventsOnDestroy() throws Exception {
+        RecordingRepository repository = new RecordingRepository(1);
+        ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+        BufferedPrivacyAuditPublisher publisher = new BufferedPrivacyAuditPublisher(
+                repository,
+                executor,
+                10,
+                Duration.ofSeconds(30),
+                2,
+                Duration.ZERO,
+                (event, retryAttempts, exception) -> {
+                }
+        );
+
+        try {
+            publisher.publish(event("destroyed"));
+            publisher.destroy();
+
+            assertTrue(repository.await());
+            assertEquals(List.of(List.of("destroyed")), repository.resourceIdBatches());
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    private PrivacyAuditEvent event(String resourceId) {
+        return new PrivacyAuditEvent(Instant.now(), "READ", "Patient", resourceId, "actor", "OK", Map.of());
+    }
+
+    static class RecordingRepository implements PrivacyAuditRepository {
+
+        private final CountDownLatch latch;
+        private final List<List<String>> resourceIdBatches = new ArrayList<>();
+
+        RecordingRepository(int expectedFlushes) {
+            this.latch = new CountDownLatch(expectedFlushes);
+        }
+
+        @Override
+        public void save(PrivacyAuditEvent event) {
+            throw new UnsupportedOperationException("save should not be used in this test");
+        }
+
+        @Override
+        public synchronized void saveAll(List<PrivacyAuditEvent> events) {
+            resourceIdBatches.add(events.stream().map(PrivacyAuditEvent::resourceId).toList());
+            latch.countDown();
+        }
+
+        synchronized List<List<String>> resourceIdBatches() {
+            return List.copyOf(resourceIdBatches);
+        }
+
+        boolean await() throws InterruptedException {
+            return latch.await(5, TimeUnit.SECONDS);
+        }
+    }
+}

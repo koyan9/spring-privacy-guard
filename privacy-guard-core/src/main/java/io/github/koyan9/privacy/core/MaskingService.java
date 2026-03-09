@@ -5,16 +5,29 @@
 
 package io.github.koyan9.privacy.core;
 
+import java.util.List;
+import java.util.Objects;
+
 public class MaskingService {
 
     private final String fallbackMaskChar;
+    private final List<MaskingStrategy> maskingStrategies;
 
     public MaskingService() {
-        this("*");
+        this("*", List.of());
     }
 
     public MaskingService(String fallbackMaskChar) {
+        this(fallbackMaskChar, List.of());
+    }
+
+    public MaskingService(List<MaskingStrategy> maskingStrategies) {
+        this("*", maskingStrategies);
+    }
+
+    public MaskingService(String fallbackMaskChar, List<MaskingStrategy> maskingStrategies) {
         this.fallbackMaskChar = sanitizeMaskChar(fallbackMaskChar);
+        this.maskingStrategies = maskingStrategies == null ? List.of() : List.copyOf(maskingStrategies);
     }
 
     public String mask(String value, SensitiveData sensitiveData) {
@@ -23,20 +36,23 @@ public class MaskingService {
         }
 
         String maskChar = sanitizeMaskChar(sensitiveData.maskChar());
-        if (sensitiveData.leftVisible() >= 0 || sensitiveData.rightVisible() >= 0) {
+        MaskingContext context = new MaskingContext(
+                sensitiveData.type(),
+                maskChar,
+                sensitiveData.leftVisible(),
+                sensitiveData.rightVisible()
+        );
+        if (context.hasExplicitVisibility()) {
             int left = Math.max(0, sensitiveData.leftVisible());
             int right = Math.max(0, sensitiveData.rightVisible());
             return maskRange(value, left, right, maskChar);
         }
 
-        return switch (sensitiveData.type()) {
-            case NAME -> maskName(value, maskChar);
-            case PHONE -> maskRange(value, 3, 4, maskChar);
-            case EMAIL -> maskEmail(value, maskChar);
-            case ID_CARD -> maskRange(value, 4, 4, maskChar);
-            case ADDRESS -> maskRange(value, Math.min(6, value.length()), 0, maskChar);
-            case GENERIC -> maskRange(value, 1, 1, maskChar);
-        };
+        String customMasked = maskWithStrategies(value, context);
+        if (customMasked != null) {
+            return customMasked;
+        }
+        return maskBuiltIn(value, sensitiveData.type(), maskChar);
     }
 
     public String mask(String value, SensitiveType sensitiveType) {
@@ -44,13 +60,31 @@ public class MaskingService {
             return value;
         }
 
+        MaskingContext context = new MaskingContext(sensitiveType, fallbackMaskChar, -1, -1);
+        String customMasked = maskWithStrategies(value, context);
+        if (customMasked != null) {
+            return customMasked;
+        }
+        return maskBuiltIn(value, sensitiveType, fallbackMaskChar);
+    }
+
+    private String maskWithStrategies(String value, MaskingContext context) {
+        for (MaskingStrategy maskingStrategy : maskingStrategies) {
+            if (maskingStrategy.supports(context)) {
+                return Objects.requireNonNull(maskingStrategy.mask(value, context), "MaskingStrategy must not return null");
+            }
+        }
+        return null;
+    }
+
+    private String maskBuiltIn(String value, SensitiveType sensitiveType, String maskChar) {
         return switch (sensitiveType) {
-            case NAME -> maskName(value, fallbackMaskChar);
-            case PHONE -> maskRange(value, 3, 4, fallbackMaskChar);
-            case EMAIL -> maskEmail(value, fallbackMaskChar);
-            case ID_CARD -> maskRange(value, 4, 4, fallbackMaskChar);
-            case ADDRESS -> maskRange(value, Math.min(6, value.length()), 0, fallbackMaskChar);
-            case GENERIC -> maskRange(value, 1, 1, fallbackMaskChar);
+            case NAME -> maskName(value, maskChar);
+            case PHONE -> maskRange(value, 3, 4, maskChar);
+            case EMAIL -> maskEmail(value, maskChar);
+            case ID_CARD -> maskRange(value, 4, 4, maskChar);
+            case ADDRESS -> maskRange(value, Math.min(6, value.length()), 0, maskChar);
+            case GENERIC -> maskRange(value, 1, 1, maskChar);
         };
     }
 

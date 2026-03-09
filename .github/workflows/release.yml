@@ -1,4 +1,4 @@
-﻿# Copyright 2026 koyan9
+# Copyright 2026 koyan9
 # SPDX-License-Identifier: Apache-2.0
 
 name: Release
@@ -47,11 +47,22 @@ jobs:
           cp privacy-guard-core/target/*.jar release-artifacts/ || true
           cp privacy-guard-spring-boot-starter/target/*.jar release-artifacts/ || true
 
-      - name: Generate release notes draft
+      - name: Prepare release notes
+        shell: bash
         run: |
-          cp RELEASE_NOTES_v0.1.0.md RELEASE_NOTES.md
-          echo "" >> RELEASE_NOTES.md
-          echo "Tag: ${{ inputs.tag }}" >> RELEASE_NOTES.md
+          notes_file="RELEASE_NOTES_${{ inputs.tag }}.md"
+          if [ -f "$notes_file" ]; then
+            echo "Using tag-specific release notes: $notes_file"
+            cp "$notes_file" RELEASE_NOTES.md
+          else
+            echo "Using fallback release notes template"
+            cp RELEASE_NOTES_TEMPLATE.md RELEASE_NOTES.md
+          fi
+
+          {
+            echo ""
+            echo "Tag: ${{ inputs.tag }}"
+          } >> RELEASE_NOTES.md
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2

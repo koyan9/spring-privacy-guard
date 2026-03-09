@@ -1,0 +1,361 @@
+{
+  "properties": [
+    {
+      "name": "privacy.guard.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Master switch for the spring-privacy-guard starter.",
+      "defaultValue": true
+    },
+    {
+      "name": "privacy.guard.fallback-mask-char",
+      "type": "java.lang.String",
+      "description": "Default mask token used when a field-level annotation does not provide a custom mask character.",
+      "defaultValue": "*"
+    },
+    {
+      "name": "privacy.guard.logging.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enables privacy-aware logging helpers and text sanitization.",
+      "defaultValue": true
+    },
+    {
+      "name": "privacy.guard.logging.logback.install-turbo-filter",
+      "type": "java.lang.Boolean",
+      "description": "Installs the Logback turbo filter automatically when Logback is on the classpath.",
+      "defaultValue": false
+    },
+    {
+      "name": "privacy.guard.logging.logback.block-unsafe-messages",
+      "type": "java.lang.Boolean",
+      "description": "Blocks unsafe log messages through the privacy Logback filter.",
+      "defaultValue": true
+    },
+    {
+      "name": "privacy.guard.audit.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enables audit publishers and audit service beans.",
+      "defaultValue": true
+    },
+    {
+      "name": "privacy.guard.audit.log-events",
+      "type": "java.lang.Boolean",
+      "description": "Writes sanitized audit events to the application log.",
+      "defaultValue": true
+    },
+    {
+      "name": "privacy.guard.audit.repository-type",
+      "type": "io.github.koyan9.privacy.audit.PrivacyAuditRepositoryType",
+      "description": "Selects the backing repository implementation for audit persistence.",
+      "defaultValue": "NONE"
+    },
+    {
+      "name": "privacy.guard.audit.async.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Publishes audit events asynchronously on a dedicated executor.",
+      "defaultValue": false
+    },
+    {
+      "name": "privacy.guard.audit.async.thread-name-prefix",
+      "type": "java.lang.String",
+      "description": "Thread name prefix used by the built-in async audit executor.",
+      "defaultValue": "privacy-audit-"
+    },
+    {
+      "name": "privacy.guard.audit.batch.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Buffers repository-backed audit events and flushes them in batches.",
+      "defaultValue": false
+    },
+    {
+      "name": "privacy.guard.audit.batch.size",
+      "type": "java.lang.Integer",
+      "description": "Maximum number of buffered audit events to write in one batch.",
+      "defaultValue": 50
+    },
+    {
+      "name": "privacy.guard.audit.batch.flush-interval",
+      "type": "java.time.Duration",
+      "description": "Maximum time an audit event stays buffered before a scheduled flush runs.",
+      "defaultValue": "500ms"
+    },
+    {
+      "name": "privacy.guard.audit.retry.max-attempts",
+      "type": "java.lang.Integer",
+      "description": "Maximum publish or flush attempts before dead letter handling runs.",
+      "defaultValue": 3
+    },
+    {
+      "name": "privacy.guard.audit.retry.backoff",
+      "type": "java.time.Duration",
+      "description": "Delay between retry attempts for async publishing and buffered flushes.",
+      "defaultValue": "100ms"
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.repository-type",
+      "type": "io.github.koyan9.privacy.audit.PrivacyAuditRepositoryType",
+      "description": "Selects the repository used to persist exhausted audit retries.",
+      "defaultValue": "NONE"
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.health.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enables the dead-letter Actuator health indicator when Actuator is on the classpath.",
+      "defaultValue": true
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.health.warning-threshold",
+      "type": "java.lang.Long",
+      "description": "Marks the dead-letter health state as WARNING once the backlog reaches this threshold.",
+      "defaultValue": 1
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.health.down-threshold",
+      "type": "java.lang.Long",
+      "description": "Marks the dead-letter health indicator as DOWN once the backlog reaches this threshold.",
+      "defaultValue": 100
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.metrics.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enables the Micrometer gauges that report the current dead-letter backlog, thresholds, and active state tags.",
+      "defaultValue": true
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enables scheduled dead-letter threshold monitoring and callback delivery when alert callback beans are present.",
+      "defaultValue": false
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.check-interval",
+      "type": "java.time.Duration",
+      "description": "Controls how often the dead-letter backlog thresholds are evaluated for callback delivery.",
+      "defaultValue": "30s"
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.notify-on-recovery",
+      "type": "java.lang.Boolean",
+      "description": "Emits a callback when the dead-letter backlog returns to CLEAR after a warning or down state.",
+      "defaultValue": true
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.logging.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Registers the built-in logging callback for dead-letter threshold alerts.",
+      "defaultValue": true
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.webhook.url",
+      "type": "java.lang.String",
+      "description": "Target webhook URL for the built-in dead-letter alert callback."
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.webhook.bearer-token",
+      "type": "java.lang.String",
+      "description": "Optional bearer token sent with built-in dead-letter webhook alerts."
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.webhook.signature-secret",
+      "type": "java.lang.String",
+      "description": "Optional HMAC secret used to sign built-in dead-letter webhook alerts."
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.webhook.signature-algorithm",
+      "type": "java.lang.String",
+      "description": "HMAC algorithm used to sign built-in dead-letter webhook alerts.",
+      "defaultValue": "HmacSHA256"
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.webhook.signature-header",
+      "type": "java.lang.String",
+      "description": "HTTP header that carries the built-in webhook alert signature.",
+      "defaultValue": "X-Privacy-Alert-Signature"
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.webhook.timestamp-header",
+      "type": "java.lang.String",
+      "description": "HTTP header that carries the built-in webhook alert timestamp.",
+      "defaultValue": "X-Privacy-Alert-Timestamp"
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.webhook.nonce-header",
+      "type": "java.lang.String",
+      "description": "HTTP header that carries the built-in webhook alert nonce.",
+      "defaultValue": "X-Privacy-Alert-Nonce"
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.webhook.max-attempts",
+      "type": "java.lang.Integer",
+      "description": "Maximum number of delivery attempts for the built-in webhook alert callback.",
+      "defaultValue": 3
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.webhook.backoff",
+      "type": "java.time.Duration",
+      "description": "Delay between built-in webhook alert retry attempts.",
+      "defaultValue": "200ms"
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.webhook.connect-timeout",
+      "type": "java.time.Duration",
+      "description": "Connect timeout for the built-in webhook alert HTTP client.",
+      "defaultValue": "2s"
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.webhook.read-timeout",
+      "type": "java.time.Duration",
+      "description": "Request timeout for the built-in webhook alert callback.",
+      "defaultValue": "5s"
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.email.from",
+      "type": "java.lang.String",
+      "description": "Sender address for the built-in dead-letter email alert callback."
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.email.to",
+      "type": "java.lang.String",
+      "description": "Recipient address for the built-in dead-letter email alert callback."
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.email.subject-prefix",
+      "type": "java.lang.String",
+      "description": "Subject prefix used by the built-in dead-letter email alert callback.",
+      "defaultValue": "[spring-privacy-guard]"
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.receiver.filter.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Registers the built-in Spring MVC webhook verification filter when enabled.",
+      "defaultValue": false
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.receiver.filter.path-pattern",
+      "type": "java.lang.String",
+      "description": "Ant-style path pattern protected by the built-in webhook verification filter.",
+      "defaultValue": "/privacy-audit-alerts/**"
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.receiver.interceptor.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Registers the built-in Spring MVC webhook verification interceptor when enabled.",
+      "defaultValue": false
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.receiver.interceptor.path-pattern",
+      "type": "java.lang.String",
+      "description": "Ant-style path pattern protected by the built-in webhook verification interceptor.",
+      "defaultValue": "/privacy-audit-alerts/**"
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.receiver.metrics.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enables replay-store Micrometer gauges when a replay store bean is available.",
+      "defaultValue": true
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.receiver.metrics.expiring-soon-window",
+      "type": "java.time.Duration",
+      "description": "Window used to count replay-store entries that are about to expire.",
+      "defaultValue": "5m"
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.jdbc.table-name",
+      "type": "java.lang.String",
+      "description": "Target JDBC table used by the dead letter repository.",
+      "defaultValue": "privacy_audit_dead_letter"
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.jdbc.initialize-schema",
+      "type": "java.lang.Boolean",
+      "description": "Runs the built-in SQL schema before the dead letter JDBC repository is used.",
+      "defaultValue": false
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.jdbc.schema-location",
+      "type": "java.lang.String",
+      "description": "Overrides the built-in dead letter schema resource with a custom SQL script location."
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.jdbc.dialect",
+      "type": "io.github.koyan9.privacy.audit.PrivacyAuditJdbcDialect",
+      "description": "Controls which built-in dead letter SQL schema variant is selected for JDBC mode.",
+      "defaultValue": "AUTO"
+    },
+    {
+      "name": "privacy.guard.audit.jdbc.table-name",
+      "type": "java.lang.String",
+      "description": "Target JDBC table used by the audit repository.",
+      "defaultValue": "privacy_audit_event"
+    },
+    {
+      "name": "privacy.guard.audit.jdbc.initialize-schema",
+      "type": "java.lang.Boolean",
+      "description": "Runs the built-in SQL schema before the JDBC repository is used.",
+      "defaultValue": false
+    },
+    {
+      "name": "privacy.guard.audit.jdbc.schema-location",
+      "type": "java.lang.String",
+      "description": "Overrides the built-in schema resource with a custom SQL script location."
+    },
+    {
+      "name": "privacy.guard.audit.jdbc.dialect",
+      "type": "io.github.koyan9.privacy.audit.PrivacyAuditJdbcDialect",
+      "description": "Controls which built-in SQL schema variant is selected for JDBC mode.",
+      "defaultValue": "AUTO"
+    }
+  ],
+  "hints": [
+    {
+      "name": "privacy.guard.audit.repository-type",
+      "values": [
+        {
+          "value": "NONE",
+          "description": "Disable repository-backed audit storage."
+        },
+        {
+          "value": "IN_MEMORY",
+          "description": "Store audit events in the in-memory repository for demos or tests."
+        },
+        {
+          "value": "JDBC",
+          "description": "Persist audit events through JdbcOperations."
+        }
+      ]
+    },
+    {
+      "name": "privacy.guard.audit.jdbc.dialect",
+      "values": [
+        {
+          "value": "AUTO",
+          "description": "Infer the schema dialect from the DataSource when possible."
+        },
+        {
+          "value": "GENERIC",
+          "description": "Use the generic SQL schema resource."
+        },
+        {
+          "value": "H2",
+          "description": "Use the H2-specific SQL schema resource."
+        },
+        {
+          "value": "MYSQL",
+          "description": "Use the MySQL-specific SQL schema resource."
+        },
+        {
+          "value": "POSTGRESQL",
+          "description": "Use the PostgreSQL-specific SQL schema resource."
+        }
+      ]
+    }
+  ]
+}
+
+
+
+
+
+
+
+

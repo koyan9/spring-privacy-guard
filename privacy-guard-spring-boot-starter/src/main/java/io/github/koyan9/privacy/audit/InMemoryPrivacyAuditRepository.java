@@ -22,6 +22,14 @@ public class InMemoryPrivacyAuditRepository implements PrivacyAuditRepository, P
         events.add(event);
     }
 
+    @Override
+    public void saveAll(List<PrivacyAuditEvent> events) {
+        if (events == null || events.isEmpty()) {
+            return;
+        }
+        this.events.addAll(events);
+    }
+
     public List<PrivacyAuditEvent> findAll() {
         return List.copyOf(events);
     }

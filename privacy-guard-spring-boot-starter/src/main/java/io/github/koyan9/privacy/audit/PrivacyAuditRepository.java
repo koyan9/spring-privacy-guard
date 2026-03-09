@@ -5,7 +5,18 @@
 
 package io.github.koyan9.privacy.audit;
 
+import java.util.List;
+
 public interface PrivacyAuditRepository {
 
     void save(PrivacyAuditEvent event);
+
+    default void saveAll(List<PrivacyAuditEvent> events) {
+        if (events == null || events.isEmpty()) {
+            return;
+        }
+        for (PrivacyAuditEvent event : events) {
+            save(event);
+        }
+    }
 }

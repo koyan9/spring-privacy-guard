@@ -1,4 +1,4 @@
-﻿# Copyright 2026 koyan9
+# Copyright 2026 koyan9
 # SPDX-License-Identifier: Apache-2.0
 
 name: CI
@@ -35,6 +35,15 @@ jobs:
 
       - name: Verify project
         run: mvn -B -q verify
+
+      - name: Upload JaCoCo reports
+        if: matrix.java-version == 17
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-report-java-${{ matrix.java-version }}
+          path: |
+            privacy-guard-core/target/site/jacoco/
+            privacy-guard-spring-boot-starter/target/site/jacoco/
 
       - name: Install project artifacts locally
         run: mvn -B -q -DskipTests install

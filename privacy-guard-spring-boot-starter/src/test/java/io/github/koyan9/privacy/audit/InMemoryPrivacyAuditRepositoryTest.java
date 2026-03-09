@@ -8,6 +8,7 @@ package io.github.koyan9.privacy.audit;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -24,6 +25,18 @@ class InMemoryPrivacyAuditRepositoryTest {
 
         repository.clear();
         assertEquals(0, repository.findAll().size());
+    }
+
+    @Test
+    void storesEventsInBulk() {
+        InMemoryPrivacyAuditRepository repository = new InMemoryPrivacyAuditRepository();
+
+        repository.saveAll(List.of(
+                new PrivacyAuditEvent(Instant.parse("2026-03-06T00:00:00Z"), "READ", "Patient", "a", "actor", "OK", Map.of()),
+                new PrivacyAuditEvent(Instant.parse("2026-03-06T01:00:00Z"), "WRITE", "Patient", "b", "actor", "OK", Map.of())
+        ));
+
+        assertEquals(List.of("a", "b"), repository.findAll().stream().map(PrivacyAuditEvent::resourceId).toList());
     }
 
     @Test

@@ -36,15 +36,20 @@ public class JdbcPrivacyAuditRepository implements PrivacyAuditRepository, Priva
     @Override
     public void save(PrivacyAuditEvent event) {
         jdbcOperations.update(
-                "insert into " + tableName + " (occurred_at, action, resource_type, resource_id, actor, outcome, details_json) values (?, ?, ?, ?, ?, ?, ?)",
-                event.occurredAt(),
-                event.action(),
-                event.resourceType(),
-                event.resourceId(),
-                event.actor(),
-                event.outcome(),
-                toJson(event)
+                insertSql(),
+                toSqlArgs(event)
         );
+    }
+
+    @Override
+    public void saveAll(List<PrivacyAuditEvent> events) {
+        if (events == null || events.isEmpty()) {
+            return;
+        }
+        List<Object[]> batchArgs = events.stream()
+                .map(this::toSqlArgs)
+                .toList();
+        jdbcOperations.batchUpdate(insertSql(), batchArgs);
     }
 
     @Override
@@ -111,20 +116,18 @@ public class JdbcPrivacyAuditRepository implements PrivacyAuditRepository, Priva
         return new QueryParts(sql.toString(), args);
     }
 
-    private void appendEquals(StringBuilder sql, List<Object> args, String columnName, String value) {
-        if (value == null) {
-            return;
+    private void appendEquals(StringBuilder sql, List<Object> args, String column, String value) {
+        if (value != null && !value.isBlank()) {
+            sql.append(" and ").append(column).append(" = ?");
+            args.add(value);
         }
-        sql.append(" and ").append(columnName).append(" = ?");
-        args.add(value);
     }
 
-    private void appendLike(StringBuilder sql, List<Object> args, String columnName, String value) {
-        if (value == null) {
-            return;
+    private void appendLike(StringBuilder sql, List<Object> args, String column, String value) {
+        if (value != null && !value.isBlank()) {
+            sql.append(" and ").append(column).append(" like ?");
+            args.add("%" + value + "%");
         }
-        sql.append(" and ").append(columnName).append(" like ?");
-        args.add("%" + value + "%");
     }
 
     private PrivacyAuditEvent mapEvent(ResultSet resultSet) throws SQLException {
@@ -142,6 +145,22 @@ public class JdbcPrivacyAuditRepository implements PrivacyAuditRepository, Priva
     private Instant toInstant(ResultSet resultSet) throws SQLException {
         java.sql.Timestamp timestamp = resultSet.getTimestamp("occurred_at");
         return timestamp == null ? Instant.EPOCH : timestamp.toInstant();
+    }
+
+    private String insertSql() {
+        return "insert into " + tableName + " (occurred_at, action, resource_type, resource_id, actor, outcome, details_json) values (?, ?, ?, ?, ?, ?, ?)";
+    }
+
+    private Object[] toSqlArgs(PrivacyAuditEvent event) {
+        return new Object[]{
+                event.occurredAt(),
+                event.action(),
+                event.resourceType(),
+                event.resourceId(),
+                event.actor(),
+                event.outcome(),
+                toJson(event)
+        };
     }
 
     private String toJson(PrivacyAuditEvent event) {

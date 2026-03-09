@@ -4,13 +4,75 @@
 server:
   port: 8088
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics
+  endpoint:
+    health:
+      show-details: always
+
+demo:
+  admin:
+    token: demo-admin-token
+    header-name: X-Demo-Admin-Token
+  alert:
+    receiver:
+      bearer-token: demo-receiver-token
+      signature-secret: demo-receiver-secret
+      signature-algorithm: HmacSHA256
+      signature-header: X-Privacy-Alert-Signature
+      timestamp-header: X-Privacy-Alert-Timestamp
+      nonce-header: X-Privacy-Alert-Nonce
+      max-skew: 5m
+      # store-file: ./target/demo-alert-replay-store.json
+
 privacy:
   guard:
     enabled: true
     fallback-mask-char: "*"
     audit:
       repository-type: IN_MEMORY
-      # JDBC 示例：
+      dead-letter:
+        repository-type: IN_MEMORY
+        observability:
+          health:
+            warning-threshold: 1
+            down-threshold: 5
+          alert:
+            enabled: true
+            check-interval: 50ms
+            logging:
+              enabled: true
+            receiver:
+              filter:
+                enabled: true
+                path-pattern: /demo-alert-receiver
+            # webhook:
+            #   url: http://localhost:8088/demo-alert-receiver
+            #   bearer-token: demo-receiver-token
+            #   signature-secret: demo-receiver-secret
+            #   signature-algorithm: HmacSHA256
+            #   signature-header: X-Privacy-Alert-Signature
+            #   timestamp-header: X-Privacy-Alert-Timestamp
+            #   nonce-header: X-Privacy-Alert-Nonce
+            #   max-attempts: 3
+            #   backoff: 200ms
+            #   connect-timeout: 2s
+            #   read-timeout: 5s
+            # email:
+            #   from: privacy-demo@example.com
+            #   to: ops@example.com
+            #   subject-prefix: [privacy-demo]
+      # async:
+      #   enabled: true
+      #   thread-name-prefix: privacy-audit-
+      # batch:
+      #   enabled: true
+      #   size: 100
+      #   flush-interval: 1s
+      # JDBC example:
       # repository-type: JDBC
       # jdbc:
       #   initialize-schema: true

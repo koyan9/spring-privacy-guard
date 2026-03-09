@@ -14,11 +14,13 @@ import org.springframework.jdbc.core.RowMapper;
 import java.sql.ResultSet;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -38,6 +40,25 @@ class JdbcPrivacyAuditRepositoryTest {
         verify(jdbcOperations).update(
                 eq("insert into privacy_audit_event (occurred_at, action, resource_type, resource_id, actor, outcome, details_json) values (?, ?, ?, ?, ?, ?, ?)"),
                 any(), any(), any(), any(), any(), any(), eq("{\"phone\":\"138****8000\"}")
+        );
+    }
+
+    @Test
+    void writesAuditEventsInBatchThroughJdbcOperations() {
+        JdbcOperations jdbcOperations = mock(JdbcOperations.class);
+        JdbcPrivacyAuditRepository repository = new JdbcPrivacyAuditRepository(jdbcOperations, new ObjectMapper(), "privacy_audit_event");
+        PrivacyAuditEvent first = new PrivacyAuditEvent(Instant.parse("2026-03-06T00:00:00Z"), "READ", "Patient", "first", "actor", "OK", Map.of("phone", "138****8000"));
+        PrivacyAuditEvent second = new PrivacyAuditEvent(Instant.parse("2026-03-06T01:00:00Z"), "WRITE", "Patient", "second", "actor", "OK", Map.of("phone", "139****9000"));
+
+        repository.saveAll(List.of(first, second));
+
+        verify(jdbcOperations).batchUpdate(
+                eq("insert into privacy_audit_event (occurred_at, action, resource_type, resource_id, actor, outcome, details_json) values (?, ?, ?, ?, ?, ?, ?)"),
+                org.mockito.ArgumentMatchers.<java.util.List<Object[]>>argThat(batchArgs ->
+                        batchArgs.size() == 2
+                                && Arrays.equals(batchArgs.get(0), new Object[]{Instant.parse("2026-03-06T00:00:00Z"), "READ", "Patient", "first", "actor", "OK", "{\"phone\":\"138****8000\"}"})
+                                && Arrays.equals(batchArgs.get(1), new Object[]{Instant.parse("2026-03-06T01:00:00Z"), "WRITE", "Patient", "second", "actor", "OK", "{\"phone\":\"139****9000\"}"})
+                )
         );
     }
 

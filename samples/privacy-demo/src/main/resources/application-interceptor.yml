@@ -1,0 +1,20 @@
+# Copyright 2026 koyan9
+# SPDX-License-Identifier: Apache-2.0
+
+spring:
+  config:
+    activate:
+      on-profile: interceptor
+
+privacy:
+  guard:
+    audit:
+      dead-letter:
+        observability:
+          alert:
+            receiver:
+              filter:
+                enabled: false
+              interceptor:
+                enabled: true
+                path-pattern: /demo-alert-receiver

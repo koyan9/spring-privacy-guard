@@ -5,9 +5,11 @@
 
 package io.github.koyan9.privacy.audit;
 
+import org.springframework.beans.factory.DisposableBean;
+
 import java.util.List;
 
-public class CompositePrivacyAuditPublisher implements PrivacyAuditPublisher {
+public class CompositePrivacyAuditPublisher implements PrivacyAuditPublisher, DisposableBean {
 
     private final List<PrivacyAuditPublisher> publishers;
 
@@ -19,6 +21,15 @@ public class CompositePrivacyAuditPublisher implements PrivacyAuditPublisher {
     public void publish(PrivacyAuditEvent event) {
         for (PrivacyAuditPublisher publisher : publishers) {
             publisher.publish(event);
+        }
+    }
+
+    @Override
+    public void destroy() throws Exception {
+        for (PrivacyAuditPublisher publisher : publishers) {
+            if (publisher instanceof DisposableBean disposableBean) {
+                disposableBean.destroy();
+            }
         }
     }
 }
