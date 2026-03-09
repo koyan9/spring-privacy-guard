@@ -18,6 +18,11 @@
 - Update README / CHANGELOG / release notes when behavior or configuration changes
 - Validate project-local samples before release if your change affects integration behavior
 
+## Security
+
+- If you believe you found a vulnerability, follow `SECURITY.md` and avoid posting exploit details publicly.
+- Sanitize logs, payloads, tokens, and personal data before sharing samples in issues or pull requests.
+
 ## Release Readiness
 
 - Follow `docs/RELEASE_CHECKLIST.md` before preparing a release

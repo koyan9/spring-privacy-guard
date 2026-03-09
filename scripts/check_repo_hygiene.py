@@ -16,6 +16,11 @@ LF_FILENAMES = {".editorconfig", ".gitattributes", ".gitignore", "mvnw"}
 CRLF_FILENAMES = {"mvnw.cmd"}
 
 REQUIRED_FILES = [
+    Path("SECURITY.md"),
+    Path(".github/ISSUE_TEMPLATE/bug_report.md"),
+    Path(".github/ISSUE_TEMPLATE/feature_request.md"),
+    Path(".github/ISSUE_TEMPLATE/config.yml"),
+    Path(".github/PULL_REQUEST_TEMPLATE.md"),
     Path("docs/INDEX.md"),
     Path("docs/RELEASE_ANNOUNCEMENT_v0.2.0.md"),
     Path("docs/RELEASE_ANNOUNCEMENT_v0.2.0.zh-CN.md"),
@@ -26,12 +31,13 @@ REQUIRED_SNIPPETS = {
     Path("README.md"): ["docs/INDEX.md"],
     Path("README.zh-CN.md"): ["docs/INDEX.md"],
     Path("docs/INDEX.md"): [
+        "SECURITY.md",
         "RELEASE_NOTES_v0.2.0.md",
         "docs/RELEASE_ANNOUNCEMENT_v0.2.0.md",
         "docs/RELEASE_ANNOUNCEMENT_v0.2.0.zh-CN.md",
     ],
     Path("AGENTS.md"): [".editorconfig", ".gitattributes"],
-    Path("CONTRIBUTING.md"): [".editorconfig", ".gitattributes"],
+    Path("CONTRIBUTING.md"): [".editorconfig", ".gitattributes", "SECURITY.md"],
 }
 
 

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security policy
+    url: https://github.com/koyan9/spring-privacy-guard/blob/main/SECURITY.md
+    about: Read the private vulnerability reporting guidance before opening a public issue.
+  - name: Documentation index
+    url: https://github.com/koyan9/spring-privacy-guard/blob/main/docs/INDEX.md
+    about: Check the README, release notes, and release docs before filing a support question.
