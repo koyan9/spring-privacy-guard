@@ -31,6 +31,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Validate repository hygiene
+        run: python3 scripts/check_repo_hygiene.py --ci
+
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:

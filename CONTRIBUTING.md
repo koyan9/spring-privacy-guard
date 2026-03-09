@@ -6,6 +6,7 @@
 - Preferred commands:
   - macOS / Linux: `./mvnw -q verify`
   - Windows: `mvnw.cmd -q verify`
+- `python scripts/check_repo_hygiene.py`: validate UTF-8, line endings, and documentation links
 - `verify` enforces the JaCoCo line-coverage gate for each published module
 
 ## Workflow

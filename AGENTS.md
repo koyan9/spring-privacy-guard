@@ -7,6 +7,7 @@ This repository is a Maven multi-module Java project. `privacy-guard-core/src/ma
 - `mvnw.cmd -q verify` or `./mvnw -q verify`: run the full module test suite.
 - `mvnw.cmd -q -DskipTests install`: install local artifacts for sample or downstream testing.
 - `mvnw.cmd -q -f samples/privacy-demo/pom.xml -DskipTests compile`: confirm the demo still compiles against local changes.
+- `python scripts/check_repo_hygiene.py`: validate UTF-8, line endings, and release-doc references.
 - `mvnw.cmd -q -Prelease-artifacts package`: build source and javadoc jars used for releases.
 
 ## Coding Style & Naming Conventions
