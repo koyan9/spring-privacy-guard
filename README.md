@@ -3,8 +3,10 @@
 [English](README.md) | [简体中文](README.zh-CN.md)
 
 [![CI](https://github.com/koyan9/spring-privacy-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/koyan9/spring-privacy-guard/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/koyan9/spring-privacy-guard?display_name=tag)](https://github.com/koyan9/spring-privacy-guard/releases/latest)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Java 17+](https://img.shields.io/badge/Java-17%2B-orange)](#quick-start)
+[![Docs Index](https://img.shields.io/badge/Docs-Index-6f42c1)](docs/INDEX.md)
 [![中文文档](https://img.shields.io/badge/Docs-zh--CN-green)](README.zh-CN.md)
 
 A Spring Boot starter for masking sensitive data, sanitizing logs, tracing privacy operations, and operating dead-letter workflows securely.

@@ -3,8 +3,10 @@
 [English](README.md) | [简体中文](README.zh-CN.md)
 
 [![CI](https://github.com/koyan9/spring-privacy-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/koyan9/spring-privacy-guard/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/koyan9/spring-privacy-guard?display_name=tag)](https://github.com/koyan9/spring-privacy-guard/releases/latest)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Java 17+](https://img.shields.io/badge/Java-17%2B-orange)](README.md#quick-start)
+[![Docs Index](https://img.shields.io/badge/Docs-Index-6f42c1)](docs/INDEX.md)
 [![English Docs](https://img.shields.io/badge/Docs-English-blue)](README.md)
 
 `spring-privacy-guard` 是一个面向 Spring Boot 的隐私保护 Starter，用于敏感数据脱敏、日志清洗、隐私审计追踪，以及安全可运维的死信处理与告警。

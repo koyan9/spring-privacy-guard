@@ -1,5 +1,13 @@
 # Documentation Index
 
+## Entry Points
+
+- Main README: `README.md`
+- Chinese README: `README.zh-CN.md`
+- Latest GitHub release: `https://github.com/koyan9/spring-privacy-guard/releases/latest`
+- CI workflow: `.github/workflows/ci.yml`
+- Release workflow: `.github/workflows/release.yml`
+
 ## Release Docs
 
 - Roadmap: `docs/ROADMAP.md`
