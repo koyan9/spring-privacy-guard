@@ -28,9 +28,9 @@ What should happen instead?
 
 ## Steps to Reproduce
 
-1. 
-2. 
-3. 
+1.
+2.
+3.
 
 ## Environment
 
