@@ -1,11 +1,11 @@
 # spring-privacy-guard
 
-[English](README.md) | [简体中文](README.zh-CN.md)
+[English](README.md) | [绠�浣撲腑鏂嘳(README.zh-CN.md)
 
 [![CI](https://github.com/koyan9/spring-privacy-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/koyan9/spring-privacy-guard/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Java 17+](https://img.shields.io/badge/Java-17%2B-orange)](#quick-start)
-[![中文文档](https://img.shields.io/badge/Docs-zh--CN-green)](README.zh-CN.md)
+[![涓枃鏂囨。](https://img.shields.io/badge/Docs-zh--CN-green)](README.zh-CN.md)
 
 A Spring Boot starter for masking sensitive data, sanitizing logs, tracing privacy operations, and operating dead-letter workflows securely.
 
@@ -237,12 +237,15 @@ Recommended next development focus for `0.2.0`:
 
 ## Project Docs
 
+- Documentation index: `docs/INDEX.md`
 - Roadmap: `docs/ROADMAP.md`
 - Release checklist: `docs/RELEASE_CHECKLIST.md`
 - Release execution guide: `docs/RELEASE_EXECUTION_v0.2.0.md`
 - Release runbook: `docs/RELEASE_RUNBOOK_v0.2.0.md`
 - Draft release notes: `RELEASE_NOTES_v0.2.0.md`
 - Release dry run: `docs/RELEASE_DRY_RUN_v0.2.0.md`
+- Release announcement: `docs/RELEASE_ANNOUNCEMENT_v0.2.0.md`
+- Release announcement (zh-CN): `docs/RELEASE_ANNOUNCEMENT_v0.2.0.zh-CN.md`
 - GitHub release copy: `docs/GITHUB_RELEASE_COPY_v0.2.0.md`
 - GitHub metadata: `docs/GITHUB_METADATA.md`
 
