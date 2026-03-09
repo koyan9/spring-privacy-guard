@@ -10,7 +10,7 @@ This repository is a Maven multi-module Java project. `privacy-guard-core/src/ma
 - `mvnw.cmd -q -Prelease-artifacts package`: build source and javadoc jars used for releases.
 
 ## Coding Style & Naming Conventions
-Target Java 17+ and follow the existing code style: 4-space indentation, one top-level public type per file, and package names rooted at `io.github.koyan9.privacy`. Use `PascalCase` for classes, `camelCase` for methods and fields, and clear service-style names such as `PrivacyAuditService` or `MaskingService`. No formatter or lint plugin is configured here, so keep changes consistent with surrounding code.
+Target Java 17+ and follow the existing code style: 4-space indentation for Java, XML, and Markdown, plus 2-space indentation for YAML and JSON. Use `PascalCase` for classes, `camelCase` for methods and fields, and package names rooted at `io.github.koyan9.privacy`. Basic editor defaults live in `.editorconfig`, and Git line endings are enforced through `.gitattributes` with LF for source/docs and CRLF for Windows scripts.
 
 ## Testing Guidelines
 Tests use JUnit 5, with Spring Boot Test in the starter module where framework wiring is involved. Name test classes `*Test` and prefer behavior-focused methods such as `publishesSanitizedAuditEvent()`. Add or update tests for every behavior change, especially for masking rules, logging sanitization, schema initialization, and audit querying. Run `mvnw.cmd -q verify` before opening a PR.

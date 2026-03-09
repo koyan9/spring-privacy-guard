@@ -11,6 +11,8 @@
 ## Workflow
 
 - Keep changes focused and minimal
+- Follow `.editorconfig` for indentation, encoding, and final-newline defaults
+- Respect `.gitattributes` line endings: LF for source/docs and CRLF for Windows scripts
 - Add or update tests for behavior changes
 - Update README / CHANGELOG / release notes when behavior or configuration changes
 - Validate project-local samples before release if your change affects integration behavior
