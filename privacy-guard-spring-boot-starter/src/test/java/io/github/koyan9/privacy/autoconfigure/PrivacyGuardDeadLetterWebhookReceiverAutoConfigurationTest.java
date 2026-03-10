@@ -6,11 +6,13 @@
 package io.github.koyan9.privacy.autoconfigure;
 
 import io.github.koyan9.privacy.audit.InMemoryPrivacyAuditDeadLetterWebhookReplayStore;
+import io.github.koyan9.privacy.audit.JdbcPrivacyAuditDeadLetterWebhookReplayStore;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStore;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStoreMetricsBinder;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStoreObservationService;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookRequestVerifier;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookVerificationSettings;
+import io.github.koyan9.privacy.audit.PrivacyAuditSchemaInitializer;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
@@ -18,10 +20,14 @@ import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.jdbc.core.JdbcOperations;
 
 import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 class PrivacyGuardDeadLetterWebhookReceiverAutoConfigurationTest {
 
@@ -76,6 +82,35 @@ class PrivacyGuardDeadLetterWebhookReceiverAutoConfigurationTest {
         });
     }
 
+    @Test
+    void createsJdbcReplayStoreWhenEnabled() {
+        contextRunner
+                .withUserConfiguration(VerificationSettingsConfig.class, JdbcConfig.class)
+                .withPropertyValues("privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.enabled=true")
+                .run(context -> {
+                    assertThat(context).hasSingleBean(JdbcPrivacyAuditDeadLetterWebhookReplayStore.class);
+                    assertThat(context).doesNotHaveBean(InMemoryPrivacyAuditDeadLetterWebhookReplayStore.class);
+                });
+    }
+
+    @Test
+    void initializesJdbcReplayStoreSchemaWhenConfigured() {
+        contextRunner
+                .withUserConfiguration(VerificationSettingsConfig.class, JdbcConfig.class)
+                .withPropertyValues(
+                        "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.enabled=true",
+                        "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.initialize-schema=true",
+                        "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.schema-location=classpath:META-INF/privacy-guard/privacy-audit-dead-letter-webhook-replay-store-schema-h2.sql",
+                        "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.table-name=receiver_replay_store"
+                )
+                .run(context -> {
+                    JdbcOperations jdbcOperations = context.getBean(JdbcOperations.class);
+
+                    assertThat(context).hasSingleBean(PrivacyAuditSchemaInitializer.class);
+                    verify(jdbcOperations).execute(contains("create table if not exists receiver_replay_store"));
+                });
+    }
+
     @Configuration(proxyBeanMethods = false)
     static class VerificationSettingsConfig {
 
@@ -113,6 +148,15 @@ class PrivacyGuardDeadLetterWebhookReceiverAutoConfigurationTest {
                 public void clear() {
                 }
             };
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class JdbcConfig {
+
+        @Bean
+        JdbcOperations jdbcOperations() {
+            return mock(JdbcOperations.class);
         }
     }
 }

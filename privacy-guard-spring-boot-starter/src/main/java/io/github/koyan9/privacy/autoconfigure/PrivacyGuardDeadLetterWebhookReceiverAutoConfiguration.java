@@ -5,16 +5,20 @@
 
 package io.github.koyan9.privacy.autoconfigure;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.koyan9.privacy.audit.InMemoryPrivacyAuditDeadLetterWebhookReplayStore;
+import io.github.koyan9.privacy.audit.JdbcPrivacyAuditDeadLetterWebhookReplayStore;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookBodyCachingFilter;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStore;
+import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStoreJdbcProperties;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStoreMetricsBinder;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStoreObservationService;
+import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStoreSchemaLocationResolver;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookRequestVerifier;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookVerificationFilter;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookVerificationInterceptor;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookVerificationSettings;
+import io.github.koyan9.privacy.audit.PrivacyAuditSchemaInitializer;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -23,9 +27,20 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.ResourceLoader;
+import org.springframework.jdbc.core.JdbcOperations;
+
+import javax.sql.DataSource;
 
 @AutoConfiguration
 public class PrivacyGuardDeadLetterWebhookReceiverAutoConfiguration {
+
+    @Bean
+    @ConditionalOnMissingBean
+    public PrivacyAuditDeadLetterWebhookReplayStoreSchemaLocationResolver privacyAuditDeadLetterWebhookReplayStoreSchemaLocationResolver() {
+        return new PrivacyAuditDeadLetterWebhookReplayStoreSchemaLocationResolver();
+    }
 
     @Bean
     @ConditionalOnBean(PrivacyAuditDeadLetterWebhookVerificationSettings.class)
@@ -71,6 +86,64 @@ public class PrivacyGuardDeadLetterWebhookReceiverAutoConfiguration {
             PrivacyAuditDeadLetterWebhookReplayStoreObservationService observationService
     ) {
         return new PrivacyAuditDeadLetterWebhookReplayStoreMetricsBinder(observationService);
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(name = "org.springframework.jdbc.core.JdbcOperations")
+    static class JdbcReplayStoreConfiguration {
+
+        @Bean
+        @ConditionalOnBean(PrivacyAuditDeadLetterWebhookVerificationSettings.class)
+        @ConditionalOnMissingBean(PrivacyAuditDeadLetterWebhookReplayStore.class)
+        @ConditionalOnProperty(
+                prefix = "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc",
+                name = "enabled",
+                havingValue = "true"
+        )
+        public JdbcPrivacyAuditDeadLetterWebhookReplayStore jdbcPrivacyAuditDeadLetterWebhookReplayStore(
+                JdbcOperations jdbcOperations,
+                PrivacyGuardProperties properties
+        ) {
+            PrivacyAuditDeadLetterWebhookReplayStoreJdbcProperties jdbcProperties = properties.getAudit()
+                    .getDeadLetter()
+                    .getObservability()
+                    .getAlert()
+                    .getReceiver()
+                    .getReplayStore()
+                    .getJdbc();
+            return new JdbcPrivacyAuditDeadLetterWebhookReplayStore(jdbcOperations, jdbcProperties.getTableName());
+        }
+
+        @Bean
+        @ConditionalOnBean(PrivacyAuditDeadLetterWebhookVerificationSettings.class)
+        @ConditionalOnExpression(
+                "'${privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.enabled:false}' == 'true' " +
+                        "and '${privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.initialize-schema:false}' == 'true'"
+        )
+        public PrivacyAuditSchemaInitializer privacyAuditDeadLetterWebhookReplayStoreSchemaInitializer(
+                JdbcOperations jdbcOperations,
+                ResourceLoader resourceLoader,
+                ObjectProvider<DataSource> dataSourceProvider,
+                PrivacyAuditDeadLetterWebhookReplayStoreSchemaLocationResolver schemaLocationResolver,
+                PrivacyGuardProperties properties
+        ) {
+            PrivacyAuditDeadLetterWebhookReplayStoreJdbcProperties jdbcProperties = properties.getAudit()
+                    .getDeadLetter()
+                    .getObservability()
+                    .getAlert()
+                    .getReceiver()
+                    .getReplayStore()
+                    .getJdbc();
+            String schemaLocation = schemaLocationResolver.resolve(jdbcProperties, dataSourceProvider.getIfAvailable());
+            PrivacyAuditSchemaInitializer initializer = new PrivacyAuditSchemaInitializer(
+                    jdbcOperations,
+                    resourceLoader,
+                    schemaLocation,
+                    jdbcProperties.getTableName()
+            );
+            initializer.initialize();
+            return initializer;
+        }
     }
 
     @Bean

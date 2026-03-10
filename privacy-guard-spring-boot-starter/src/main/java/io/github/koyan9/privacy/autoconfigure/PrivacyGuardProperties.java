@@ -370,6 +370,7 @@ public class PrivacyGuardProperties {
         private final AlertReceiverFilter filter = new AlertReceiverFilter();
         private final AlertReceiverInterceptor interceptor = new AlertReceiverInterceptor();
         private final AlertReceiverMetrics metrics = new AlertReceiverMetrics();
+        private final AlertReceiverReplayStore replayStore = new AlertReceiverReplayStore();
 
         public AlertReceiverFilter getFilter() {
             return filter;
@@ -381,6 +382,10 @@ public class PrivacyGuardProperties {
 
         public AlertReceiverMetrics getMetrics() {
             return metrics;
+        }
+
+        public AlertReceiverReplayStore getReplayStore() {
+            return replayStore;
         }
     }
 
@@ -445,6 +450,16 @@ public class PrivacyGuardProperties {
 
         public void setExpiringSoonWindow(Duration expiringSoonWindow) {
             this.expiringSoonWindow = expiringSoonWindow;
+        }
+    }
+
+    public static class AlertReceiverReplayStore {
+
+        private final io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStoreJdbcProperties jdbc =
+                new io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStoreJdbcProperties();
+
+        public io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStoreJdbcProperties getJdbc() {
+            return jdbc;
         }
     }
     public static class AlertWebhook {

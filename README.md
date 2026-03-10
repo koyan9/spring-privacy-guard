@@ -86,6 +86,9 @@ privacy:
 | `privacy.guard.audit.dead-letter.observability.alert.email.to` | empty | Enables built-in email alerts. |
 | `privacy.guard.audit.dead-letter.observability.alert.receiver.filter.enabled` | `false` | Enables the built-in receiver verification filter. |
 | `privacy.guard.audit.dead-letter.observability.alert.receiver.interceptor.enabled` | `false` | Enables the built-in receiver verification interceptor. |
+| `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.enabled` | `false` | Enables the JDBC replay store for receiver verification. |
+| `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.table-name` | `privacy_audit_webhook_replay_store` | JDBC table name for replay store entries. |
+| `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.initialize-schema` | `false` | Runs the replay store schema initializer. |
 
 For the full property matrix, examples, and advanced options, see the sections below.
 
@@ -199,6 +202,7 @@ Applications receiving signed alerts can reuse:
 - `PrivacyAuditDeadLetterWebhookReplayStore`
 - `InMemoryPrivacyAuditDeadLetterWebhookReplayStore`
 - `FilePrivacyAuditDeadLetterWebhookReplayStore`
+- `JdbcPrivacyAuditDeadLetterWebhookReplayStore`
 - `PrivacyAuditDeadLetterWebhookVerificationFilter`
 - `PrivacyAuditDeadLetterWebhookVerificationInterceptor`
 

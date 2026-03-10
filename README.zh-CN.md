@@ -90,6 +90,9 @@ privacy:
 | `privacy.guard.audit.dead-letter.observability.alert.email.to` | 空 | 启用内置 email 告警 |
 | `privacy.guard.audit.dead-letter.observability.alert.receiver.filter.enabled` | `false` | 启用内置 receiver 验签过滤器 |
 | `privacy.guard.audit.dead-letter.observability.alert.receiver.interceptor.enabled` | `false` | 启用内置 receiver 验签拦截器 |
+| `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.enabled` | `false` | 启用 JDBC replay-store |
+| `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.table-name` | `privacy_audit_webhook_replay_store` | replay-store JDBC 表名 |
+| `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.initialize-schema` | `false` | 初始化 replay-store SQL 表 |
 
 完整配置说明、全部属性以及详细默认值，请参考 `README.md` 中的英文完整文档。
 
@@ -205,6 +208,7 @@ Starter 提供可复用的 webhook receiver 校验能力：
 - `PrivacyAuditDeadLetterWebhookReplayStore`
 - `InMemoryPrivacyAuditDeadLetterWebhookReplayStore`
 - `FilePrivacyAuditDeadLetterWebhookReplayStore`
+- `JdbcPrivacyAuditDeadLetterWebhookReplayStore`
 - `PrivacyAuditDeadLetterWebhookVerificationFilter`
 - `PrivacyAuditDeadLetterWebhookVerificationInterceptor`
 

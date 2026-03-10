@@ -6,7 +6,7 @@ This document tracks the recommended next development focus for `spring-privacy-
 
 1. Receiver operations polish
    - Add replay-store health/dashboard guidance
-   - Add receiver storage backends beyond local files
+   - Add receiver storage backends beyond local files (JDBC replay store)
    - Add clearer receiver deployment examples
 2. Alert delivery hardening
    - Optional jitter/backoff policies for webhook delivery

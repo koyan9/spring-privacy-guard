@@ -4,7 +4,9 @@ All notable changes to `spring-privacy-guard` will be documented in this file.
 
 ## [Unreleased]
 
-- No unreleased changes yet.
+- Added a JDBC-backed webhook replay store for multi-instance receiver deployments.
+- Added replay store JDBC schema resources and auto-configuration for optional schema initialization.
+- Moved release notes under `docs/releases/` and updated release tooling references.
 
 ## [0.2.0] - 2026-03-09
 

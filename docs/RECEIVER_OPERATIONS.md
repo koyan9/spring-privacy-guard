@@ -4,13 +4,38 @@ This guide covers operational guidance for webhook receiver verification and rep
 
 ## Replay-Store Backends
 
-The starter ships with two implementations:
+The starter ships with three implementations:
 
 - `InMemoryPrivacyAuditDeadLetterWebhookReplayStore` for local development and tests
 - `FilePrivacyAuditDeadLetterWebhookReplayStore` for single-instance deployments
+- `JdbcPrivacyAuditDeadLetterWebhookReplayStore` for shared, multi-instance deployments
 
 If you run multiple receiver instances, use a shared store implementation to avoid replay gaps.
 Implement `PrivacyAuditDeadLetterWebhookReplayStore` and wire it as a bean to override the default.
+
+### JDBC Replay Store
+
+Enable the JDBC replay store when running multiple receiver instances:
+
+```yaml
+privacy:
+  guard:
+    audit:
+      dead-letter:
+        observability:
+          alert:
+            receiver:
+              replay-store:
+                jdbc:
+                  enabled: true
+                  initialize-schema: true
+                  table-name: privacy_audit_webhook_replay_store
+```
+
+You can override the schema location or dialect via:
+
+- `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.schema-location`
+- `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.dialect`
 
 ## Health and Metrics
 

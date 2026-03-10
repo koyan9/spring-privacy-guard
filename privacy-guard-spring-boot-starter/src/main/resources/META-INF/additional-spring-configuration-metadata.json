@@ -260,6 +260,35 @@
       "defaultValue": "5m"
     },
     {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enables the JDBC-backed replay store for webhook receiver verification.",
+      "defaultValue": false
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.table-name",
+      "type": "java.lang.String",
+      "description": "Target JDBC table used by the webhook receiver replay store.",
+      "defaultValue": "privacy_audit_webhook_replay_store"
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.initialize-schema",
+      "type": "java.lang.Boolean",
+      "description": "Runs the built-in SQL schema before the JDBC replay store is used.",
+      "defaultValue": false
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.schema-location",
+      "type": "java.lang.String",
+      "description": "Overrides the built-in replay store schema resource with a custom SQL script location."
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.dialect",
+      "type": "io.github.koyan9.privacy.audit.PrivacyAuditJdbcDialect",
+      "description": "Controls which built-in replay store SQL schema variant is selected for JDBC mode.",
+      "defaultValue": "AUTO"
+    },
+    {
       "name": "privacy.guard.audit.dead-letter.jdbc.table-name",
       "type": "java.lang.String",
       "description": "Target JDBC table used by the dead letter repository.",
