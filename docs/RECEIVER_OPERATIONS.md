@@ -13,6 +13,12 @@ The starter ships with three implementations:
 If you run multiple receiver instances, use a shared store implementation to avoid replay gaps.
 Implement `PrivacyAuditDeadLetterWebhookReplayStore` and wire it as a bean to override the default.
 
+### Choosing a Replay Store
+
+- Use `InMemoryPrivacyAuditDeadLetterWebhookReplayStore` for local runs and tests only.
+- Use `FilePrivacyAuditDeadLetterWebhookReplayStore` when you run a single receiver instance and can persist the file.
+- Use `JdbcPrivacyAuditDeadLetterWebhookReplayStore` when you run multiple receiver instances or need shared state.
+
 ### JDBC Replay Store
 
 Enable the JDBC replay store when running multiple receiver instances:
