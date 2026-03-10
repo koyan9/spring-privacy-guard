@@ -251,6 +251,7 @@ Recommended next development focus for `0.2.0`:
 
 - Documentation index: `docs/INDEX.md`
 - Maintainer guide: `docs/MAINTAINER_GUIDE.md`
+- Receiver operations: `docs/RECEIVER_OPERATIONS.md`
 - Roadmap: `docs/ROADMAP.md`
 - Release checklist: `docs/RELEASE_CHECKLIST.md`
 - Release execution guide: `docs/RELEASE_EXECUTION_v0.2.0.md`

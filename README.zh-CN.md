@@ -256,6 +256,7 @@ Starter 提供可复用的 webhook receiver 校验能力：
 
 - 文档索引：`docs/INDEX.md`
 - 维护者指南：`docs/MAINTAINER_GUIDE.md`
+- 接收端运维指引：`docs/RECEIVER_OPERATIONS.md`
 - 路线图：`docs/ROADMAP.md`
 - 发布检查清单：`docs/RELEASE_CHECKLIST.md`
 - `v0.2.0` 发布执行指引：`docs/RELEASE_EXECUTION_v0.2.0.md`

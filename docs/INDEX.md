@@ -22,6 +22,10 @@
 - Release artifacts checklist: `docs/RELEASE_CHECKLIST.md`
 - Release validation commands: `docs/RELEASE_EXECUTION_v0.2.0.md`
 
+## Receiver Operations
+
+- Receiver operations guide: `docs/RECEIVER_OPERATIONS.md`
+
 ## Docs Status
 
 - Primary entry point: `README.md`
