@@ -33,6 +33,13 @@ This guide is for maintainers responsible for releases, triage, and repository h
 - Check CI runs are green for the release commit.
 - If a release must be pulled, delete the GitHub release first, then follow the rollback steps in `docs/RELEASE_EXECUTION_v0.2.0.md`.
 
+## Release FAQ
+
+- **How do I create a release tag?** Follow `docs/RELEASE_EXECUTION_v0.2.0.md` and tag `vX.Y.Z`.
+- **Which workflow inputs do I use?** Use `tag`, `release_name`, and `prerelease` as documented in `.github/workflows/release.yml`.
+- **Where should release notes live?** Put them in `RELEASE_NOTES_<tag>.md` and update `CHANGELOG.md`.
+- **How do I roll back a bad release?** Remove the GitHub release, delete the tag, and re-run the release process after the fix.
+
 ## Versioning & Tags
 
 - Version bumps must update root `pom.xml`, module `pom.xml`, and `samples/privacy-demo/pom.xml`.

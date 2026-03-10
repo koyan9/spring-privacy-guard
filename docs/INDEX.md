@@ -21,6 +21,14 @@
 - Release notes: `RELEASE_NOTES_v0.2.0.md`
 - Release artifacts checklist: `docs/RELEASE_CHECKLIST.md`
 
+## Docs Status
+
+- Primary entry point: `README.md`
+- Secondary entry point: `docs/INDEX.md`
+- Latest release notes: `RELEASE_NOTES_v0.2.0.md`
+- Maintainer reference: `docs/MAINTAINER_GUIDE.md`
+- Support and security: `SUPPORT.md` and `SECURITY.md`
+
 ## Release Docs
 
 - Roadmap: `docs/ROADMAP.md`
