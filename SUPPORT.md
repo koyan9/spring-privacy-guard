@@ -8,7 +8,7 @@ Start with the project docs first:
 - `README.zh-CN.md`
 - `docs/INDEX.md`
 - `CHANGELOG.md`
-- `RELEASE_NOTES_v0.2.0.md`
+- `docs/releases/RELEASE_NOTES_v0.2.0.md`
 
 For release or rollout questions, also review:
 

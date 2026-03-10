@@ -27,7 +27,7 @@ REQUIRED_FILES = [
     Path("docs/INDEX.md"),
     Path("docs/RELEASE_ANNOUNCEMENT_v0.2.0.md"),
     Path("docs/RELEASE_ANNOUNCEMENT_v0.2.0.zh-CN.md"),
-    Path("RELEASE_NOTES_v0.2.0.md"),
+    Path("docs/releases/RELEASE_NOTES_v0.2.0.md"),
 ]
 
 REQUIRED_SNIPPETS = {
@@ -38,7 +38,7 @@ REQUIRED_SNIPPETS = {
         "SUPPORT.md",
         "docs/GITHUB_LABELS.md",
         "docs/MAINTAINER_GUIDE.md",
-        "RELEASE_NOTES_v0.2.0.md",
+        "docs/releases/RELEASE_NOTES_v0.2.0.md",
         "docs/RELEASE_ANNOUNCEMENT_v0.2.0.md",
         "docs/RELEASE_ANNOUNCEMENT_v0.2.0.zh-CN.md",
     ],

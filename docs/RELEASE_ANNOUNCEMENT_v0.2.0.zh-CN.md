@@ -25,6 +25,6 @@
 
 ## 相关发布材料
 
-- 发布说明：`RELEASE_NOTES_v0.2.0.md`
+- 发布说明：`docs/releases/RELEASE_NOTES_v0.2.0.md`
 - GitHub Release 文案：`docs/GITHUB_RELEASE_COPY_v0.2.0.md`
 - 发布运行手册：`docs/RELEASE_RUNBOOK_v0.2.0.md`

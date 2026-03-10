@@ -1,6 +1,6 @@
 # GitHub Release Copy: v0.2.0
 
-Use the content below directly in the GitHub Release editor if you do not want to paste `RELEASE_NOTES_v0.2.0.md` manually.
+Use the content below directly in the GitHub Release editor if you do not want to paste `docs/releases/RELEASE_NOTES_v0.2.0.md` manually.
 
 ---
 

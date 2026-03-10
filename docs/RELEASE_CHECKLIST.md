@@ -16,7 +16,7 @@ Use this checklist before cutting a new release.
 - Update `README.zh-CN.md` if the change affects documented usage
 - Update `samples/privacy-demo/README.md` if sample behavior changed
 - Confirm `CHANGELOG.md` includes the release contents
-- Prepare `RELEASE_NOTES_<tag>.md` or update `RELEASE_NOTES_TEMPLATE.md`
+- Prepare `docs/releases/RELEASE_NOTES_<tag>.md` or update `docs/releases/RELEASE_NOTES_TEMPLATE.md`
 - Optionally capture a dry run note such as `docs/RELEASE_DRY_RUN_v0.2.0.md`
 
 ## Release Content

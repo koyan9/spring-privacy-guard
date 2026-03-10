@@ -23,7 +23,7 @@ Expected result: full success with no failing modules.
 Verify these files are ready:
 
 - `CHANGELOG.md`
-- `RELEASE_NOTES_v0.2.0.md`
+- `docs/releases/RELEASE_NOTES_v0.2.0.md`
 - `docs/RELEASE_CHECKLIST.md`
 - `docs/RELEASE_DRY_RUN_v0.2.0.md`
 
@@ -63,7 +63,7 @@ Input values:
 After the workflow finishes, check:
 
 - the release title is correct
-- the body matches `RELEASE_NOTES_v0.2.0.md`
+- the body matches `docs/releases/RELEASE_NOTES_v0.2.0.md`
 - uploaded jars exist for core and starter modules
 - the release is marked as a normal release, not prerelease
 

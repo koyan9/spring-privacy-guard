@@ -17,7 +17,7 @@ python scripts/check_repo_hygiene.py
 ## Preconditions
 
 - `CHANGELOG.md` has a finalized `0.2.0` section
-- `RELEASE_NOTES_v0.2.0.md` is ready to use as the release body
+- `docs/releases/RELEASE_NOTES_v0.2.0.md` is ready to use as the release body
 - `mvnw.cmd -q verify` or `./mvnw -q verify` passes locally
 - Working tree is clean and contains only intended release changes
 
@@ -72,17 +72,17 @@ The workflow automatically:
 
 - builds release artifacts with the `release-artifacts` profile
 - collects starter and core jars
-- uses `RELEASE_NOTES_v0.2.0.md` as the release body when present
+- uses `docs/releases/RELEASE_NOTES_v0.2.0.md` as the release body when present
 - creates the GitHub release and uploads built artifacts
 
 ## Suggested GitHub Release Body
 
-Use `RELEASE_NOTES_v0.2.0.md` directly.
+Use `docs/releases/RELEASE_NOTES_v0.2.0.md` directly.
 
 ## Post-Release Checks
 
 - Verify the GitHub release contains the expected jars
-- Confirm the body rendered from `RELEASE_NOTES_v0.2.0.md`
+- Confirm the body rendered from `docs/releases/RELEASE_NOTES_v0.2.0.md`
 - Confirm the tag points to the intended commit
 - If publishing further artifacts externally, record the published coordinates and checksums
 

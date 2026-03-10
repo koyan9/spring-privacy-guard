@@ -4,7 +4,7 @@
 
 [![Project README](https://img.shields.io/badge/Project-README-0ea5e9)](../../README.md)
 [![Docs Index](https://img.shields.io/badge/Docs-Index-6f42c1)](../../docs/INDEX.md)
-[![Release Notes](https://img.shields.io/badge/Release%20Notes-v0.2.0-1d4ed8)](../../RELEASE_NOTES_v0.2.0.md)
+[![Release Notes](https://img.shields.io/badge/Release%20Notes-v0.2.0-1d4ed8)](../../docs/releases/RELEASE_NOTES_v0.2.0.md)
 
 `samples/privacy-demo` 是 `spring-privacy-guard` 的可运行示例，展示敏感数据脱敏、审计、死信处理、签名告警、receiver 验签和 replay 防护。
 

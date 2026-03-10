@@ -35,7 +35,7 @@ All notable changes to `spring-privacy-guard` will be documented in this file.
 
 - Expanded and reorganized `README.md`, `README.zh-CN.md`, and `samples/privacy-demo/README.md` with clearer quick-start, configuration, receiver, observability, sample mode-switch, and release-readiness guidance
 - Documented demo.admin.* sample settings, token-protected dead-letter management usage, starter webhook/email alert properties, receiver verification settings, tagged dead-letter metrics, and replay-store metrics
-- Release automation now resolves `RELEASE_NOTES_<tag>.md` dynamically and falls back to `RELEASE_NOTES_TEMPLATE.md`
+- Release automation now resolves `docs/releases/RELEASE_NOTES_<tag>.md` dynamically and falls back to `docs/releases/RELEASE_NOTES_TEMPLATE.md`
 - Increased core masking test coverage with null, blank, short-value, multi-token, multi-match, and custom-strategy scenarios
 - Expanded starter auto-configuration integration tests for Boot ObjectMapper masking, JDBC schema initialization, custom strategy injection, async audit publishing, dead-letter repositories, receiver filter/interceptor wiring, and replay-store metrics
 - CI now uploads JaCoCo reports for the Java 17 verification job

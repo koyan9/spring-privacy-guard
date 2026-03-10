@@ -25,6 +25,6 @@ If you are already using Spring Boot and need field masking, log sanitization, p
 
 ## Related Release Assets
 
-- Release notes: `RELEASE_NOTES_v0.2.0.md`
+- Release notes: `docs/releases/RELEASE_NOTES_v0.2.0.md`
 - GitHub release copy: `docs/GITHUB_RELEASE_COPY_v0.2.0.md`
 - Release runbook: `docs/RELEASE_RUNBOOK_v0.2.0.md`

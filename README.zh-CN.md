@@ -5,7 +5,7 @@
 [![CI](https://github.com/koyan9/spring-privacy-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/koyan9/spring-privacy-guard/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/koyan9/spring-privacy-guard?display_name=tag)](https://github.com/koyan9/spring-privacy-guard/releases/latest)
 [![Changelog](https://img.shields.io/badge/Changelog-0.2.0-0f766e)](CHANGELOG.md)
-[![Release Notes](https://img.shields.io/badge/Release%20Notes-v0.2.0-1d4ed8)](RELEASE_NOTES_v0.2.0.md)
+[![Release Notes](https://img.shields.io/badge/Release%20Notes-v0.2.0-1d4ed8)](docs/releases/RELEASE_NOTES_v0.2.0.md)
 [![Security](https://img.shields.io/badge/Security-Policy-7f1d1d)](SECURITY.md)
 [![Support](https://img.shields.io/badge/Support-Guide-1f2937)](SUPPORT.md)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
@@ -261,7 +261,7 @@ Starter 提供可复用的 webhook receiver 校验能力：
 - 发布检查清单：`docs/RELEASE_CHECKLIST.md`
 - `v0.2.0` 发布执行指引：`docs/RELEASE_EXECUTION_v0.2.0.md`
 - `v0.2.0` 发布运行手册：`docs/RELEASE_RUNBOOK_v0.2.0.md`
-- `v0.2.0` 发布说明草稿：`RELEASE_NOTES_v0.2.0.md`
+- `v0.2.0` 发布说明草稿：`docs/releases/RELEASE_NOTES_v0.2.0.md`
 - `v0.2.0` 发布演练记录：`docs/RELEASE_DRY_RUN_v0.2.0.md`
 - `v0.2.0` 英文发布公告：`docs/RELEASE_ANNOUNCEMENT_v0.2.0.md`
 - `v0.2.0` 中文发布公告：`docs/RELEASE_ANNOUNCEMENT_v0.2.0.zh-CN.md`

@@ -53,13 +53,13 @@ jobs:
       - name: Prepare release notes
         shell: bash
         run: |
-          notes_file="RELEASE_NOTES_${{ inputs.tag }}.md"
+          notes_file="docs/releases/RELEASE_NOTES_${{ inputs.tag }}.md"
           if [ -f "$notes_file" ]; then
             echo "Using tag-specific release notes: $notes_file"
             cp "$notes_file" RELEASE_NOTES.md
           else
             echo "Using fallback release notes template"
-            cp RELEASE_NOTES_TEMPLATE.md RELEASE_NOTES.md
+            cp docs/releases/RELEASE_NOTES_TEMPLATE.md RELEASE_NOTES.md
           fi
 
           {

@@ -8,7 +8,7 @@
 - Support guide: `SUPPORT.md`
 - Maintainer guide: `docs/MAINTAINER_GUIDE.md`
 - Changelog: `CHANGELOG.md`
-- Current release notes: `RELEASE_NOTES_v0.2.0.md`
+- Current release notes: `docs/releases/RELEASE_NOTES_v0.2.0.md`
 - Latest GitHub release: `https://github.com/koyan9/spring-privacy-guard/releases/latest`
 - CI workflow: `.github/workflows/ci.yml`
 - Release workflow: `.github/workflows/release.yml`
@@ -18,7 +18,7 @@
 - Release ops checklist: `docs/MAINTAINER_GUIDE.md`
 - Release execution guide: `docs/RELEASE_EXECUTION_v0.2.0.md`
 - Release runbook: `docs/RELEASE_RUNBOOK_v0.2.0.md`
-- Release notes: `RELEASE_NOTES_v0.2.0.md`
+- Release notes: `docs/releases/RELEASE_NOTES_v0.2.0.md`
 - Release artifacts checklist: `docs/RELEASE_CHECKLIST.md`
 - Release validation commands: `docs/RELEASE_EXECUTION_v0.2.0.md`
 
@@ -30,7 +30,7 @@
 
 - Primary entry point: `README.md`
 - Secondary entry point: `docs/INDEX.md`
-- Latest release notes: `RELEASE_NOTES_v0.2.0.md`
+- Latest release notes: `docs/releases/RELEASE_NOTES_v0.2.0.md`
 - Maintainer reference: `docs/MAINTAINER_GUIDE.md`
 - Support and security: `SUPPORT.md` and `SECURITY.md`
 
@@ -41,7 +41,7 @@
 - Release execution guide: `docs/RELEASE_EXECUTION_v0.2.0.md`
 - Release runbook: `docs/RELEASE_RUNBOOK_v0.2.0.md`
 - Release dry run: `docs/RELEASE_DRY_RUN_v0.2.0.md`
-- Draft release notes: `RELEASE_NOTES_v0.2.0.md`
+- Draft release notes: `docs/releases/RELEASE_NOTES_v0.2.0.md`
 - GitHub release copy: `docs/GITHUB_RELEASE_COPY_v0.2.0.md`
 - GitHub metadata: `docs/GITHUB_METADATA.md`
 - GitHub label guide: `docs/GITHUB_LABELS.md`
@@ -52,5 +52,5 @@
 
 1. Read `docs/RELEASE_CHECKLIST.md`
 2. Follow `docs/RELEASE_EXECUTION_v0.2.0.md`
-3. Use `RELEASE_NOTES_v0.2.0.md` for the release body
+3. Use `docs/releases/RELEASE_NOTES_v0.2.0.md` for the release body
 4. Reuse the announcement files for GitHub, README references, or community posts

@@ -40,7 +40,7 @@
 ## Release Readiness
 
 - Follow `docs/RELEASE_CHECKLIST.md` before preparing a release
-- For `v0.2.0`, see `RELEASE_NOTES_v0.2.0.md`, `docs/RELEASE_DRY_RUN_v0.2.0.md`, and `docs/RELEASE_EXECUTION_v0.2.0.md`
+- For `v0.2.0`, see `docs/releases/RELEASE_NOTES_v0.2.0.md`, `docs/RELEASE_DRY_RUN_v0.2.0.md`, and `docs/RELEASE_EXECUTION_v0.2.0.md`
 - Keep roadmap discussions aligned with `docs/ROADMAP.md`
 
 

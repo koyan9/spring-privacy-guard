@@ -6,7 +6,7 @@ This document records a release-preparation dry run for the planned `v0.2.0` rel
 
 - Root docs: `README.md`, `README.zh-CN.md`, `CHANGELOG.md`
 - Sample docs: `samples/privacy-demo/README.md`
-- Release materials: `RELEASE_NOTES_v0.2.0.md`, `RELEASE_NOTES_TEMPLATE.md`
+- Release materials: `docs/releases/RELEASE_NOTES_v0.2.0.md`, `docs/releases/RELEASE_NOTES_TEMPLATE.md`
 - Release workflow: `.github/workflows/release.yml`
 
 ## Checklist Result
@@ -23,7 +23,7 @@ This document records a release-preparation dry run for the planned `v0.2.0` rel
 - [x] `README.zh-CN.md` updated
 - [x] `samples/privacy-demo/README.md` updated
 - [x] `CHANGELOG.md` updated
-- [x] tag-specific release notes drafted in `RELEASE_NOTES_v0.2.0.md`
+- [x] tag-specific release notes drafted in `docs/releases/RELEASE_NOTES_v0.2.0.md`
 
 ### Release Content
 

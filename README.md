@@ -5,7 +5,7 @@
 [![CI](https://github.com/koyan9/spring-privacy-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/koyan9/spring-privacy-guard/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/koyan9/spring-privacy-guard?display_name=tag)](https://github.com/koyan9/spring-privacy-guard/releases/latest)
 [![Changelog](https://img.shields.io/badge/Changelog-0.2.0-0f766e)](CHANGELOG.md)
-[![Release Notes](https://img.shields.io/badge/Release%20Notes-v0.2.0-1d4ed8)](RELEASE_NOTES_v0.2.0.md)
+[![Release Notes](https://img.shields.io/badge/Release%20Notes-v0.2.0-1d4ed8)](docs/releases/RELEASE_NOTES_v0.2.0.md)
 [![Security](https://img.shields.io/badge/Security-Policy-7f1d1d)](SECURITY.md)
 [![Support](https://img.shields.io/badge/Support-Guide-1f2937)](SUPPORT.md)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
@@ -256,7 +256,7 @@ Recommended next development focus for `0.2.0`:
 - Release checklist: `docs/RELEASE_CHECKLIST.md`
 - Release execution guide: `docs/RELEASE_EXECUTION_v0.2.0.md`
 - Release runbook: `docs/RELEASE_RUNBOOK_v0.2.0.md`
-- Draft release notes: `RELEASE_NOTES_v0.2.0.md`
+- Draft release notes: `docs/releases/RELEASE_NOTES_v0.2.0.md`
 - Release dry run: `docs/RELEASE_DRY_RUN_v0.2.0.md`
 - Release announcement: `docs/RELEASE_ANNOUNCEMENT_v0.2.0.md`
 - Release announcement (zh-CN): `docs/RELEASE_ANNOUNCEMENT_v0.2.0.zh-CN.md`
@@ -265,4 +265,4 @@ Recommended next development focus for `0.2.0`:
 
 ## Release Notes
 
-The release workflow looks for `RELEASE_NOTES_<tag>.md` first and falls back to `RELEASE_NOTES_TEMPLATE.md`.
+The release workflow looks for `docs/releases/RELEASE_NOTES_<tag>.md` first and falls back to `docs/releases/RELEASE_NOTES_TEMPLATE.md`.
