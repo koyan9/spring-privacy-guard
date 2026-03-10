@@ -6,6 +6,8 @@
 [![Release](https://img.shields.io/github/v/release/koyan9/spring-privacy-guard?display_name=tag)](https://github.com/koyan9/spring-privacy-guard/releases/latest)
 [![Changelog](https://img.shields.io/badge/Changelog-0.2.0-0f766e)](CHANGELOG.md)
 [![Release Notes](https://img.shields.io/badge/Release%20Notes-v0.2.0-1d4ed8)](RELEASE_NOTES_v0.2.0.md)
+[![Security](https://img.shields.io/badge/Security-Policy-7f1d1d)](SECURITY.md)
+[![Support](https://img.shields.io/badge/Support-Guide-1f2937)](SUPPORT.md)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Java 17+](https://img.shields.io/badge/Java-17%2B-orange)](README.md#quick-start)
 [![Docs Index](https://img.shields.io/badge/Docs-Index-6f42c1)](docs/INDEX.md)

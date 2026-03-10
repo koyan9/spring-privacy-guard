@@ -2,6 +2,16 @@
 
 This guide is for maintainers responsible for releases, triage, and repository hygiene.
 
+## Quick Links
+
+- `docs/INDEX.md`
+- `SECURITY.md`
+- `SUPPORT.md`
+- `docs/GITHUB_LABELS.md`
+- `docs/RELEASE_CHECKLIST.md`
+- `docs/RELEASE_EXECUTION_v0.2.0.md`
+- `RELEASE_NOTES_v0.2.0.md`
+
 ## Triage Checklist
 
 - Confirm the module: `privacy-guard-core`, `privacy-guard-spring-boot-starter`, or `samples/privacy-demo`.
