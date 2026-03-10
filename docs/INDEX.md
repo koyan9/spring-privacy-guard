@@ -6,6 +6,7 @@
 - Chinese README: `README.zh-CN.md`
 - Security policy: `SECURITY.md`
 - Support guide: `SUPPORT.md`
+- Maintainer guide: `docs/MAINTAINER_GUIDE.md`
 - Changelog: `CHANGELOG.md`
 - Current release notes: `RELEASE_NOTES_v0.2.0.md`
 - Latest GitHub release: `https://github.com/koyan9/spring-privacy-guard/releases/latest`
