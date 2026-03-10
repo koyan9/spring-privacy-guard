@@ -218,6 +218,23 @@ Starter 提供可复用的 webhook receiver 校验能力：
 - 使用 `interceptor` 模式保护接收端路径
 - 直接在业务代码中注入 verifier 做手动校验
 
+### JDBC Replay-Store 示例
+
+```yaml
+privacy:
+  guard:
+    audit:
+      dead-letter:
+        observability:
+          alert:
+            receiver:
+              replay-store:
+                jdbc:
+                  enabled: true
+                  initialize-schema: true
+                  table-name: privacy_audit_webhook_replay_store
+```
+
 ## 示例应用
 
 `samples/privacy-demo/` 默认展示：

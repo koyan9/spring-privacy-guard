@@ -212,6 +212,23 @@ Choose one of these protection modes:
 - `privacy.guard.audit.dead-letter.observability.alert.receiver.interceptor.enabled=true`
 - manual verifier injection in your own endpoint code
 
+### JDBC Replay Store
+
+```yaml
+privacy:
+  guard:
+    audit:
+      dead-letter:
+        observability:
+          alert:
+            receiver:
+              replay-store:
+                jdbc:
+                  enabled: true
+                  initialize-schema: true
+                  table-name: privacy_audit_webhook_replay_store
+```
+
 ## Sample App
 
 `samples/privacy-demo/` demonstrates:
