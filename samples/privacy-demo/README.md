@@ -18,6 +18,18 @@
 - 签名 receiver、replay-store 管理与统计
 - filter / interceptor 两种 receiver 验签模式
 
+## Receiver 运维
+
+Replay-store 运维说明与指标参考：
+
+- `docs/RECEIVER_OPERATIONS.md`
+
+常用端点：
+
+- `GET /demo-alert-receiver/replay-store?limit=20&offset=0`
+- `GET /demo-alert-receiver/replay-store/stats?expiringWithin=PT5M`
+- `DELETE /demo-alert-receiver/replay-store`
+
 ## 运行前准备
 
 先在仓库根目录安装本地构件：
