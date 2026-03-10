@@ -20,6 +20,7 @@
 - Release runbook: `docs/RELEASE_RUNBOOK_v0.2.0.md`
 - Release notes: `RELEASE_NOTES_v0.2.0.md`
 - Release artifacts checklist: `docs/RELEASE_CHECKLIST.md`
+- Release validation commands: `docs/RELEASE_EXECUTION_v0.2.0.md`
 
 ## Docs Status
 
