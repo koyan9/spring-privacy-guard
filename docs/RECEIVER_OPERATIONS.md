@@ -19,6 +19,13 @@ Implement `PrivacyAuditDeadLetterWebhookReplayStore` and wire it as a bean to ov
 - Use `FilePrivacyAuditDeadLetterWebhookReplayStore` when you run a single receiver instance and can persist the file.
 - Use `JdbcPrivacyAuditDeadLetterWebhookReplayStore` when you run multiple receiver instances or need shared state.
 
+### Migrating from File to JDBC
+
+- Plan for a clean cutover: existing nonces in the file store will not be automatically imported.
+- During migration, rotate receiver secrets if you want to invalidate old nonces.
+- Schedule a brief maintenance window and clear the replay store before switching.
+- After migration, enable `replay-store.jdbc.initialize-schema` once, then disable it if you manage schema separately.
+
 ### JDBC Replay Store
 
 Enable the JDBC replay store when running multiple receiver instances:
