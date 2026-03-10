@@ -29,11 +29,18 @@
 - Use the GitHub issue templates and keep reports scoped to a single reproducible problem.
 - Maintain labels consistently using `docs/GITHUB_LABELS.md` when triaging issues or pull requests.
 
+## Contributor FAQ
+
+- **Where should I report a security issue?** Follow `SECURITY.md` and avoid posting exploit details publicly.
+- **Where do I find the release checklist?** Use `docs/RELEASE_CHECKLIST.md` and `docs/RELEASE_EXECUTION_v0.2.0.md`.
+- **What if I only changed documentation?** Run `python scripts/check_repo_hygiene.py` and update `CHANGELOG.md` if release notes need the change.
+- **How do I validate sample changes?** Run `./mvnw -q -f samples/privacy-demo/pom.xml -DskipTests compile` or run the sample app.
+- **How do I confirm line endings and encoding?** Follow `.editorconfig`, `.gitattributes`, and rerun `python scripts/check_repo_hygiene.py`.
+
 ## Release Readiness
 
 - Follow `docs/RELEASE_CHECKLIST.md` before preparing a release
 - For `v0.2.0`, see `RELEASE_NOTES_v0.2.0.md`, `docs/RELEASE_DRY_RUN_v0.2.0.md`, and `docs/RELEASE_EXECUTION_v0.2.0.md`
 - Keep roadmap discussions aligned with `docs/ROADMAP.md`
-
 
 
