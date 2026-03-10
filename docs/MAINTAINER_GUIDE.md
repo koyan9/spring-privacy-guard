@@ -26,6 +26,13 @@ This guide is for maintainers responsible for releases, triage, and repository h
 - Validate `RELEASE_NOTES_<tag>.md` before triggering the release workflow.
 - Run `python scripts/check_repo_hygiene.py` before publishing.
 
+## Release Ops
+
+- Confirm the GitHub release exists for the tag and the body matches `RELEASE_NOTES_<tag>.md`.
+- Verify uploaded artifacts include the core and starter jars.
+- Check CI runs are green for the release commit.
+- If a release must be pulled, delete the GitHub release first, then follow the rollback steps in `docs/RELEASE_EXECUTION_v0.2.0.md`.
+
 ## Versioning & Tags
 
 - Version bumps must update root `pom.xml`, module `pom.xml`, and `samples/privacy-demo/pom.xml`.

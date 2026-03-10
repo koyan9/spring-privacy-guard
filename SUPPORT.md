@@ -23,6 +23,11 @@ For release or rollout questions, also review:
 - Security concern: follow `SECURITY.md` and avoid posting sensitive details publicly
 - Documentation gap or usage confusion: open a documentation-focused issue or feature request with the affected file path
 
+## Support vs Security
+
+- If the report includes exploit details, credentials, or production data, treat it as security and follow `SECURITY.md`.
+- If it is a usage question or reproducible defect without sensitive data, use the regular issue templates.
+
 ## What to Include
 
 Include the smallest useful reproduction:
