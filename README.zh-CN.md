@@ -240,6 +240,12 @@ Starter 提供可复用的 webhook receiver 校验能力：
 
 - `powershell.exe -ExecutionPolicy Bypass -File samples/privacy-demo/scripts/verify-alert-receiver.ps1`
 
+## 维护者快速入口
+
+- 排障与分诊参考 `SUPPORT.md`、`SECURITY.md`、`docs/GITHUB_LABELS.md`
+- 发布前执行 `python scripts/check_repo_hygiene.py`
+- 发布流程参考 `docs/MAINTAINER_GUIDE.md` 与 `docs/RELEASE_EXECUTION_v0.2.0.md`
+
 ## 说明
 
 中文文档会优先覆盖常用能力与配置示例；当中文和英文内容存在差异时，请以 `README.md` 的完整说明为准。

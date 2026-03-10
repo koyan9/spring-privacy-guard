@@ -202,8 +202,8 @@ Applications receiving signed alerts can reuse:
 
 Choose one of these protection modes:
 
-- eceiver.filter.enabled=true`
-- eceiver.interceptor.enabled=true`
+- `privacy.guard.audit.dead-letter.observability.alert.receiver.filter.enabled=true`
+- `privacy.guard.audit.dead-letter.observability.alert.receiver.interceptor.enabled=true`
 - manual verifier injection in your own endpoint code
 
 ## Sample App
@@ -228,6 +228,12 @@ The sample uses filter mode by default. To switch to interceptor mode:
 - Verify everything: `./mvnw -q verify` or `mvnw.cmd -q verify`
 - Install local artifacts: `./mvnw -q -DskipTests install`
 - Run sample: `./mvnw -q -f samples/privacy-demo/pom.xml spring-boot:run`
+
+## Maintainer Quick Start
+
+- Triage using `SUPPORT.md`, `SECURITY.md`, and `docs/GITHUB_LABELS.md`
+- Run `python scripts/check_repo_hygiene.py` before tagging
+- Follow `docs/MAINTAINER_GUIDE.md` and `docs/RELEASE_EXECUTION_v0.2.0.md` for releases
 
 ## Roadmap
 
