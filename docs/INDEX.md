@@ -13,6 +13,14 @@
 - CI workflow: `.github/workflows/ci.yml`
 - Release workflow: `.github/workflows/release.yml`
 
+## Release Verification
+
+- Release ops checklist: `docs/MAINTAINER_GUIDE.md`
+- Release execution guide: `docs/RELEASE_EXECUTION_v0.2.0.md`
+- Release runbook: `docs/RELEASE_RUNBOOK_v0.2.0.md`
+- Release notes: `RELEASE_NOTES_v0.2.0.md`
+- Release artifacts checklist: `docs/RELEASE_CHECKLIST.md`
+
 ## Release Docs
 
 - Roadmap: `docs/ROADMAP.md`
