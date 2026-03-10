@@ -24,6 +24,23 @@ Replay-store 运维说明与指标参考：
 
 - `docs/RECEIVER_OPERATIONS.md`
 
+JDBC replay-store 示例配置（适合多实例部署）：
+
+```yaml
+privacy:
+  guard:
+    audit:
+      dead-letter:
+        observability:
+          alert:
+            receiver:
+              replay-store:
+                jdbc:
+                  enabled: true
+                  initialize-schema: true
+                  table-name: privacy_audit_webhook_replay_store
+```
+
 常用端点：
 
 - `GET /demo-alert-receiver/replay-store?limit=20&offset=0`
