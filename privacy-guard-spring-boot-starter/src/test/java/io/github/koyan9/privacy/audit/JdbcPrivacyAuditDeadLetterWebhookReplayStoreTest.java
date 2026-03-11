@@ -89,4 +89,27 @@ class JdbcPrivacyAuditDeadLetterWebhookReplayStoreTest {
 
         verify(jdbcOperations).update("delete from replay_store");
     }
+
+    @Test
+    void computesStatsUsingAggregateQueries() {
+        JdbcOperations jdbcOperations = mock(JdbcOperations.class);
+        JdbcPrivacyAuditDeadLetterWebhookReplayStore store = new JdbcPrivacyAuditDeadLetterWebhookReplayStore(jdbcOperations, "replay_store");
+        Instant now = Instant.now();
+
+        when(jdbcOperations.queryForObject("select count(*) from replay_store", Long.class)).thenReturn(4L);
+        when(jdbcOperations.queryForObject(contains("where expires_at >= ? and expires_at <= ?"), eq(Long.class), any(Timestamp.class), any(Timestamp.class)))
+                .thenReturn(2L);
+        when(jdbcOperations.queryForObject("select min(expires_at) from replay_store", Timestamp.class))
+                .thenReturn(Timestamp.from(Instant.EPOCH));
+        when(jdbcOperations.queryForObject("select max(expires_at) from replay_store", Timestamp.class))
+                .thenReturn(Timestamp.from(Instant.EPOCH.plusSeconds(30)));
+
+        PrivacyAuditDeadLetterWebhookReplayStoreSnapshot snapshot = store.snapshotStats(now, Duration.ofSeconds(15));
+
+        assertThat(snapshot.count()).isEqualTo(4);
+        assertThat(snapshot.expiringSoon()).isEqualTo(2);
+        assertThat(snapshot.earliestExpiry()).isEqualTo(Instant.EPOCH);
+        assertThat(snapshot.latestExpiry()).isEqualTo(Instant.EPOCH.plusSeconds(30));
+        assertThat(snapshot.expiringSoonWindow()).isEqualTo("PT15S");
+    }
 }

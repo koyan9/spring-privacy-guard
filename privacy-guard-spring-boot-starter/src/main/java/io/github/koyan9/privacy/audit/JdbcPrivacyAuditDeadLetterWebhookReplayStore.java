@@ -13,7 +13,8 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-public class JdbcPrivacyAuditDeadLetterWebhookReplayStore implements PrivacyAuditDeadLetterWebhookReplayStore {
+public class JdbcPrivacyAuditDeadLetterWebhookReplayStore implements PrivacyAuditDeadLetterWebhookReplayStore,
+        PrivacyAuditDeadLetterWebhookReplayStoreStatsProvider {
 
     private final JdbcOperations jdbcOperations;
     private final String tableName;
@@ -47,6 +48,25 @@ public class JdbcPrivacyAuditDeadLetterWebhookReplayStore implements PrivacyAudi
     }
 
     @Override
+    public PrivacyAuditDeadLetterWebhookReplayStoreSnapshot snapshotStats(Instant now, java.time.Duration expiringSoonWindow) {
+        long count = queryForCount("select count(*) from " + tableName);
+        long expiringSoon = queryForCount(
+                "select count(*) from " + tableName + " where expires_at >= ? and expires_at <= ?",
+                Timestamp.from(now),
+                Timestamp.from(now.plus(expiringSoonWindow))
+        );
+        Instant earliest = queryForInstant("select min(expires_at) from " + tableName);
+        Instant latest = queryForInstant("select max(expires_at) from " + tableName);
+        return new PrivacyAuditDeadLetterWebhookReplayStoreSnapshot(
+                count,
+                expiringSoon,
+                earliest,
+                latest,
+                expiringSoonWindow.toString()
+        );
+    }
+
+    @Override
     public void clear() {
         jdbcOperations.update(clearSql());
     }
@@ -73,5 +93,15 @@ public class JdbcPrivacyAuditDeadLetterWebhookReplayStore implements PrivacyAudi
 
     private String clearSql() {
         return "delete from " + tableName;
+    }
+
+    private long queryForCount(String sql, Object... args) {
+        Long count = jdbcOperations.queryForObject(sql, Long.class, args);
+        return count == null ? 0L : count;
+    }
+
+    private Instant queryForInstant(String sql) {
+        Timestamp timestamp = jdbcOperations.queryForObject(sql, Timestamp.class);
+        return toInstant(timestamp);
     }
 }

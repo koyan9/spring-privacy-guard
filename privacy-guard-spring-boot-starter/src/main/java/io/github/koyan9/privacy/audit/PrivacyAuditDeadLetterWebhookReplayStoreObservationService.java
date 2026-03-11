@@ -24,8 +24,11 @@ public class PrivacyAuditDeadLetterWebhookReplayStoreObservationService {
     }
 
     public PrivacyAuditDeadLetterWebhookReplayStoreSnapshot currentSnapshot() {
-        Map<String, Instant> snapshot = replayStore.snapshot();
         Instant now = Instant.now();
+        if (replayStore instanceof PrivacyAuditDeadLetterWebhookReplayStoreStatsProvider statsProvider) {
+            return statsProvider.snapshotStats(now, expiringSoonWindow);
+        }
+        Map<String, Instant> snapshot = replayStore.snapshot();
         long expiringSoon = snapshot.values().stream()
                 .filter(expiry -> !expiry.isBefore(now) && !expiry.isAfter(now.plus(expiringSoonWindow)))
                 .count();
