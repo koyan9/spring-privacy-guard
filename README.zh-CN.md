@@ -93,6 +93,7 @@ privacy:
 | `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.enabled` | `false` | 启用 JDBC replay-store |
 | `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.table-name` | `privacy_audit_webhook_replay_store` | replay-store JDBC 表名 |
 | `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.initialize-schema` | `false` | 初始化 replay-store SQL 表 |
+| `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.cleanup-interval` | `5m` | replay-store 清理间隔 |
 
 完整配置说明、全部属性以及详细默认值，请参考 `README.md` 中的英文完整文档。
 

@@ -89,6 +89,7 @@ privacy:
 | `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.enabled` | `false` | Enables the JDBC replay store for receiver verification. |
 | `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.table-name` | `privacy_audit_webhook_replay_store` | JDBC table name for replay store entries. |
 | `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.initialize-schema` | `false` | Runs the replay store schema initializer. |
+| `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.cleanup-interval` | `5m` | Minimum interval between replay store cleanup passes. |
 
 For the full property matrix, examples, and advanced options, see the sections below.
 
