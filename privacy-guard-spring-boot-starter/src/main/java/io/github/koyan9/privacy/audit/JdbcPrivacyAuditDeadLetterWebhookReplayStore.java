@@ -9,24 +9,38 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcOperations;
 
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class JdbcPrivacyAuditDeadLetterWebhookReplayStore implements PrivacyAuditDeadLetterWebhookReplayStore,
         PrivacyAuditDeadLetterWebhookReplayStoreStatsProvider {
 
     private final JdbcOperations jdbcOperations;
     private final String tableName;
+    private final Duration cleanupInterval;
+    private final AtomicLong lastCleanupAt = new AtomicLong(0L);
 
     public JdbcPrivacyAuditDeadLetterWebhookReplayStore(JdbcOperations jdbcOperations, String tableName) {
+        this(jdbcOperations, tableName, Duration.ofMinutes(5));
+    }
+
+    public JdbcPrivacyAuditDeadLetterWebhookReplayStore(
+            JdbcOperations jdbcOperations,
+            String tableName,
+            Duration cleanupInterval
+    ) {
         this.jdbcOperations = jdbcOperations;
         this.tableName = tableName;
+        this.cleanupInterval = cleanupInterval == null ? Duration.ZERO : cleanupInterval;
     }
 
     @Override
     public boolean markIfNew(String nonce, Instant now, java.time.Duration ttl) {
-        cleanup(now);
+        cleanupExpiredNonce(nonce, now);
+        cleanupExpiredEntries(now);
         Instant expiresAt = now.plus(ttl);
         try {
             Integer updated = jdbcOperations.update(insertSql(), nonce, Timestamp.from(expiresAt));
@@ -71,7 +85,23 @@ public class JdbcPrivacyAuditDeadLetterWebhookReplayStore implements PrivacyAudi
         jdbcOperations.update(clearSql());
     }
 
-    private void cleanup(Instant now) {
+    private void cleanupExpiredNonce(String nonce, Instant now) {
+        jdbcOperations.update(deleteExpiredNonceSql(), nonce, Timestamp.from(now));
+    }
+
+    private void cleanupExpiredEntries(Instant now) {
+        if (cleanupInterval.isZero() || cleanupInterval.isNegative()) {
+            jdbcOperations.update(cleanupSql(), Timestamp.from(now));
+            return;
+        }
+        long nowMillis = now.toEpochMilli();
+        long previous = lastCleanupAt.get();
+        if (nowMillis - previous < cleanupInterval.toMillis()) {
+            return;
+        }
+        if (!lastCleanupAt.compareAndSet(previous, nowMillis)) {
+            return;
+        }
         jdbcOperations.update(cleanupSql(), Timestamp.from(now));
     }
 
@@ -89,6 +119,10 @@ public class JdbcPrivacyAuditDeadLetterWebhookReplayStore implements PrivacyAudi
 
     private String cleanupSql() {
         return "delete from " + tableName + " where expires_at < ?";
+    }
+
+    private String deleteExpiredNonceSql() {
+        return "delete from " + tableName + " where nonce = ? and expires_at < ?";
     }
 
     private String clearSql() {

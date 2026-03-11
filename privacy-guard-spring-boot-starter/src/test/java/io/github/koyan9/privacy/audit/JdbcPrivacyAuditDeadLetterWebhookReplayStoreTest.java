@@ -22,6 +22,7 @@ import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
 class JdbcPrivacyAuditDeadLetterWebhookReplayStoreTest {
@@ -32,13 +33,16 @@ class JdbcPrivacyAuditDeadLetterWebhookReplayStoreTest {
         JdbcPrivacyAuditDeadLetterWebhookReplayStore store = new JdbcPrivacyAuditDeadLetterWebhookReplayStore(jdbcOperations, "replay_store");
         Instant now = Instant.now();
 
-        when(jdbcOperations.update(contains("delete from replay_store"), any(Timestamp.class))).thenReturn(1);
+        when(jdbcOperations.update(eq("delete from replay_store where nonce = ? and expires_at < ?"), eq("nonce-1"), any(Timestamp.class)))
+                .thenReturn(1);
+        when(jdbcOperations.update(eq("delete from replay_store where expires_at < ?"), any(Timestamp.class))).thenReturn(1);
         when(jdbcOperations.update(contains("insert into replay_store"), eq("nonce-1"), any(Timestamp.class))).thenReturn(1);
 
         boolean marked = store.markIfNew("nonce-1", now, Duration.ofMinutes(5));
 
         assertThat(marked).isTrue();
-        verify(jdbcOperations).update(contains("delete from replay_store"), any(Timestamp.class));
+        verify(jdbcOperations).update(eq("delete from replay_store where nonce = ? and expires_at < ?"), eq("nonce-1"), any(Timestamp.class));
+        verify(jdbcOperations).update(eq("delete from replay_store where expires_at < ?"), any(Timestamp.class));
         verify(jdbcOperations).update(contains("insert into replay_store"), eq("nonce-1"), any(Timestamp.class));
     }
 
@@ -48,7 +52,9 @@ class JdbcPrivacyAuditDeadLetterWebhookReplayStoreTest {
         JdbcPrivacyAuditDeadLetterWebhookReplayStore store = new JdbcPrivacyAuditDeadLetterWebhookReplayStore(jdbcOperations, "replay_store");
         Instant now = Instant.now();
 
-        when(jdbcOperations.update(contains("delete from replay_store"), any(Timestamp.class))).thenReturn(1);
+        when(jdbcOperations.update(eq("delete from replay_store where nonce = ? and expires_at < ?"), eq("nonce-1"), any(Timestamp.class)))
+                .thenReturn(1);
+        when(jdbcOperations.update(eq("delete from replay_store where expires_at < ?"), any(Timestamp.class))).thenReturn(1);
         when(jdbcOperations.update(contains("insert into replay_store"), eq("nonce-1"), any(Timestamp.class)))
                 .thenThrow(new DuplicateKeyException("duplicate"));
 
@@ -111,5 +117,29 @@ class JdbcPrivacyAuditDeadLetterWebhookReplayStoreTest {
         assertThat(snapshot.earliestExpiry()).isEqualTo(Instant.EPOCH);
         assertThat(snapshot.latestExpiry()).isEqualTo(Instant.EPOCH.plusSeconds(30));
         assertThat(snapshot.expiringSoonWindow()).isEqualTo("PT15S");
+    }
+
+    @Test
+    void skipsGlobalCleanupWithinInterval() {
+        JdbcOperations jdbcOperations = mock(JdbcOperations.class);
+        JdbcPrivacyAuditDeadLetterWebhookReplayStore store = new JdbcPrivacyAuditDeadLetterWebhookReplayStore(
+                jdbcOperations,
+                "replay_store",
+                Duration.ofMinutes(10)
+        );
+        Instant now = Instant.now();
+
+        when(jdbcOperations.update(eq("delete from replay_store where nonce = ? and expires_at < ?"), eq("nonce-1"), any(Timestamp.class)))
+                .thenReturn(0);
+        when(jdbcOperations.update(eq("delete from replay_store where nonce = ? and expires_at < ?"), eq("nonce-2"), any(Timestamp.class)))
+                .thenReturn(0);
+        when(jdbcOperations.update(eq("delete from replay_store where expires_at < ?"), any(Timestamp.class))).thenReturn(1);
+        when(jdbcOperations.update(contains("insert into replay_store"), eq("nonce-1"), any(Timestamp.class))).thenReturn(1);
+        when(jdbcOperations.update(contains("insert into replay_store"), eq("nonce-2"), any(Timestamp.class))).thenReturn(1);
+
+        store.markIfNew("nonce-1", now, Duration.ofMinutes(5));
+        store.markIfNew("nonce-2", now.plusSeconds(1), Duration.ofMinutes(5));
+
+        verify(jdbcOperations, times(1)).update(eq("delete from replay_store where expires_at < ?"), any(Timestamp.class));
     }
 }

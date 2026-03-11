@@ -111,7 +111,11 @@ public class PrivacyGuardDeadLetterWebhookReceiverAutoConfiguration {
                     .getReceiver()
                     .getReplayStore()
                     .getJdbc();
-            return new JdbcPrivacyAuditDeadLetterWebhookReplayStore(jdbcOperations, jdbcProperties.getTableName());
+            return new JdbcPrivacyAuditDeadLetterWebhookReplayStore(
+                    jdbcOperations,
+                    jdbcProperties.getTableName(),
+                    jdbcProperties.getCleanupInterval()
+            );
         }
 
         @Bean

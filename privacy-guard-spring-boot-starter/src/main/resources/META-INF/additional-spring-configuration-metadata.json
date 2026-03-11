@@ -272,6 +272,12 @@
       "defaultValue": "privacy_audit_webhook_replay_store"
     },
     {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.cleanup-interval",
+      "type": "java.time.Duration",
+      "description": "Minimum interval between replay store cleanup passes.",
+      "defaultValue": "5m"
+    },
+    {
       "name": "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.initialize-schema",
       "type": "java.lang.Boolean",
       "description": "Runs the built-in SQL schema before the JDBC replay store is used.",
@@ -380,7 +386,6 @@
     }
   ]
 }
-
 
 
 

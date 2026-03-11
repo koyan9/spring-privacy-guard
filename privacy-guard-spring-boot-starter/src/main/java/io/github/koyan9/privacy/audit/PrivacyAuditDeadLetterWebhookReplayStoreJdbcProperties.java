@@ -5,6 +5,8 @@
 
 package io.github.koyan9.privacy.audit;
 
+import java.time.Duration;
+
 public class PrivacyAuditDeadLetterWebhookReplayStoreJdbcProperties {
 
     private boolean enabled = false;
@@ -12,6 +14,7 @@ public class PrivacyAuditDeadLetterWebhookReplayStoreJdbcProperties {
     private boolean initializeSchema = false;
     private String schemaLocation;
     private PrivacyAuditJdbcDialect dialect = PrivacyAuditJdbcDialect.AUTO;
+    private Duration cleanupInterval = Duration.ofMinutes(5);
 
     public boolean isEnabled() {
         return enabled;
@@ -51,5 +54,13 @@ public class PrivacyAuditDeadLetterWebhookReplayStoreJdbcProperties {
 
     public void setDialect(PrivacyAuditJdbcDialect dialect) {
         this.dialect = dialect;
+    }
+
+    public Duration getCleanupInterval() {
+        return cleanupInterval;
+    }
+
+    public void setCleanupInterval(Duration cleanupInterval) {
+        this.cleanupInterval = cleanupInterval;
     }
 }
