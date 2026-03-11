@@ -63,7 +63,7 @@ public class JdbcPrivacyAuditDeadLetterWebhookReplayStore implements PrivacyAudi
 
     @Override
     public PrivacyAuditDeadLetterWebhookReplayStoreSnapshot snapshotStats(Instant now, java.time.Duration expiringSoonWindow) {
-        long count = queryForCount("select count(*) from " + tableName);
+        int count = Math.toIntExact(queryForCount("select count(*) from " + tableName));
         long expiringSoon = queryForCount(
                 "select count(*) from " + tableName + " where expires_at >= ? and expires_at <= ?",
                 Timestamp.from(now),
@@ -130,7 +130,12 @@ public class JdbcPrivacyAuditDeadLetterWebhookReplayStore implements PrivacyAudi
     }
 
     private long queryForCount(String sql, Object... args) {
-        Long count = jdbcOperations.queryForObject(sql, Long.class, args);
+        Long count;
+        if (args == null || args.length == 0) {
+            count = jdbcOperations.queryForObject(sql, Long.class);
+        } else {
+            count = jdbcOperations.queryForObject(sql, Long.class, args);
+        }
         return count == null ? 0L : count;
     }
 
