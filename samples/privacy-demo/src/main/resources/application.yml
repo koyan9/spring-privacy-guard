@@ -54,6 +54,7 @@ privacy:
                   enabled: false
                   initialize-schema: false
                   table-name: privacy_audit_webhook_replay_store
+                  cleanup-interval: 5m
             # webhook:
             #   url: http://localhost:8088/demo-alert-receiver
             #   bearer-token: demo-receiver-token
