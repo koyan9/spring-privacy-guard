@@ -50,6 +50,17 @@ You can override the schema location or dialect via:
 - `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.schema-location`
 - `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.dialect`
 
+### Schema Notes
+
+Built-in schema resources:
+
+- `classpath:META-INF/privacy-guard/privacy-audit-dead-letter-webhook-replay-store-schema-generic.sql`
+- `classpath:META-INF/privacy-guard/privacy-audit-dead-letter-webhook-replay-store-schema-h2.sql`
+- `classpath:META-INF/privacy-guard/privacy-audit-dead-letter-webhook-replay-store-schema-postgresql.sql`
+- `classpath:META-INF/privacy-guard/privacy-audit-dead-letter-webhook-replay-store-schema-mysql.sql`
+
+Use the dialect switch when your database vendor requires a custom schema variant.
+
 ## Health and Metrics
 
 Receiver replay-store metrics are exposed when Micrometer is available:
