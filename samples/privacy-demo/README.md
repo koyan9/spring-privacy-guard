@@ -190,6 +190,8 @@ privacy:
 
 对应 profile 文件：`samples/privacy-demo/src/main/resources/application-interceptor.yml`
 
+拦截器模式配置文件已包含 replay-store JDBC 开关示例，可按需启用。
+
 ## 说明
 
 该示例保留 `DemoDeadLetterAlertCallback` 仅用于测试中观测最近一次告警；webhook / email 发送和 receiver 验签都优先演示 starter 内置能力。
