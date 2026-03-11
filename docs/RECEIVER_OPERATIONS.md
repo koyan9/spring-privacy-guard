@@ -43,12 +43,15 @@ privacy:
                   enabled: true
                   initialize-schema: true
                   table-name: privacy_audit_webhook_replay_store
+                  cleanup-interval: 5m
 ```
 
 You can override the schema location or dialect via:
 
 - `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.schema-location`
 - `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.dialect`
+
+`cleanup-interval` controls how often the global cleanup runs. Set it to `0` to clean on every request.
 
 ### Schema Notes
 
