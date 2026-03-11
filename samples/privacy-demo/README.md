@@ -39,7 +39,10 @@ privacy:
                   enabled: true
                   initialize-schema: true
                   table-name: privacy_audit_webhook_replay_store
+                  cleanup-interval: 5m
 ```
+
+`cleanup-interval` 控制全量清理频率，设置为 `0` 时每次请求都会触发清理。
 
 常用端点：
 
