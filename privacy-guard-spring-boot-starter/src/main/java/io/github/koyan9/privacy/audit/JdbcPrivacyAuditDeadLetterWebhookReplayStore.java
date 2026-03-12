@@ -5,7 +5,6 @@
 
 package io.github.koyan9.privacy.audit;
 
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcOperations;
 
@@ -46,7 +45,7 @@ public class JdbcPrivacyAuditDeadLetterWebhookReplayStore implements PrivacyAudi
         try {
             Integer updated = jdbcOperations.update(insertSql(), nonce, Timestamp.from(expiresAt));
             return updated != null && updated > 0;
-        } catch (DuplicateKeyException | DataIntegrityViolationException exception) {
+        } catch (DataIntegrityViolationException exception) {
             return false;
         }
     }
