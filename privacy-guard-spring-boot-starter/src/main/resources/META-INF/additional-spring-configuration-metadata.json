@@ -278,6 +278,12 @@
       "defaultValue": "5m"
     },
     {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.cleanup-batch-size",
+      "type": "java.lang.Integer",
+      "description": "Maximum number of expired replay-store entries removed per cleanup pass.",
+      "defaultValue": 500
+    },
+    {
       "name": "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.initialize-schema",
       "type": "java.lang.Boolean",
       "description": "Runs the built-in SQL schema before the JDBC replay store is used.",
@@ -386,7 +392,6 @@
     }
   ]
 }
-
 
 
 

@@ -10,11 +10,13 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcOperations;
 import org.springframework.jdbc.core.ResultSetExtractor;
+import org.springframework.jdbc.core.RowMapper;
 
 import java.sql.ResultSet;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -181,5 +183,27 @@ class JdbcPrivacyAuditDeadLetterWebhookReplayStoreTest {
         store.markIfNew("nonce-2", now.plusSeconds(1), Duration.ofMinutes(5));
 
         verify(jdbcOperations, times(1)).update(eq("delete from replay_store where expires_at < ?"), any(Timestamp.class));
+    }
+
+    @Test
+    void cleansUpExpiredEntriesInBatches() {
+        JdbcOperations jdbcOperations = mock(JdbcOperations.class);
+        JdbcPrivacyAuditDeadLetterWebhookReplayStore store = new JdbcPrivacyAuditDeadLetterWebhookReplayStore(
+                jdbcOperations,
+                "replay_store",
+                Duration.ZERO,
+                2
+        );
+        Instant now = Instant.now();
+
+        when(jdbcOperations.update(eq("delete from replay_store where nonce = ? and expires_at < ?"), eq("nonce-3"), any(Timestamp.class)))
+                .thenReturn(0);
+        when(jdbcOperations.update(contains("insert into replay_store"), eq("nonce-3"), any(Timestamp.class))).thenReturn(1);
+        when(jdbcOperations.query(eq("select nonce from replay_store where expires_at < ? order by expires_at asc limit ?"), any(RowMapper.class), any(Timestamp.class), eq(2)))
+                .thenReturn(List.of("nonce-1", "nonce-2"));
+
+        store.markIfNew("nonce-3", now, Duration.ofMinutes(5));
+
+        verify(jdbcOperations).update(contains("delete from replay_store where nonce in"), eq("nonce-1"), eq("nonce-2"));
     }
 }
