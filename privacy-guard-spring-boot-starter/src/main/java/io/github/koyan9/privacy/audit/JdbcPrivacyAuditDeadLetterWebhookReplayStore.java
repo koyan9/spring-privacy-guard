@@ -6,6 +6,7 @@
 package io.github.koyan9.privacy.audit;
 
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcOperations;
 
 import java.sql.Timestamp;
@@ -45,7 +46,7 @@ public class JdbcPrivacyAuditDeadLetterWebhookReplayStore implements PrivacyAudi
         try {
             Integer updated = jdbcOperations.update(insertSql(), nonce, Timestamp.from(expiresAt));
             return updated != null && updated > 0;
-        } catch (DuplicateKeyException exception) {
+        } catch (DuplicateKeyException | DataIntegrityViolationException exception) {
             return false;
         }
     }
@@ -141,6 +142,6 @@ public class JdbcPrivacyAuditDeadLetterWebhookReplayStore implements PrivacyAudi
 
     private Instant queryForInstant(String sql) {
         Timestamp timestamp = jdbcOperations.queryForObject(sql, Timestamp.class);
-        return toInstant(timestamp);
+        return timestamp == null ? null : timestamp.toInstant();
     }
 }
