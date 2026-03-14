@@ -41,26 +41,22 @@ public class PrivacyAuditDeadLetterExchangeService {
     }
 
     public String exportJson(PrivacyAuditDeadLetterQueryCriteria criteria) {
-        try {
-            return objectMapper.writeValueAsString(deadLetterRepository.findByCriteria(normalize(criteria)));
-        } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("Failed to export privacy audit dead letters as JSON", exception);
-        }
+        return exportJson(deadLetterRepository.findByCriteria(normalize(criteria)));
     }
 
     public String exportCsv(PrivacyAuditDeadLetterQueryCriteria criteria) {
-        return csvCodec.exportEntries(deadLetterRepository.findByCriteria(normalize(criteria)));
+        return exportCsv(deadLetterRepository.findByCriteria(normalize(criteria)));
     }
 
     public PrivacyAuditDeadLetterExportManifest exportManifest(PrivacyAuditDeadLetterQueryCriteria criteria, String format) {
         String normalizedFormat = normalizeFormat(format);
+        List<PrivacyAuditDeadLetterEntry> entries = deadLetterRepository.findByCriteria(normalize(criteria));
         String content = switch (normalizedFormat) {
-            case "json" -> exportJson(criteria);
-            case "csv" -> exportCsv(criteria);
+            case "json" -> exportJson(entries);
+            case "csv" -> exportCsv(entries);
             default -> throw new IllegalArgumentException("Unsupported dead-letter export format: " + format);
         };
-        int total = deadLetterRepository.findByCriteria(normalize(criteria)).size();
-        return new PrivacyAuditDeadLetterExportManifest(normalizedFormat, total, Instant.now(), sha256(content));
+        return new PrivacyAuditDeadLetterExportManifest(normalizedFormat, entries.size(), Instant.now(), sha256(content));
     }
 
     public PrivacyAuditDeadLetterImportResult importJson(String content, boolean deduplicate, String expectedChecksum) {
@@ -144,6 +140,18 @@ public class PrivacyAuditDeadLetterExchangeService {
             return "json";
         }
         return format.trim().toLowerCase();
+    }
+
+    private String exportJson(List<PrivacyAuditDeadLetterEntry> entries) {
+        try {
+            return objectMapper.writeValueAsString(entries);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Failed to export privacy audit dead letters as JSON", exception);
+        }
+    }
+
+    private String exportCsv(List<PrivacyAuditDeadLetterEntry> entries) {
+        return csvCodec.exportEntries(entries);
     }
 
     private String fingerprint(PrivacyAuditDeadLetterEntry entry) {
