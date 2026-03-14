@@ -7,8 +7,6 @@ package io.github.koyan9.privacy.audit;
 
 import java.time.Duration;
 
-import java.time.Duration;
-
 public class PrivacyAuditDeadLetterWebhookReplayStoreJdbcProperties {
 
     private boolean enabled = false;
