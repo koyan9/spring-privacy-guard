@@ -24,6 +24,23 @@ Replay-store 运维说明与指标参考：
 
 - `docs/RECEIVER_OPERATIONS.md`
 
+单实例文件型 replay-store 示例：
+```yaml
+privacy:
+  guard:
+    audit:
+      dead-letter:
+        observability:
+          alert:
+            receiver:
+              replay-store:
+                file:
+                  enabled: true
+                  path: ./target/demo-alert-replay-store.json
+```
+
+
+
 JDBC replay-store 示例配置（适合多实例部署）：
 
 ```yaml
@@ -108,6 +125,8 @@ Actuator 指标示例：
 - `powershell.exe -ExecutionPolicy Bypass -File samples/privacy-demo/scripts/verify-alert-receiver.ps1`
 - `powershell.exe -ExecutionPolicy Bypass -File samples/privacy-demo/scripts/verify-alert-receiver.ps1 -BaseUrl http://localhost:8088 -BearerToken demo-receiver-token -SignatureSecret demo-receiver-secret -AdminToken demo-admin-token`
 
+验签失败会返回包含原因码的 JSON 响应，例如：`{"error":"Invalid signature","reason":"INVALID_SIGNATURE"}`。
+
 ## 关键配置
 
 管理接口保护：
@@ -122,17 +141,22 @@ demo:
 receiver 验签：
 
 ```yaml
-demo:
-  alert:
-    receiver:
-      bearer-token: demo-receiver-token
-      signature-secret: demo-receiver-secret
-      signature-algorithm: HmacSHA256
-      signature-header: X-Privacy-Alert-Signature
-      timestamp-header: X-Privacy-Alert-Timestamp
-      nonce-header: X-Privacy-Alert-Nonce
-      max-skew: 5m
-      # store-file: ./target/demo-alert-replay-store.json
+privacy:
+  guard:
+    audit:
+      dead-letter:
+        observability:
+          alert:
+            receiver:
+              verification:
+                enabled: true
+                bearer-token: demo-receiver-token
+                signature-secret: demo-receiver-secret
+                signature-algorithm: HmacSHA256
+                signature-header: X-Privacy-Alert-Signature
+                timestamp-header: X-Privacy-Alert-Timestamp
+                nonce-header: X-Privacy-Alert-Nonce
+                max-skew: 5m
 ```
 
 内置 webhook 告警：

@@ -17,16 +17,6 @@ demo:
   admin:
     token: demo-admin-token
     header-name: X-Demo-Admin-Token
-  alert:
-    receiver:
-      bearer-token: demo-receiver-token
-      signature-secret: demo-receiver-secret
-      signature-algorithm: HmacSHA256
-      signature-header: X-Privacy-Alert-Signature
-      timestamp-header: X-Privacy-Alert-Timestamp
-      nonce-header: X-Privacy-Alert-Nonce
-      max-skew: 5m
-      # store-file: ./target/demo-alert-replay-store.json
 
 privacy:
   guard:
@@ -46,10 +36,22 @@ privacy:
             logging:
               enabled: true
             receiver:
+              verification:
+                enabled: true
+                bearer-token: demo-receiver-token
+                signature-secret: demo-receiver-secret
+                signature-algorithm: HmacSHA256
+                signature-header: X-Privacy-Alert-Signature
+                timestamp-header: X-Privacy-Alert-Timestamp
+                nonce-header: X-Privacy-Alert-Nonce
+                max-skew: 5m
               filter:
                 enabled: true
                 path-pattern: /demo-alert-receiver
               replay-store:
+                file:
+                  enabled: false
+                  path: ./target/demo-alert-replay-store.json
                 jdbc:
                   enabled: false
                   initialize-schema: false

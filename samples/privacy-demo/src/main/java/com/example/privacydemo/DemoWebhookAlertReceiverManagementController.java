@@ -5,8 +5,9 @@
 
 package com.example.privacydemo;
 
-import io.github.koyan9.privacy.audit.PrivacyAuditService;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStore;
+import io.github.koyan9.privacy.audit.PrivacyAuditService;
+import io.github.koyan9.privacy.autoconfigure.PrivacyGuardProperties;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -25,17 +26,17 @@ class DemoWebhookAlertReceiverManagementController {
     private static final String ADMIN_ACTOR = "demo-admin";
 
     private final PrivacyAuditDeadLetterWebhookReplayStore replayStore;
-    private final DemoWebhookReceiverProperties properties;
     private final PrivacyAuditService privacyAuditService;
+    private final PrivacyGuardProperties guardProperties;
 
     DemoWebhookAlertReceiverManagementController(
             PrivacyAuditDeadLetterWebhookReplayStore replayStore,
-            DemoWebhookReceiverProperties properties,
-            PrivacyAuditService privacyAuditService
+            PrivacyAuditService privacyAuditService,
+            PrivacyGuardProperties guardProperties
     ) {
         this.replayStore = replayStore;
-        this.properties = properties;
         this.privacyAuditService = privacyAuditService;
+        this.guardProperties = guardProperties;
     }
 
     @GetMapping("/demo-alert-receiver/replay-store")
@@ -59,7 +60,7 @@ class DemoWebhookAlertReceiverManagementController {
         response.put("count", snapshot.size());
         response.put("limit", normalizedLimit);
         response.put("offset", normalizedOffset);
-        response.put("storeFile", properties.getStoreFile());
+        response.put("storeFile", storeFile());
         response.put("entries", entries);
         recordManagementAction("DEMO_ALERT_REPLAY_STORE_QUERY", Map.of(
                 "count", String.valueOf(snapshot.size()),
@@ -86,7 +87,7 @@ class DemoWebhookAlertReceiverManagementController {
         response.put("expiringSoon", expiringSoon);
         response.put("earliestExpiry", earliest == null ? null : earliest.toString());
         response.put("latestExpiry", latest == null ? null : latest.toString());
-        response.put("storeFile", properties.getStoreFile());
+        response.put("storeFile", storeFile());
         recordManagementAction("DEMO_ALERT_REPLAY_STORE_STATS_QUERY", Map.of(
                 "count", String.valueOf(snapshot.size()),
                 "expiringWithin", expiringWithin.toString(),
@@ -105,5 +106,16 @@ class DemoWebhookAlertReceiverManagementController {
 
     private void recordManagementAction(String action, Map<String, String> details) {
         privacyAuditService.record(action, "DemoWebhookAlertReplayStore", "receiver", ADMIN_ACTOR, "SUCCESS", details);
+    }
+
+    private String storeFile() {
+        PrivacyGuardProperties.AlertReceiverReplayStoreFile file = guardProperties.getAudit()
+                .getDeadLetter()
+                .getObservability()
+                .getAlert()
+                .getReceiver()
+                .getReplayStore()
+                .getFile();
+        return file.isEnabled() ? file.getPath() : null;
     }
 }

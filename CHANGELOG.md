@@ -7,6 +7,11 @@ All notable changes to `spring-privacy-guard` will be documented in this file.
 - Added a JDBC-backed webhook replay store for multi-instance receiver deployments.
 - Added replay store JDBC schema resources and auto-configuration for optional schema initialization.
 - Moved release notes under `docs/releases/` and updated release tooling references.
+- Added property-driven receiver verification settings and file-backed replay-store configuration.
+- Added receiver verification reason codes in HTTP error responses.
+- Improved replay-store snapshot accuracy by excluding expired entries.
+- Improved webhook alert delivery diagnostics with structured failure details.
+- Added webhook alert failure metrics for status, retryability, and failure types.
 
 ## [0.2.0] - 2026-03-09
 

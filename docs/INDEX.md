@@ -7,6 +7,7 @@
 - Security policy: `SECURITY.md`
 - Support guide: `SUPPORT.md`
 - Maintainer guide: `docs/MAINTAINER_GUIDE.md`
+- Logic walkthrough: `docs/LOGIC_WALKTHROUGH.md`
 - Changelog: `CHANGELOG.md`
 - Current release notes: `docs/releases/RELEASE_NOTES_v0.2.0.md`
 - Latest GitHub release: `https://github.com/koyan9/spring-privacy-guard/releases/latest`
