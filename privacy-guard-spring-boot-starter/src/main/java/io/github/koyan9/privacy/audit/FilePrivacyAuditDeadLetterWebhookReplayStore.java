@@ -11,11 +11,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-public class FilePrivacyAuditDeadLetterWebhookReplayStore implements PrivacyAuditDeadLetterWebhookReplayStore {
+public class FilePrivacyAuditDeadLetterWebhookReplayStore implements PrivacyAuditDeadLetterWebhookReplayStore,
+        PrivacyAuditDeadLetterWebhookReplayStoreStatsProvider {
 
     private static final TypeReference<Map<String, String>> STORE_TYPE = new TypeReference<>() {
     };
@@ -44,6 +46,7 @@ public class FilePrivacyAuditDeadLetterWebhookReplayStore implements PrivacyAudi
 
     @Override
     public synchronized Map<String, Instant> snapshot() {
+        cleanup(Instant.now());
         return Map.copyOf(new LinkedHashMap<>(seenNonces));
     }
 
@@ -51,6 +54,34 @@ public class FilePrivacyAuditDeadLetterWebhookReplayStore implements PrivacyAudi
     public synchronized void clear() {
         seenNonces.clear();
         persist();
+    }
+
+    @Override
+    public synchronized PrivacyAuditDeadLetterWebhookReplayStoreSnapshot snapshotStats(Instant now, Duration expiringSoonWindow) {
+        Instant evaluationTime = now == null ? Instant.now() : now;
+        Duration window = expiringSoonWindow == null ? Duration.ZERO : expiringSoonWindow;
+        cleanup(evaluationTime);
+        long expiringSoon = 0L;
+        Instant earliest = null;
+        Instant latest = null;
+        for (Instant expiry : seenNonces.values()) {
+            if (!expiry.isBefore(evaluationTime) && !expiry.isAfter(evaluationTime.plus(window))) {
+                expiringSoon++;
+            }
+            if (earliest == null || expiry.isBefore(earliest)) {
+                earliest = expiry;
+            }
+            if (latest == null || expiry.isAfter(latest)) {
+                latest = expiry;
+            }
+        }
+        return new PrivacyAuditDeadLetterWebhookReplayStoreSnapshot(
+                seenNonces.size(),
+                expiringSoon,
+                earliest,
+                latest,
+                window.toString()
+        );
     }
 
     private void cleanup(Instant now) {

@@ -34,4 +34,20 @@ class FilePrivacyAuditDeadLetterWebhookReplayStoreTest {
         FilePrivacyAuditDeadLetterWebhookReplayStore third = new FilePrivacyAuditDeadLetterWebhookReplayStore(storeFile, objectMapper);
         assertThat(third.markIfNew("nonce-1", Instant.parse("2026-03-09T00:02:00Z"), Duration.ofMinutes(5))).isTrue();
     }
+
+    @Test
+    void snapshotRemovesExpiredEntries() throws Exception {
+        Path storeFile = Files.createTempFile("privacy-guard-replay-store", ".json");
+        Files.deleteIfExists(storeFile);
+        ObjectMapper objectMapper = new ObjectMapper();
+        FilePrivacyAuditDeadLetterWebhookReplayStore store = new FilePrivacyAuditDeadLetterWebhookReplayStore(storeFile, objectMapper);
+
+        Instant expiredNow = Instant.now().minusSeconds(10);
+        assertThat(store.markIfNew("nonce-expired", expiredNow, Duration.ofSeconds(1))).isTrue();
+
+        assertThat(store.snapshot()).isEmpty();
+
+        FilePrivacyAuditDeadLetterWebhookReplayStore reloaded = new FilePrivacyAuditDeadLetterWebhookReplayStore(storeFile, objectMapper);
+        assertThat(reloaded.markIfNew("nonce-expired", Instant.now(), Duration.ofMinutes(1))).isTrue();
+    }
 }

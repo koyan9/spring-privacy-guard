@@ -64,25 +64,26 @@ public class JdbcPrivacyAuditDeadLetterWebhookReplayStore implements PrivacyAudi
 
     @Override
     public Map<String, Instant> snapshot() {
+        Instant now = Instant.now();
         return jdbcOperations.query(selectSql(), resultSet -> {
             Map<String, Instant> snapshot = new LinkedHashMap<>();
             while (resultSet.next()) {
                 snapshot.put(resultSet.getString("nonce"), toInstant(resultSet.getTimestamp("expires_at")));
             }
             return Map.copyOf(snapshot);
-        });
+        }, Timestamp.from(now));
     }
 
     @Override
     public PrivacyAuditDeadLetterWebhookReplayStoreSnapshot snapshotStats(Instant now, java.time.Duration expiringSoonWindow) {
-        int count = Math.toIntExact(queryForCount("select count(*) from " + tableName));
+        int count = Math.toIntExact(queryForCount("select count(*) from " + tableName + " where expires_at >= ?", Timestamp.from(now)));
         long expiringSoon = queryForCount(
                 "select count(*) from " + tableName + " where expires_at >= ? and expires_at <= ?",
                 Timestamp.from(now),
                 Timestamp.from(now.plus(expiringSoonWindow))
         );
-        Instant earliest = queryForInstant("select min(expires_at) from " + tableName);
-        Instant latest = queryForInstant("select max(expires_at) from " + tableName);
+        Instant earliest = queryForInstant("select min(expires_at) from " + tableName + " where expires_at >= ?", Timestamp.from(now));
+        Instant latest = queryForInstant("select max(expires_at) from " + tableName + " where expires_at >= ?", Timestamp.from(now));
         return new PrivacyAuditDeadLetterWebhookReplayStoreSnapshot(
                 count,
                 expiringSoon,
@@ -126,7 +127,7 @@ public class JdbcPrivacyAuditDeadLetterWebhookReplayStore implements PrivacyAudi
     }
 
     private String selectSql() {
-        return "select nonce, expires_at from " + tableName + " order by expires_at asc, nonce asc";
+        return "select nonce, expires_at from " + tableName + " where expires_at >= ? order by expires_at asc, nonce asc";
     }
 
     private String cleanupSql() {
@@ -180,6 +181,11 @@ public class JdbcPrivacyAuditDeadLetterWebhookReplayStore implements PrivacyAudi
 
     private Instant queryForInstant(String sql) {
         Timestamp timestamp = jdbcOperations.queryForObject(sql, Timestamp.class);
+        return timestamp == null ? null : timestamp.toInstant();
+    }
+
+    private Instant queryForInstant(String sql, Object... args) {
+        Timestamp timestamp = jdbcOperations.queryForObject(sql, Timestamp.class, args);
         return timestamp == null ? null : timestamp.toInstant();
     }
 }

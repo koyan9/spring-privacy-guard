@@ -19,12 +19,61 @@ Implement `PrivacyAuditDeadLetterWebhookReplayStore` and wire it as a bean to ov
 - Use `FilePrivacyAuditDeadLetterWebhookReplayStore` when you run a single receiver instance and can persist the file.
 - Use `JdbcPrivacyAuditDeadLetterWebhookReplayStore` when you run multiple receiver instances or need shared state.
 
+### Verification Settings
+
+You can configure receiver verification settings directly with properties:
+
+```yaml
+privacy:
+  guard:
+    audit:
+      dead-letter:
+        observability:
+          alert:
+            receiver:
+              verification:
+                enabled: true
+                bearer-token: demo-receiver-token
+                signature-secret: demo-receiver-secret
+                max-skew: 5m
+```
+
+If verification is enabled without a bearer token or signature secret, verification will not reject requests.
+
+### Verification Failure Responses
+
+Verification failures return a JSON response with a reason code:
+
+```json
+{"error":"Invalid signature","reason":"INVALID_SIGNATURE"}
+```
+
+Reason codes include `INVALID_AUTHORIZATION`, `MISSING_SIGNATURE_HEADERS`, `INVALID_TIMESTAMP`, `EXPIRED_TIMESTAMP`, `INVALID_SIGNATURE`, and `REPLAY_DETECTED`.
+
 ### Migrating from File to JDBC
 
 - Plan for a clean cutover: existing nonces in the file store will not be automatically imported.
 - During migration, rotate receiver secrets if you want to invalidate old nonces.
 - Schedule a brief maintenance window and clear the replay store before switching.
 - After migration, enable `replay-store.jdbc.initialize-schema` once, then disable it if you manage schema separately.
+
+### File Replay Store
+
+Enable the file replay store for single-instance deployments:
+
+```yaml
+privacy:
+  guard:
+    audit:
+      dead-letter:
+        observability:
+          alert:
+            receiver:
+              replay-store:
+                file:
+                  enabled: true
+                  path: /var/lib/privacy-audit/replay-store.json
+```
 
 ### JDBC Replay Store
 
@@ -68,9 +117,18 @@ Use the dialect switch when your database vendor requires a custom schema varian
 
 Receiver replay-store metrics are exposed when Micrometer is available:
 
+Webhook alert delivery diagnostics metrics (when enabled):
+
+- `privacy.audit.deadletters.alert.webhook.failures{type=*,retryable=*}`
+- `privacy.audit.deadletters.alert.webhook.last_failure_status`
+- `privacy.audit.deadletters.alert.webhook.last_failure_retryable`
+- `privacy.audit.deadletters.alert.webhook.last_failure_type{type=*}`
+
 - `privacy.audit.deadletters.receiver.replay_store.count`
 - `privacy.audit.deadletters.receiver.replay_store.expiring_soon`
 - `privacy.audit.deadletters.receiver.replay_store.expiry_seconds{kind=*}`
+
+Snapshot and metric counts exclude expired entries even if cleanup has not run yet.
 
 Use Actuator to query these metrics:
 
