@@ -90,6 +90,12 @@ privacy:
 | `privacy.guard.audit.dead-letter.observability.alert.email.to` | 空 | 启用内置 email 告警 |
 | `privacy.guard.audit.dead-letter.observability.alert.receiver.filter.enabled` | `false` | 启用内置 receiver 验签过滤器 |
 | `privacy.guard.audit.dead-letter.observability.alert.receiver.interceptor.enabled` | `false` | 启用内置 receiver 验签拦截器 |
+| `privacy.guard.audit.dead-letter.observability.alert.receiver.verification.enabled` | `false` | 通过配置创建 receiver 验签设置 |
+| `privacy.guard.audit.dead-letter.observability.alert.receiver.verification.bearer-token` | 空 | 内置验签需要的 bearer token |
+| `privacy.guard.audit.dead-letter.observability.alert.receiver.verification.signature-secret` | 空 | 内置验签需要的签名密钥 |
+| `privacy.guard.audit.dead-letter.observability.alert.receiver.verification.max-skew` | `5m` | 允许的时间戳偏移窗口 |
+| `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.file.enabled` | `false` | 启用文件型 replay-store |
+| `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.file.path` | `privacy-audit-webhook-replay-store.json` | replay-store 文件路径 |
 | `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.enabled` | `false` | 启用 JDBC replay-store |
 | `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.table-name` | `privacy_audit_webhook_replay_store` | replay-store JDBC 表名 |
 | `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.initialize-schema` | `false` | 初始化 replay-store SQL 表 |
@@ -153,6 +159,10 @@ Starter 支持完整的审计与死信处理链路：
 - `privacy.audit.deadletters.alert.webhook.retries`
 - `privacy.audit.deadletters.alert.webhook.deliveries{outcome=*}`
 - `privacy.audit.deadletters.alert.webhook.last_delivery_seconds{outcome=*}`
+- `privacy.audit.deadletters.alert.webhook.failures{type=*,retryable=*}`
+- `privacy.audit.deadletters.alert.webhook.last_failure_status`
+- `privacy.audit.deadletters.alert.webhook.last_failure_retryable`
+- `privacy.audit.deadletters.alert.webhook.last_failure_type{type=*}`
 
 ### 内置 webhook / email 告警
 
@@ -177,6 +187,8 @@ privacy:
               max-attempts: 3
               backoff: 200ms
 ```
+
+当回调失败时，日志会包含失败类型、状态码、是否可重试以及简短错误信息。
 
 Email 告警示例：
 
@@ -218,6 +230,49 @@ Starter 提供可复用的 webhook receiver 校验能力：
 - 使用 `filter` 模式保护接收端路径
 - 使用 `interceptor` 模式保护接收端路径
 - 直接在业务代码中注入 verifier 做手动校验
+
+验签失败时会返回包含原因码的 JSON 响应，例如：
+
+```json
+{"error":"Invalid signature","reason":"INVALID_SIGNATURE"}
+```
+
+原因码包括 `INVALID_AUTHORIZATION`、`MISSING_SIGNATURE_HEADERS`、`INVALID_TIMESTAMP`、`EXPIRED_TIMESTAMP`、`INVALID_SIGNATURE`、`REPLAY_DETECTED`。
+
+也可以直接通过配置创建验签设置：
+
+```yaml
+privacy:
+  guard:
+    audit:
+      dead-letter:
+        observability:
+          alert:
+            receiver:
+              verification:
+                enabled: true
+                bearer-token: demo-receiver-token
+                signature-secret: demo-receiver-secret
+                max-skew: 5m
+```
+
+如果启用 receiver 验签但未配置 bearer token 或 signature secret，验签将变为放行模式。
+
+### 文件型 Replay-Store 示例
+
+```yaml
+privacy:
+  guard:
+    audit:
+      dead-letter:
+        observability:
+          alert:
+            receiver:
+              replay-store:
+                file:
+                  enabled: true
+                  path: /var/lib/privacy-audit/replay-store.json
+```
 
 ### JDBC Replay-Store 示例
 

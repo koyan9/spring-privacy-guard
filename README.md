@@ -86,6 +86,12 @@ privacy:
 | `privacy.guard.audit.dead-letter.observability.alert.email.to` | empty | Enables built-in email alerts. |
 | `privacy.guard.audit.dead-letter.observability.alert.receiver.filter.enabled` | `false` | Enables the built-in receiver verification filter. |
 | `privacy.guard.audit.dead-letter.observability.alert.receiver.interceptor.enabled` | `false` | Enables the built-in receiver verification interceptor. |
+| `privacy.guard.audit.dead-letter.observability.alert.receiver.verification.enabled` | `false` | Creates receiver verification settings from properties. |
+| `privacy.guard.audit.dead-letter.observability.alert.receiver.verification.bearer-token` | empty | Optional bearer token required by the built-in verifier. |
+| `privacy.guard.audit.dead-letter.observability.alert.receiver.verification.signature-secret` | empty | Optional HMAC secret required by the built-in verifier. |
+| `privacy.guard.audit.dead-letter.observability.alert.receiver.verification.max-skew` | `5m` | Allowed timestamp skew for receiver verification. |
+| `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.file.enabled` | `false` | Enables the file-backed replay store for receiver verification. |
+| `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.file.path` | `privacy-audit-webhook-replay-store.json` | File path for replay store entries. |
 | `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.enabled` | `false` | Enables the JDBC replay store for receiver verification. |
 | `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.table-name` | `privacy_audit_webhook_replay_store` | JDBC table name for replay store entries. |
 | `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.initialize-schema` | `false` | Runs the replay store schema initializer. |
@@ -145,6 +151,10 @@ When Actuator is present, the starter can expose:
 - `privacy.audit.deadletters.alert.webhook.retries`
 - `privacy.audit.deadletters.alert.webhook.deliveries{outcome=*}`
 - `privacy.audit.deadletters.alert.webhook.last_delivery_seconds{outcome=*}`
+- `privacy.audit.deadletters.alert.webhook.failures{type=*,retryable=*}`
+- `privacy.audit.deadletters.alert.webhook.last_failure_status`
+- `privacy.audit.deadletters.alert.webhook.last_failure_retryable`
+- `privacy.audit.deadletters.alert.webhook.last_failure_type{type=*}`
 - `privacy.audit.deadletters.receiver.replay_store.count`
 - `privacy.audit.deadletters.receiver.replay_store.expiring_soon`
 - `privacy.audit.deadletters.receiver.replay_store.expiry_seconds{kind=*}`
@@ -172,6 +182,7 @@ privacy:
 ```
 
 The built-in webhook callback retries failed deliveries, signs `timestamp.nonce.payload`, and records delivery metrics when Micrometer is available.
+When delivery fails, the callback logs include failure type, status code, retryable flag, and a short error message.
 
 ### Built-in Email Alerts
 
@@ -212,6 +223,51 @@ Choose one of these protection modes:
 - `privacy.guard.audit.dead-letter.observability.alert.receiver.filter.enabled=true`
 - `privacy.guard.audit.dead-letter.observability.alert.receiver.interceptor.enabled=true`
 - manual verifier injection in your own endpoint code
+
+Verification failures return a JSON body with an error message and a reason code, for example:
+
+```json
+{"error":"Invalid signature","reason":"INVALID_SIGNATURE"}
+```
+
+Reason codes include `INVALID_AUTHORIZATION`, `MISSING_SIGNATURE_HEADERS`, `INVALID_TIMESTAMP`, `EXPIRED_TIMESTAMP`, `INVALID_SIGNATURE`, and `REPLAY_DETECTED`.
+
+You can supply verification settings with properties instead of defining a bean:
+
+```yaml
+privacy:
+  guard:
+    audit:
+      dead-letter:
+        observability:
+          alert:
+            receiver:
+              verification:
+                enabled: true
+                bearer-token: demo-receiver-token
+                signature-secret: demo-receiver-secret
+                max-skew: 5m
+```
+
+If receiver verification is enabled without a bearer token or signature secret, verification becomes a no-op and only basic routing is applied.
+
+### File Replay Store
+
+Use the file-backed replay store for single-instance deployments:
+
+```yaml
+privacy:
+  guard:
+    audit:
+      dead-letter:
+        observability:
+          alert:
+            receiver:
+              replay-store:
+                file:
+                  enabled: true
+                  path: /var/lib/privacy-audit/replay-store.json
+```
 
 ### JDBC Replay Store
 

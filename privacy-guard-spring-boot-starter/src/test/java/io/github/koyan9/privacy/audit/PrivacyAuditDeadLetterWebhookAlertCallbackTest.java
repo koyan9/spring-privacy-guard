@@ -98,6 +98,11 @@ class PrivacyAuditDeadLetterWebhookAlertCallbackTest {
         assertThat(meterRegistry.get("privacy.audit.deadletters.alert.webhook.attempts").counter().count()).isEqualTo(2.0d);
         assertThat(meterRegistry.get("privacy.audit.deadletters.alert.webhook.retries").counter().count()).isEqualTo(1.0d);
         assertThat(meterRegistry.get("privacy.audit.deadletters.alert.webhook.deliveries").tag("outcome", "success").counter().count()).isEqualTo(1.0d);
+        assertThat(meterRegistry.get("privacy.audit.deadletters.alert.webhook.failures")
+                .tag("type", "http_status")
+                .tag("retryable", "true")
+                .counter()
+                .count()).isEqualTo(1.0d);
     }
 
     @Test
@@ -122,6 +127,11 @@ class PrivacyAuditDeadLetterWebhookAlertCallbackTest {
         assertThat(meterRegistry.get("privacy.audit.deadletters.alert.webhook.retries").counter().count()).isEqualTo(1.0d);
         assertThat(meterRegistry.get("privacy.audit.deadletters.alert.webhook.deliveries").tag("outcome", "failure").counter().count()).isEqualTo(1.0d);
         assertThat(meterRegistry.get("privacy.audit.deadletters.alert.webhook.last_delivery_seconds").tag("outcome", "failure").gauge().value()).isPositive();
+        assertThat(meterRegistry.get("privacy.audit.deadletters.alert.webhook.failures")
+                .tag("type", "http_status")
+                .tag("retryable", "true")
+                .counter()
+                .count()).isEqualTo(2.0d);
     }
 
     private PrivacyGuardProperties.AlertWebhook webhookProperties(HttpServer httpServer, int maxAttempts, Duration backoff) {

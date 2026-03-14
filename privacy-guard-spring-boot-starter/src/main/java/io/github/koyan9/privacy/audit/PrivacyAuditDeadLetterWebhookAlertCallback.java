@@ -7,6 +7,8 @@ package io.github.koyan9.privacy.audit;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.koyan9.privacy.autoconfigure.PrivacyGuardProperties;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.util.StringUtils;
 
 import javax.crypto.Mac;
@@ -23,6 +25,8 @@ import java.util.HexFormat;
 import java.util.UUID;
 
 public class PrivacyAuditDeadLetterWebhookAlertCallback implements PrivacyAuditDeadLetterAlertCallback {
+
+    private static final Logger logger = LoggerFactory.getLogger(PrivacyAuditDeadLetterWebhookAlertCallback.class);
 
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
@@ -54,6 +58,17 @@ public class PrivacyAuditDeadLetterWebhookAlertCallback implements PrivacyAuditD
                 return;
             } catch (RuntimeException ex) {
                 lastFailure = ex;
+                WebhookAlertFailureDetail detail = detailFor(ex);
+                telemetry.recordFailureDetail(detail);
+                logger.warn(
+                        "Webhook alert delivery failed (attempt {}/{}): type={} status={} retryable={} message={}",
+                        attempt,
+                        maxAttempts,
+                        detail.failureType(),
+                        detail.statusCode(),
+                        detail.retryable(),
+                        detail.message()
+                );
                 if (attempt >= maxAttempts) {
                     telemetry.recordFailure(attempt);
                     throw ex;
@@ -79,7 +94,7 @@ public class PrivacyAuditDeadLetterWebhookAlertCallback implements PrivacyAuditD
             addSignatureHeaders(builder, payload);
             HttpResponse<Void> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.discarding());
             if (response.statusCode() >= 400) {
-                throw new IllegalStateException("Webhook alert callback returned status " + response.statusCode());
+                throw new WebhookAlertDeliveryException(response.statusCode());
             }
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
@@ -124,6 +139,41 @@ public class PrivacyAuditDeadLetterWebhookAlertCallback implements PrivacyAuditD
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Webhook alert callback retry interrupted", ex);
+        }
+    }
+
+    private WebhookAlertFailureDetail detailFor(RuntimeException exception) {
+        if (exception instanceof WebhookAlertDeliveryException deliveryException) {
+            return new WebhookAlertFailureDetail(
+                    "HTTP_STATUS",
+                    deliveryException.getMessage(),
+                    deliveryException.statusCode(),
+                    deliveryException.retryable()
+            );
+        }
+        if (exception instanceof UncheckedIOException uncheckedIOException) {
+            Throwable cause = uncheckedIOException.getCause();
+            String message = cause == null ? exception.getMessage() : cause.toString();
+            return new WebhookAlertFailureDetail("IO_ERROR", message, -1, true);
+        }
+        return new WebhookAlertFailureDetail("RUNTIME_ERROR", exception.toString(), -1, false);
+    }
+
+    static class WebhookAlertDeliveryException extends IllegalStateException {
+
+        private final int statusCode;
+
+        WebhookAlertDeliveryException(int statusCode) {
+            super("Webhook alert callback returned status " + statusCode);
+            this.statusCode = statusCode;
+        }
+
+        int statusCode() {
+            return statusCode;
+        }
+
+        boolean retryable() {
+            return statusCode >= 500 || statusCode == 429;
         }
     }
 }

@@ -15,6 +15,9 @@ public interface PrivacyAuditDeadLetterWebhookAlertTelemetry {
 
     void recordRetryScheduled(int nextAttempt);
 
+    default void recordFailureDetail(WebhookAlertFailureDetail detail) {
+    }
+
     static PrivacyAuditDeadLetterWebhookAlertTelemetry noop() {
         return new PrivacyAuditDeadLetterWebhookAlertTelemetry() {
             @Override
@@ -31,6 +34,10 @@ public interface PrivacyAuditDeadLetterWebhookAlertTelemetry {
 
             @Override
             public void recordRetryScheduled(int nextAttempt) {
+            }
+
+            @Override
+            public void recordFailureDetail(WebhookAlertFailureDetail detail) {
             }
         };
     }

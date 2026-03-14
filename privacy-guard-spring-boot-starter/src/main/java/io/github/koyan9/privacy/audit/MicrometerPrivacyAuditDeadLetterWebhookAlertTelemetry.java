@@ -10,7 +10,10 @@ import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 
 import java.time.Instant;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class MicrometerPrivacyAuditDeadLetterWebhookAlertTelemetry implements PrivacyAuditDeadLetterWebhookAlertTelemetry {
 
@@ -18,10 +21,15 @@ public class MicrometerPrivacyAuditDeadLetterWebhookAlertTelemetry implements Pr
     private final Counter successCounter;
     private final Counter failureCounter;
     private final Counter retryCounter;
+    private final MeterRegistry meterRegistry;
     private final AtomicLong lastSuccessEpochSeconds = new AtomicLong();
     private final AtomicLong lastFailureEpochSeconds = new AtomicLong();
+    private final AtomicInteger lastFailureStatus = new AtomicInteger();
+    private final AtomicInteger lastFailureRetryable = new AtomicInteger();
+    private final AtomicReference<String> lastFailureType = new AtomicReference<>("unknown");
 
     public MicrometerPrivacyAuditDeadLetterWebhookAlertTelemetry(MeterRegistry meterRegistry) {
+        this.meterRegistry = meterRegistry;
         this.attemptCounter = meterRegistry.counter("privacy.audit.deadletters.alert.webhook.attempts");
         this.successCounter = meterRegistry.counter("privacy.audit.deadletters.alert.webhook.deliveries", "outcome", "success");
         this.failureCounter = meterRegistry.counter("privacy.audit.deadletters.alert.webhook.deliveries", "outcome", "failure");
@@ -34,6 +42,18 @@ public class MicrometerPrivacyAuditDeadLetterWebhookAlertTelemetry implements Pr
                 .description("Last failed built-in webhook alert delivery timestamp as epoch seconds")
                 .tag("outcome", "failure")
                 .register(meterRegistry);
+        Gauge.builder("privacy.audit.deadletters.alert.webhook.last_failure_status", lastFailureStatus, AtomicInteger::doubleValue)
+                .description("Last failed built-in webhook alert HTTP status code or 0 when unavailable")
+                .register(meterRegistry);
+        Gauge.builder("privacy.audit.deadletters.alert.webhook.last_failure_retryable", lastFailureRetryable, AtomicInteger::doubleValue)
+                .description("Whether the last webhook alert failure was retryable (1 for retryable, 0 otherwise)")
+                .register(meterRegistry);
+        for (String type : Set.of("http_status", "io_error", "runtime_error", "unknown")) {
+            Gauge.builder("privacy.audit.deadletters.alert.webhook.last_failure_type", () -> type.equals(lastFailureType.get()) ? 1.0d : 0.0d)
+                    .description("Tracks the last webhook alert failure type as a 1/0 gauge")
+                    .tag("type", type)
+                    .register(meterRegistry);
+        }
     }
 
     @Override
@@ -56,5 +76,34 @@ public class MicrometerPrivacyAuditDeadLetterWebhookAlertTelemetry implements Pr
     @Override
     public void recordRetryScheduled(int nextAttempt) {
         retryCounter.increment();
+    }
+
+    @Override
+    public void recordFailureDetail(WebhookAlertFailureDetail detail) {
+        if (detail == null) {
+            return;
+        }
+        String type = normalizeType(detail.failureType());
+        lastFailureType.set(type);
+        lastFailureStatus.set(Math.max(0, detail.statusCode()));
+        lastFailureRetryable.set(detail.retryable() ? 1 : 0);
+        meterRegistry.counter(
+                "privacy.audit.deadletters.alert.webhook.failures",
+                "type",
+                type,
+                "retryable",
+                String.valueOf(detail.retryable())
+        ).increment();
+    }
+
+    private String normalizeType(String value) {
+        if (value == null || value.isBlank()) {
+            return "unknown";
+        }
+        String normalized = value.trim().toLowerCase();
+        return switch (normalized) {
+            case "http_status", "io_error", "runtime_error" -> normalized;
+            default -> "unknown";
+        };
     }
 }
