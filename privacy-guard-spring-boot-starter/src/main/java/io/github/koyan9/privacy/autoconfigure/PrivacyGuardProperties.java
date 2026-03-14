@@ -371,6 +371,7 @@ public class PrivacyGuardProperties {
         private final AlertReceiverInterceptor interceptor = new AlertReceiverInterceptor();
         private final AlertReceiverMetrics metrics = new AlertReceiverMetrics();
         private final AlertReceiverReplayStore replayStore = new AlertReceiverReplayStore();
+        private final AlertReceiverVerification verification = new AlertReceiverVerification();
 
         public AlertReceiverFilter getFilter() {
             return filter;
@@ -386,6 +387,10 @@ public class PrivacyGuardProperties {
 
         public AlertReceiverReplayStore getReplayStore() {
             return replayStore;
+        }
+
+        public AlertReceiverVerification getVerification() {
+            return verification;
         }
     }
 
@@ -457,9 +462,112 @@ public class PrivacyGuardProperties {
 
         private final io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStoreJdbcProperties jdbc =
                 new io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStoreJdbcProperties();
+        private final AlertReceiverReplayStoreFile file = new AlertReceiverReplayStoreFile();
 
         public io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStoreJdbcProperties getJdbc() {
             return jdbc;
+        }
+
+        public AlertReceiverReplayStoreFile getFile() {
+            return file;
+        }
+    }
+
+    public static class AlertReceiverReplayStoreFile {
+
+        private boolean enabled = false;
+        private String path = "privacy-audit-webhook-replay-store.json";
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getPath() {
+            return path;
+        }
+
+        public void setPath(String path) {
+            this.path = path;
+        }
+    }
+
+    public static class AlertReceiverVerification {
+
+        private boolean enabled = false;
+        private String bearerToken;
+        private String signatureSecret;
+        private String signatureAlgorithm = "HmacSHA256";
+        private String signatureHeader = "X-Privacy-Alert-Signature";
+        private String timestampHeader = "X-Privacy-Alert-Timestamp";
+        private String nonceHeader = "X-Privacy-Alert-Nonce";
+        private Duration maxSkew = Duration.ofMinutes(5);
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getBearerToken() {
+            return bearerToken;
+        }
+
+        public void setBearerToken(String bearerToken) {
+            this.bearerToken = bearerToken;
+        }
+
+        public String getSignatureSecret() {
+            return signatureSecret;
+        }
+
+        public void setSignatureSecret(String signatureSecret) {
+            this.signatureSecret = signatureSecret;
+        }
+
+        public String getSignatureAlgorithm() {
+            return signatureAlgorithm;
+        }
+
+        public void setSignatureAlgorithm(String signatureAlgorithm) {
+            this.signatureAlgorithm = signatureAlgorithm;
+        }
+
+        public String getSignatureHeader() {
+            return signatureHeader;
+        }
+
+        public void setSignatureHeader(String signatureHeader) {
+            this.signatureHeader = signatureHeader;
+        }
+
+        public String getTimestampHeader() {
+            return timestampHeader;
+        }
+
+        public void setTimestampHeader(String timestampHeader) {
+            this.timestampHeader = timestampHeader;
+        }
+
+        public String getNonceHeader() {
+            return nonceHeader;
+        }
+
+        public void setNonceHeader(String nonceHeader) {
+            this.nonceHeader = nonceHeader;
+        }
+
+        public Duration getMaxSkew() {
+            return maxSkew;
+        }
+
+        public void setMaxSkew(Duration maxSkew) {
+            this.maxSkew = maxSkew;
         }
     }
     public static class AlertWebhook {
@@ -636,7 +744,6 @@ public class PrivacyGuardProperties {
         }
     }
 }
-
 
 
 

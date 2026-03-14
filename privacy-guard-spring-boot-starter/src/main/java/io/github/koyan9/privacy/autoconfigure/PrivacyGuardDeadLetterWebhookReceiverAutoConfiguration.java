@@ -5,6 +5,8 @@
 
 package io.github.koyan9.privacy.autoconfigure;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.koyan9.privacy.audit.FilePrivacyAuditDeadLetterWebhookReplayStore;
 import io.github.koyan9.privacy.audit.InMemoryPrivacyAuditDeadLetterWebhookReplayStore;
 import io.github.koyan9.privacy.audit.JdbcPrivacyAuditDeadLetterWebhookReplayStore;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookBodyCachingFilter;
@@ -18,8 +20,11 @@ import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookVerificationF
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookVerificationInterceptor;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookVerificationSettings;
 import io.github.koyan9.privacy.audit.PrivacyAuditSchemaInitializer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.AnyNestedCondition;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
@@ -27,14 +32,64 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Conditional;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.jdbc.core.JdbcOperations;
+import org.springframework.util.StringUtils;
 
 import javax.sql.DataSource;
+import java.nio.file.Path;
 
 @AutoConfiguration
 public class PrivacyGuardDeadLetterWebhookReceiverAutoConfiguration {
+
+    private static final Logger logger = LoggerFactory.getLogger(PrivacyGuardDeadLetterWebhookReceiverAutoConfiguration.class);
+
+    static class ReceiverVerificationPropertiesEnabledCondition extends AnyNestedCondition {
+
+        ReceiverVerificationPropertiesEnabledCondition() {
+            super(ConfigurationPhase.REGISTER_BEAN);
+        }
+
+        @ConditionalOnProperty(
+                prefix = "privacy.guard.audit.dead-letter.observability.alert.receiver.filter",
+                name = "enabled",
+                havingValue = "true"
+        )
+        static class FilterEnabled {
+        }
+
+        @ConditionalOnProperty(
+                prefix = "privacy.guard.audit.dead-letter.observability.alert.receiver.interceptor",
+                name = "enabled",
+                havingValue = "true"
+        )
+        static class InterceptorEnabled {
+        }
+
+        @ConditionalOnProperty(
+                prefix = "privacy.guard.audit.dead-letter.observability.alert.receiver.verification",
+                name = "enabled",
+                havingValue = "true"
+        )
+        static class VerificationEnabled {
+        }
+    }
+
+    static class ReceiverVerificationEnabledCondition extends AnyNestedCondition {
+
+        ReceiverVerificationEnabledCondition() {
+            super(ConfigurationPhase.REGISTER_BEAN);
+        }
+
+        @Conditional(ReceiverVerificationPropertiesEnabledCondition.class)
+        static class PropertiesEnabled {
+        }
+
+        @ConditionalOnBean(PrivacyAuditDeadLetterWebhookVerificationSettings.class)
+        static class SettingsBeanPresent {
+        }
+    }
 
     @Bean
     @ConditionalOnMissingBean
@@ -43,14 +98,45 @@ public class PrivacyGuardDeadLetterWebhookReceiverAutoConfiguration {
     }
 
     @Bean
-    @ConditionalOnBean(PrivacyAuditDeadLetterWebhookVerificationSettings.class)
+    @ConditionalOnMissingBean
+    @Conditional(ReceiverVerificationPropertiesEnabledCondition.class)
+    public PrivacyAuditDeadLetterWebhookVerificationSettings privacyAuditDeadLetterWebhookVerificationSettings(
+            PrivacyGuardProperties properties
+    ) {
+        PrivacyGuardProperties.AlertReceiverVerification verification = properties.getAudit()
+                .getDeadLetter()
+                .getObservability()
+                .getAlert()
+                .getReceiver()
+                .getVerification();
+        if (!StringUtils.hasText(verification.getBearerToken()) && !StringUtils.hasText(verification.getSignatureSecret())) {
+            logger.warn("Receiver verification is enabled but no bearer token or signature secret is configured; requests will not be rejected");
+        }
+        return new PrivacyAuditDeadLetterWebhookVerificationSettings(
+                verification.getBearerToken(),
+                verification.getSignatureSecret(),
+                verification.getSignatureAlgorithm(),
+                verification.getSignatureHeader(),
+                verification.getTimestampHeader(),
+                verification.getNonceHeader(),
+                verification.getMaxSkew()
+        );
+    }
+
+    @Bean
+    @Conditional(ReceiverVerificationEnabledCondition.class)
     @ConditionalOnMissingBean(PrivacyAuditDeadLetterWebhookReplayStore.class)
+    @ConditionalOnExpression(
+            "'${privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.enabled:false}' != 'true' and " +
+                    "'${privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.file.enabled:false}' != 'true'"
+    )
     public InMemoryPrivacyAuditDeadLetterWebhookReplayStore privacyAuditDeadLetterWebhookReplayStore() {
         return new InMemoryPrivacyAuditDeadLetterWebhookReplayStore();
     }
 
     @Bean
-    @ConditionalOnBean({PrivacyAuditDeadLetterWebhookVerificationSettings.class, PrivacyAuditDeadLetterWebhookReplayStore.class})
+    @Conditional(ReceiverVerificationEnabledCondition.class)
+    @ConditionalOnBean(PrivacyAuditDeadLetterWebhookReplayStore.class)
     @ConditionalOnMissingBean
     public PrivacyAuditDeadLetterWebhookRequestVerifier privacyAuditDeadLetterWebhookRequestVerifier(
             PrivacyAuditDeadLetterWebhookVerificationSettings settings,
@@ -88,67 +174,92 @@ public class PrivacyGuardDeadLetterWebhookReceiverAutoConfiguration {
         return new PrivacyAuditDeadLetterWebhookReplayStoreMetricsBinder(observationService);
     }
 
-    @Configuration(proxyBeanMethods = false)
+    @Bean
     @ConditionalOnClass(name = "org.springframework.jdbc.core.JdbcOperations")
-    static class JdbcReplayStoreConfiguration {
+    @Conditional(ReceiverVerificationEnabledCondition.class)
+    @ConditionalOnMissingBean(PrivacyAuditDeadLetterWebhookReplayStore.class)
+    @ConditionalOnProperty(
+            prefix = "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc",
+            name = "enabled",
+            havingValue = "true"
+    )
+    public JdbcPrivacyAuditDeadLetterWebhookReplayStore jdbcPrivacyAuditDeadLetterWebhookReplayStore(
+            JdbcOperations jdbcOperations,
+            PrivacyGuardProperties properties
+    ) {
+        PrivacyAuditDeadLetterWebhookReplayStoreJdbcProperties jdbcProperties = properties.getAudit()
+                .getDeadLetter()
+                .getObservability()
+                .getAlert()
+                .getReceiver()
+                .getReplayStore()
+                .getJdbc();
+        return new JdbcPrivacyAuditDeadLetterWebhookReplayStore(
+                jdbcOperations,
+                jdbcProperties.getTableName(),
+                jdbcProperties.getCleanupInterval(),
+                jdbcProperties.getCleanupBatchSize()
+        );
+    }
 
-        @Bean
-        @ConditionalOnBean(PrivacyAuditDeadLetterWebhookVerificationSettings.class)
-        @ConditionalOnMissingBean(PrivacyAuditDeadLetterWebhookReplayStore.class)
-        @ConditionalOnProperty(
-                prefix = "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc",
-                name = "enabled",
-                havingValue = "true"
-        )
-        public JdbcPrivacyAuditDeadLetterWebhookReplayStore jdbcPrivacyAuditDeadLetterWebhookReplayStore(
-                JdbcOperations jdbcOperations,
-                PrivacyGuardProperties properties
-        ) {
-            PrivacyAuditDeadLetterWebhookReplayStoreJdbcProperties jdbcProperties = properties.getAudit()
-                    .getDeadLetter()
-                    .getObservability()
-                    .getAlert()
-                    .getReceiver()
-                    .getReplayStore()
-                    .getJdbc();
-            return new JdbcPrivacyAuditDeadLetterWebhookReplayStore(
-                    jdbcOperations,
-                    jdbcProperties.getTableName(),
-                    jdbcProperties.getCleanupInterval(),
-                    jdbcProperties.getCleanupBatchSize()
-            );
-        }
+    @Bean
+    @ConditionalOnClass(name = "org.springframework.jdbc.core.JdbcOperations")
+    @Conditional(ReceiverVerificationEnabledCondition.class)
+    @ConditionalOnProperty(
+            prefix = "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc",
+            name = {"enabled", "initialize-schema"},
+            havingValue = "true"
+    )
+    public PrivacyAuditSchemaInitializer privacyAuditDeadLetterWebhookReplayStoreSchemaInitializer(
+            JdbcOperations jdbcOperations,
+            ResourceLoader resourceLoader,
+            ObjectProvider<DataSource> dataSourceProvider,
+            PrivacyAuditDeadLetterWebhookReplayStoreSchemaLocationResolver schemaLocationResolver,
+            PrivacyGuardProperties properties
+    ) {
+        PrivacyAuditDeadLetterWebhookReplayStoreJdbcProperties jdbcProperties = properties.getAudit()
+                .getDeadLetter()
+                .getObservability()
+                .getAlert()
+                .getReceiver()
+                .getReplayStore()
+                .getJdbc();
+        String schemaLocation = schemaLocationResolver.resolve(jdbcProperties, dataSourceProvider.getIfAvailable());
+        PrivacyAuditSchemaInitializer initializer = new PrivacyAuditSchemaInitializer(
+                jdbcOperations,
+                resourceLoader,
+                schemaLocation,
+                jdbcProperties.getTableName()
+        );
+        initializer.initialize();
+        return initializer;
+    }
 
-        @Bean
-        @ConditionalOnBean(PrivacyAuditDeadLetterWebhookVerificationSettings.class)
-        @ConditionalOnExpression(
-                "'${privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.enabled:false}' == 'true' " +
-                        "and '${privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.initialize-schema:false}' == 'true'"
-        )
-        public PrivacyAuditSchemaInitializer privacyAuditDeadLetterWebhookReplayStoreSchemaInitializer(
-                JdbcOperations jdbcOperations,
-                ResourceLoader resourceLoader,
-                ObjectProvider<DataSource> dataSourceProvider,
-                PrivacyAuditDeadLetterWebhookReplayStoreSchemaLocationResolver schemaLocationResolver,
-                PrivacyGuardProperties properties
-        ) {
-            PrivacyAuditDeadLetterWebhookReplayStoreJdbcProperties jdbcProperties = properties.getAudit()
-                    .getDeadLetter()
-                    .getObservability()
-                    .getAlert()
-                    .getReceiver()
-                    .getReplayStore()
-                    .getJdbc();
-            String schemaLocation = schemaLocationResolver.resolve(jdbcProperties, dataSourceProvider.getIfAvailable());
-            PrivacyAuditSchemaInitializer initializer = new PrivacyAuditSchemaInitializer(
-                    jdbcOperations,
-                    resourceLoader,
-                    schemaLocation,
-                    jdbcProperties.getTableName()
-            );
-            initializer.initialize();
-            return initializer;
+    @Bean
+    @ConditionalOnClass(ObjectMapper.class)
+    @Conditional(ReceiverVerificationEnabledCondition.class)
+    @ConditionalOnMissingBean(PrivacyAuditDeadLetterWebhookReplayStore.class)
+    @ConditionalOnProperty(
+            prefix = "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.file",
+            name = "enabled",
+            havingValue = "true"
+    )
+    @ConditionalOnExpression("'${privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.enabled:false}' != 'true'")
+    public FilePrivacyAuditDeadLetterWebhookReplayStore filePrivacyAuditDeadLetterWebhookReplayStore(
+            ObjectMapper objectMapper,
+            PrivacyGuardProperties properties
+    ) {
+        PrivacyGuardProperties.AlertReceiverReplayStoreFile file = properties.getAudit()
+                .getDeadLetter()
+                .getObservability()
+                .getAlert()
+                .getReceiver()
+                .getReplayStore()
+                .getFile();
+        if (!StringUtils.hasText(file.getPath())) {
+            throw new IllegalArgumentException("Replay-store file path must be configured when file replay-store is enabled");
         }
+        return new FilePrivacyAuditDeadLetterWebhookReplayStore(Path.of(file.getPath()), objectMapper);
     }
 
     @Bean

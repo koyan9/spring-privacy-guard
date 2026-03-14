@@ -248,6 +248,52 @@
       "defaultValue": "/privacy-audit-alerts/**"
     },
     {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.receiver.verification.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Creates the built-in webhook verification settings bean from configuration properties.",
+      "defaultValue": false
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.receiver.verification.bearer-token",
+      "type": "java.lang.String",
+      "description": "Optional bearer token required by the built-in webhook verifier."
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.receiver.verification.signature-secret",
+      "type": "java.lang.String",
+      "description": "Optional HMAC secret required by the built-in webhook verifier."
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.receiver.verification.signature-algorithm",
+      "type": "java.lang.String",
+      "description": "HMAC algorithm used by the built-in webhook verifier.",
+      "defaultValue": "HmacSHA256"
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.receiver.verification.signature-header",
+      "type": "java.lang.String",
+      "description": "HTTP header that carries the webhook signature for verification.",
+      "defaultValue": "X-Privacy-Alert-Signature"
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.receiver.verification.timestamp-header",
+      "type": "java.lang.String",
+      "description": "HTTP header that carries the webhook timestamp for verification.",
+      "defaultValue": "X-Privacy-Alert-Timestamp"
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.receiver.verification.nonce-header",
+      "type": "java.lang.String",
+      "description": "HTTP header that carries the webhook nonce for verification.",
+      "defaultValue": "X-Privacy-Alert-Nonce"
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.receiver.verification.max-skew",
+      "type": "java.time.Duration",
+      "description": "Maximum allowed timestamp skew for webhook verification.",
+      "defaultValue": "5m"
+    },
+    {
       "name": "privacy.guard.audit.dead-letter.observability.alert.receiver.metrics.enabled",
       "type": "java.lang.Boolean",
       "description": "Enables replay-store Micrometer gauges when a replay store bean is available.",
@@ -258,6 +304,18 @@
       "type": "java.time.Duration",
       "description": "Window used to count replay-store entries that are about to expire.",
       "defaultValue": "5m"
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.file.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enables the file-backed replay store for webhook receiver verification.",
+      "defaultValue": false
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.file.path",
+      "type": "java.lang.String",
+      "description": "Path to the JSON file used by the file-backed replay store.",
+      "defaultValue": "privacy-audit-webhook-replay-store.json"
     },
     {
       "name": "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.enabled",
@@ -392,7 +450,6 @@
     }
   ]
 }
-
 
 
 

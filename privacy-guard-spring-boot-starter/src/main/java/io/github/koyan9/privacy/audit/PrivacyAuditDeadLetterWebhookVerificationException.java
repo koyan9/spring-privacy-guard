@@ -23,6 +23,10 @@ public class PrivacyAuditDeadLetterWebhookVerificationException extends RuntimeE
         return reason;
     }
 
+    public String reasonCode() {
+        return reason == null ? "UNKNOWN" : reason.name();
+    }
+
     public enum Reason {
         INVALID_AUTHORIZATION,
         MISSING_SIGNATURE_HEADERS,

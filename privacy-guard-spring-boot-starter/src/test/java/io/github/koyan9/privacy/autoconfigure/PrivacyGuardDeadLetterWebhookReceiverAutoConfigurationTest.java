@@ -5,6 +5,7 @@
 
 package io.github.koyan9.privacy.autoconfigure;
 
+import io.github.koyan9.privacy.audit.FilePrivacyAuditDeadLetterWebhookReplayStore;
 import io.github.koyan9.privacy.audit.InMemoryPrivacyAuditDeadLetterWebhookReplayStore;
 import io.github.koyan9.privacy.audit.JdbcPrivacyAuditDeadLetterWebhookReplayStore;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStore;
@@ -22,6 +23,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcOperations;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -47,6 +50,33 @@ class PrivacyGuardDeadLetterWebhookReceiverAutoConfigurationTest {
                     assertThat(context).hasSingleBean(InMemoryPrivacyAuditDeadLetterWebhookReplayStore.class);
                     assertThat(context).hasSingleBean(PrivacyAuditDeadLetterWebhookReplayStoreObservationService.class);
                     assertThat(context).hasSingleBean(PrivacyAuditDeadLetterWebhookReplayStoreMetricsBinder.class);
+                });
+    }
+
+    @Test
+    void createsVerificationSettingsFromProperties() {
+        contextRunner
+                .withPropertyValues(
+                        "privacy.guard.audit.dead-letter.observability.alert.receiver.verification.enabled=true",
+                        "privacy.guard.audit.dead-letter.observability.alert.receiver.verification.bearer-token=token",
+                        "privacy.guard.audit.dead-letter.observability.alert.receiver.verification.signature-secret=secret",
+                        "privacy.guard.audit.dead-letter.observability.alert.receiver.verification.signature-algorithm=HmacSHA256",
+                        "privacy.guard.audit.dead-letter.observability.alert.receiver.verification.signature-header=X-Signature",
+                        "privacy.guard.audit.dead-letter.observability.alert.receiver.verification.timestamp-header=X-Timestamp",
+                        "privacy.guard.audit.dead-letter.observability.alert.receiver.verification.nonce-header=X-Nonce",
+                        "privacy.guard.audit.dead-letter.observability.alert.receiver.verification.max-skew=10s"
+                )
+                .run(context -> {
+                    assertThat(context).hasSingleBean(PrivacyAuditDeadLetterWebhookVerificationSettings.class);
+                    PrivacyAuditDeadLetterWebhookVerificationSettings settings = context.getBean(PrivacyAuditDeadLetterWebhookVerificationSettings.class);
+                    assertThat(settings.bearerToken()).isEqualTo("token");
+                    assertThat(settings.signatureSecret()).isEqualTo("secret");
+                    assertThat(settings.signatureAlgorithm()).isEqualTo("HmacSHA256");
+                    assertThat(settings.signatureHeader()).isEqualTo("X-Signature");
+                    assertThat(settings.timestampHeader()).isEqualTo("X-Timestamp");
+                    assertThat(settings.nonceHeader()).isEqualTo("X-Nonce");
+                    assertThat(settings.maxSkew()).isEqualTo(Duration.ofSeconds(10));
+                    assertThat(context).hasSingleBean(InMemoryPrivacyAuditDeadLetterWebhookReplayStore.class);
                 });
     }
 
@@ -89,6 +119,41 @@ class PrivacyGuardDeadLetterWebhookReceiverAutoConfigurationTest {
                 .withPropertyValues("privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.enabled=true")
                 .run(context -> {
                     assertThat(context).hasSingleBean(JdbcPrivacyAuditDeadLetterWebhookReplayStore.class);
+                    assertThat(context).doesNotHaveBean(InMemoryPrivacyAuditDeadLetterWebhookReplayStore.class);
+                });
+    }
+
+    @Test
+    void createsFileReplayStoreWhenEnabled() throws Exception {
+        Path tempFile = Files.createTempFile("privacy-guard", ".json");
+        Files.deleteIfExists(tempFile);
+        contextRunner
+                .withPropertyValues(
+                        "privacy.guard.audit.dead-letter.observability.alert.receiver.verification.enabled=true",
+                        "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.file.enabled=true",
+                        "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.file.path=" + tempFile
+                )
+                .run(context -> {
+                    assertThat(context).hasSingleBean(FilePrivacyAuditDeadLetterWebhookReplayStore.class);
+                    assertThat(context).doesNotHaveBean(InMemoryPrivacyAuditDeadLetterWebhookReplayStore.class);
+                });
+    }
+
+    @Test
+    void prefersJdbcReplayStoreWhenJdbcAndFileEnabled() throws Exception {
+        Path tempFile = Files.createTempFile("privacy-guard", ".json");
+        Files.deleteIfExists(tempFile);
+        contextRunner
+                .withUserConfiguration(JdbcConfig.class)
+                .withPropertyValues(
+                        "privacy.guard.audit.dead-letter.observability.alert.receiver.verification.enabled=true",
+                        "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.enabled=true",
+                        "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.file.enabled=true",
+                        "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.file.path=" + tempFile
+                )
+                .run(context -> {
+                    assertThat(context).hasSingleBean(JdbcPrivacyAuditDeadLetterWebhookReplayStore.class);
+                    assertThat(context).doesNotHaveBean(FilePrivacyAuditDeadLetterWebhookReplayStore.class);
                     assertThat(context).doesNotHaveBean(InMemoryPrivacyAuditDeadLetterWebhookReplayStore.class);
                 });
     }

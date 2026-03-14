@@ -53,7 +53,7 @@ public class PrivacyAuditDeadLetterWebhookVerificationFilter extends OncePerRequ
         } catch (PrivacyAuditDeadLetterWebhookVerificationException ex) {
             response.setStatus(status(ex.reason()));
             response.setContentType("application/json");
-            response.getWriter().write("{\"error\":\"" + ex.getMessage() + "\"}");
+            response.getWriter().write("{\"error\":\"" + ex.getMessage() + "\",\"reason\":\"" + ex.reasonCode() + "\"}");
             return;
         }
         filterChain.doFilter(wrappedRequest, response);
