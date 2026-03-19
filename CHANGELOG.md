@@ -4,7 +4,9 @@ All notable changes to `spring-privacy-guard` will be documented in this file.
 
 ## [Unreleased]
 
-- No entries yet.
+- Added a runnable `jdbc-tenant` sample profile with H2-backed JDBC audit, dead-letter, tenant-column, and replay-store wiring.
+- Added a sample integration test and deployment recipe docs for the local JDBC tenant profile.
+- Added Micrometer counters for tenant-aware query path selection (`native` vs `fallback`) across audit and dead-letter helper reads.
 
 ## [0.3.0] - TBD
 

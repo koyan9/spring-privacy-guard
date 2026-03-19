@@ -289,6 +289,7 @@ Keep the two tenant channels distinct:
 - In non-servlet execution paths such as scheduled jobs, async consumers, or message listeners, `PrivacyTenantContextFilter` does not run. Supply a custom `PrivacyTenantProvider` or use `PrivacyTenantContextHolder`, `PrivacyTenantContextScope`, and `PrivacyTenantContextSnapshot` explicitly around the work.
 - Built-in tenant-scoped read helpers preserve the stable query contracts by paging the existing repositories and filtering by `details[tenantDetailKey]`. For large JDBC datasets or strict SQL-level tenant isolation, prefer custom repository beans and your own persistence model.
 - Built-in JDBC repositories can also use an optional dedicated tenant column via `privacy.guard.audit.jdbc.tenant-column-name` and `privacy.guard.audit.dead-letter.jdbc.tenant-column-name`. When configured, the repositories copy the configured detail key into that column on write and prefer column-based filtering on read.
+- When Micrometer is available, tenant-aware query helpers also emit `privacy.audit.tenant.read.path{domain=*,path=*}` counters so you can see whether reads are using native repository paths or fallback filtering.
 - If you attach tenant IDs to audit details, keep the same `tenantDetailKey` across write, query, export, and import flows for predictable filtering.
 - The sample protects management endpoints with `X-Demo-Admin-Token: demo-admin-token`. That header is sample-only and not part of the starter SPI.
 

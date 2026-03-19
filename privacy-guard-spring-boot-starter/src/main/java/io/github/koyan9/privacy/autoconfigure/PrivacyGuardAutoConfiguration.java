@@ -42,6 +42,7 @@ import io.github.koyan9.privacy.audit.PrivacyTenantAuditReadRepository;
 import io.github.koyan9.privacy.audit.PrivacyTenantAuditPolicy;
 import io.github.koyan9.privacy.audit.PrivacyTenantAuditPolicyResolver;
 import io.github.koyan9.privacy.audit.PrivacyTenantAuditDeadLetterReadRepository;
+import io.github.koyan9.privacy.audit.PrivacyTenantAuditTelemetry;
 import io.github.koyan9.privacy.audit.RepositoryBackedPrivacyAuditDeadLetterHandler;
 import io.github.koyan9.privacy.audit.RepositoryPrivacyAuditPublisher;
 import io.github.koyan9.privacy.core.MaskingService;
@@ -360,14 +361,16 @@ public class PrivacyGuardAutoConfiguration {
             PrivacyAuditStatsService privacyAuditStatsService,
             PrivacyTenantProvider tenantProvider,
             PrivacyTenantAuditPolicyResolver tenantAuditPolicyResolver,
-            ObjectProvider<PrivacyTenantAuditReadRepository> tenantAuditReadRepositories
+            ObjectProvider<PrivacyTenantAuditReadRepository> tenantAuditReadRepositories,
+            ObjectProvider<PrivacyTenantAuditTelemetry> telemetryProvider
     ) {
         return new PrivacyTenantAuditQueryService(
                 privacyAuditQueryService,
                 privacyAuditStatsService,
                 tenantProvider,
                 tenantAuditPolicyResolver,
-                tenantAuditReadRepositories.getIfAvailable()
+                tenantAuditReadRepositories.getIfAvailable(),
+                telemetryProvider.getIfAvailable(PrivacyTenantAuditTelemetry::noop)
         );
     }
 
@@ -379,14 +382,16 @@ public class PrivacyGuardAutoConfiguration {
             PrivacyAuditDeadLetterStatsService privacyAuditDeadLetterStatsService,
             PrivacyTenantProvider tenantProvider,
             PrivacyTenantAuditPolicyResolver tenantAuditPolicyResolver,
-            ObjectProvider<PrivacyTenantAuditDeadLetterReadRepository> tenantAuditDeadLetterReadRepositories
+            ObjectProvider<PrivacyTenantAuditDeadLetterReadRepository> tenantAuditDeadLetterReadRepositories,
+            ObjectProvider<PrivacyTenantAuditTelemetry> telemetryProvider
     ) {
         return new PrivacyTenantAuditDeadLetterQueryService(
                 privacyAuditDeadLetterService,
                 privacyAuditDeadLetterStatsService,
                 tenantProvider,
                 tenantAuditPolicyResolver,
-                tenantAuditDeadLetterReadRepositories.getIfAvailable()
+                tenantAuditDeadLetterReadRepositories.getIfAvailable(),
+                telemetryProvider.getIfAvailable(PrivacyTenantAuditTelemetry::noop)
         );
     }
 

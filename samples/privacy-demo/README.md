@@ -131,6 +131,8 @@ privacy:
 - Windows：`mvnw.cmd spring-boot:run`
 - macOS / Linux：`./mvnw spring-boot:run`
 - 根目录运行：`./mvnw -q -f samples/privacy-demo/pom.xml spring-boot:run`
+- Windows JDBC tenant profile：`mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=jdbc-tenant`
+- macOS / Linux JDBC tenant profile：`./mvnw spring-boot:run -Dspring-boot.run.profiles=jdbc-tenant`
 
 默认地址：`http://localhost:8088`
 
@@ -281,6 +283,7 @@ privacy:
 对应 profile 文件：`samples/privacy-demo/src/main/resources/application-interceptor.yml`
 
 拦截器模式配置文件已包含 replay-store JDBC 开关示例，可按需启用。
+JDBC tenant recipe 对应 profile 文件：`samples/privacy-demo/src/main/resources/application-jdbc-tenant.yml`
 
 ## 说明
 

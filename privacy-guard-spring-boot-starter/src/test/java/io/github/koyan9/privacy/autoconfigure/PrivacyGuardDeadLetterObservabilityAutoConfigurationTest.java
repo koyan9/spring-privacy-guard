@@ -8,6 +8,7 @@ package io.github.koyan9.privacy.autoconfigure;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.koyan9.privacy.audit.InMemoryPrivacyAuditDeadLetterRepository;
 import io.github.koyan9.privacy.audit.LoggingPrivacyAuditDeadLetterAlertCallback;
+import io.github.koyan9.privacy.audit.PrivacyTenantAuditTelemetry;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterAlertCallback;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterAlertMonitor;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterBacklogState;
@@ -37,7 +38,8 @@ class PrivacyGuardDeadLetterObservabilityAutoConfigurationTest {
                     JacksonAutoConfiguration.class,
                     PrivacyGuardAutoConfiguration.class,
                     PrivacyGuardDeadLetterExchangeAutoConfiguration.class,
-                    PrivacyGuardDeadLetterObservabilityAutoConfiguration.class
+                    PrivacyGuardDeadLetterObservabilityAutoConfiguration.class,
+                    PrivacyGuardTenantObservabilityAutoConfiguration.class
             ));
 
     @Test
@@ -105,6 +107,13 @@ class PrivacyGuardDeadLetterObservabilityAutoConfigurationTest {
                     assertThat(context).hasSingleBean(PrivacyAuditDeadLetterWebhookAlertCallback.class);
                     assertThat(context).hasBean("privacyAuditDeadLetterWebhookHttpClient");
                 });
+    }
+
+    @Test
+    void createsTenantTelemetryWhenMicrometerAvailable() {
+        contextRunner
+                .withBean(io.micrometer.core.instrument.MeterRegistry.class, io.micrometer.core.instrument.simple.SimpleMeterRegistry::new)
+                .run(context -> assertThat(context).hasSingleBean(PrivacyTenantAuditTelemetry.class));
     }
 
     @Test

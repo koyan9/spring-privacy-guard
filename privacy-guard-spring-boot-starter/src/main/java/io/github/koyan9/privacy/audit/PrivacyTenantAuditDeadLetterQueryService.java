@@ -22,6 +22,7 @@ public class PrivacyTenantAuditDeadLetterQueryService {
     private final PrivacyTenantProvider tenantProvider;
     private final PrivacyTenantAuditPolicyResolver tenantAuditPolicyResolver;
     private final PrivacyTenantAuditDeadLetterReadRepository tenantAuditDeadLetterReadRepository;
+    private final PrivacyTenantAuditTelemetry telemetry;
 
     public PrivacyTenantAuditDeadLetterQueryService(
             PrivacyAuditDeadLetterService privacyAuditDeadLetterService,
@@ -34,6 +35,7 @@ public class PrivacyTenantAuditDeadLetterQueryService {
                 privacyAuditDeadLetterStatsService,
                 tenantProvider,
                 tenantAuditPolicyResolver,
+                null,
                 null
         );
     }
@@ -45,6 +47,24 @@ public class PrivacyTenantAuditDeadLetterQueryService {
             PrivacyTenantAuditPolicyResolver tenantAuditPolicyResolver,
             PrivacyTenantAuditDeadLetterReadRepository tenantAuditDeadLetterReadRepository
     ) {
+        this(
+                privacyAuditDeadLetterService,
+                privacyAuditDeadLetterStatsService,
+                tenantProvider,
+                tenantAuditPolicyResolver,
+                tenantAuditDeadLetterReadRepository,
+                null
+        );
+    }
+
+    public PrivacyTenantAuditDeadLetterQueryService(
+            PrivacyAuditDeadLetterService privacyAuditDeadLetterService,
+            PrivacyAuditDeadLetterStatsService privacyAuditDeadLetterStatsService,
+            PrivacyTenantProvider tenantProvider,
+            PrivacyTenantAuditPolicyResolver tenantAuditPolicyResolver,
+            PrivacyTenantAuditDeadLetterReadRepository tenantAuditDeadLetterReadRepository,
+            PrivacyTenantAuditTelemetry telemetry
+    ) {
         this.privacyAuditDeadLetterService = privacyAuditDeadLetterService;
         this.privacyAuditDeadLetterStatsService = privacyAuditDeadLetterStatsService;
         this.tenantProvider = tenantProvider == null ? PrivacyTenantProvider.noop() : tenantProvider;
@@ -52,6 +72,7 @@ public class PrivacyTenantAuditDeadLetterQueryService {
                 ? PrivacyTenantAuditPolicyResolver.noop()
                 : tenantAuditPolicyResolver;
         this.tenantAuditDeadLetterReadRepository = tenantAuditDeadLetterReadRepository;
+        this.telemetry = telemetry == null ? PrivacyTenantAuditTelemetry.noop() : telemetry;
     }
 
     public List<PrivacyAuditDeadLetterEntry> findByCriteria(String tenantId, PrivacyAuditDeadLetterQueryCriteria criteria) {
@@ -64,8 +85,10 @@ public class PrivacyTenantAuditDeadLetterQueryService {
                 : criteria.normalize();
         String detailKey = tenantDetailKey(normalizedTenant);
         if (tenantAuditDeadLetterReadRepository != null) {
+            telemetry.recordQueryReadPath("dead_letter", "native");
             return tenantAuditDeadLetterReadRepository.findByCriteria(normalizedTenant, detailKey, normalized);
         }
+        telemetry.recordQueryReadPath("dead_letter", "fallback");
         List<PrivacyAuditDeadLetterEntry> filtered = collectFilteredEntries(normalized, normalizedTenant);
         return filtered.stream()
                 .skip(normalized.offset())
@@ -87,8 +110,10 @@ public class PrivacyTenantAuditDeadLetterQueryService {
                 : criteria.normalize();
         String detailKey = tenantDetailKey(normalizedTenant);
         if (tenantAuditDeadLetterReadRepository != null) {
+            telemetry.recordQueryReadPath("dead_letter_stats", "native");
             return tenantAuditDeadLetterReadRepository.computeStats(normalizedTenant, detailKey, normalized);
         }
+        telemetry.recordQueryReadPath("dead_letter_stats", "fallback");
         List<PrivacyAuditDeadLetterEntry> filtered = collectFilteredEntries(normalized, normalizedTenant);
         return new PrivacyAuditDeadLetterStats(
                 filtered.size(),

@@ -169,6 +169,7 @@ Before calling your tenant model rollout complete, verify:
 5. Export/import flows still retag correctly when importing into a target tenant.
 6. Async and buffered publishing preserve tenant context.
 7. Your migration tool owns all non-bootstrap DDL and index changes.
+8. `privacy.audit.tenant.read.path{domain=*,path=*}` reflects the expected native or fallback query path during rollout.
 
 ## Anti-Patterns
 
@@ -190,3 +191,21 @@ For most teams, the pragmatic order is:
 5. Custom repository SPI only if needed
 
 That order keeps the stable contracts intact while improving production behavior incrementally.
+
+## Local Recipe
+
+If you want a runnable local reference before touching your production application, use the sample profile:
+
+- `samples/privacy-demo/src/main/resources/application-jdbc-tenant.yml`
+
+Run it with:
+
+- Windows: `mvnw.cmd -f samples/privacy-demo/pom.xml spring-boot:run -Dspring-boot.run.profiles=jdbc-tenant`
+- macOS / Linux: `./mvnw -f samples/privacy-demo/pom.xml spring-boot:run -Dspring-boot.run.profiles=jdbc-tenant`
+
+That profile demonstrates:
+
+- JDBC audit and dead-letter repositories
+- dedicated tenant columns with a non-default column name
+- JDBC replay-store
+- the existing tenant-aware sample endpoints on top of the JDBC path

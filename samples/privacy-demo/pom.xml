@@ -37,9 +37,18 @@
             <artifactId>spring-boot-starter-mail</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+        <dependency>
             <groupId>io.github.koyan9</groupId>
             <artifactId>spring-privacy-guard-spring-boot-starter</artifactId>
             <version>${spring.privacy.guard.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>runtime</scope>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -57,4 +66,3 @@
         </plugins>
     </build>
 </project>
-

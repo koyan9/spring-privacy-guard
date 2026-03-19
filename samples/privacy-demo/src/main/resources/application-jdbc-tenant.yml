@@ -1,0 +1,38 @@
+# Copyright 2026 koyan9
+# SPDX-License-Identifier: Apache-2.0
+
+spring:
+  datasource:
+    url: jdbc:h2:mem:privacy-demo-jdbc-tenant;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+privacy:
+  guard:
+    audit:
+      repository-type: JDBC
+      jdbc:
+        initialize-schema: true
+        dialect: H2
+        table-name: privacy_audit_event_jdbc_demo
+        tenant-column-name: tenant_key
+        tenant-detail-key: tenant
+      dead-letter:
+        repository-type: JDBC
+        jdbc:
+          initialize-schema: true
+          dialect: H2
+          table-name: privacy_audit_dead_letter_jdbc_demo
+          tenant-column-name: tenant_key
+          tenant-detail-key: tenant
+        observability:
+          alert:
+            receiver:
+              replay-store:
+                jdbc:
+                  enabled: true
+                  initialize-schema: true
+                  dialect: H2
+                  table-name: privacy_audit_webhook_replay_store_jdbc_demo
+                  cleanup-interval: 5m

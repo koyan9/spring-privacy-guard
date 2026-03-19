@@ -5,6 +5,7 @@
 
 package io.github.koyan9.privacy.audit;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -66,6 +67,8 @@ class PrivacyTenantAuditQueryServiceTest {
         PrivacyAuditStatsService statsService = new PrivacyAuditStatsService(
                 criteria -> new PrivacyAuditQueryStats(99, Map.of("READ", 99L), Map.of(), Map.of())
         );
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        PrivacyTenantAuditTelemetry telemetry = new MicrometerPrivacyTenantAuditTelemetry(meterRegistry);
         PrivacyTenantAuditReadRepository nativeRepository = new PrivacyTenantAuditReadRepository() {
             @Override
             public List<PrivacyAuditEvent> findByCriteria(String tenantId, String tenantDetailKey, PrivacyAuditQueryCriteria criteria) {
@@ -82,7 +85,8 @@ class PrivacyTenantAuditQueryServiceTest {
                 statsService,
                 () -> "tenant-a",
                 tenantId -> new PrivacyTenantAuditPolicy(java.util.Set.of(), java.util.Set.of(), true, "tenant"),
-                nativeRepository
+                nativeRepository,
+                telemetry
         );
 
         List<PrivacyAuditEvent> events = service.findByCriteria("tenant-a", PrivacyAuditQueryCriteria.recent(10));
@@ -91,6 +95,32 @@ class PrivacyTenantAuditQueryServiceTest {
         assertThat(events).extracting(PrivacyAuditEvent::resourceId).containsExactly("native");
         assertThat(stats.total()).isEqualTo(1);
         assertThat(stats.byOutcome()).containsEntry("SUCCESS", 1L);
+        assertThat(meterRegistry.get("privacy.audit.tenant.read.path").tag("domain", "audit").tag("path", "native").counter().count()).isEqualTo(1.0d);
+        assertThat(meterRegistry.get("privacy.audit.tenant.read.path").tag("domain", "audit_stats").tag("path", "native").counter().count()).isEqualTo(1.0d);
+    }
+
+    @Test
+    void recordsFallbackPathWhenNativeRepositoryUnavailable() {
+        PrivacyAuditQueryRepository repository = criteria -> List.of(event("A1", "tenant-a"), event("B1", "tenant-b"));
+        PrivacyAuditQueryService queryService = new PrivacyAuditQueryService(repository);
+        PrivacyAuditStatsService statsService = new PrivacyAuditStatsService(
+                criteria -> new PrivacyAuditQueryStats(2, Map.of("READ", 2L), Map.of("SUCCESS", 2L), Map.of("Patient", 2L))
+        );
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        PrivacyTenantAuditQueryService service = new PrivacyTenantAuditQueryService(
+                queryService,
+                statsService,
+                () -> "tenant-a",
+                tenantId -> new PrivacyTenantAuditPolicy(java.util.Set.of(), java.util.Set.of(), true, "tenant"),
+                null,
+                new MicrometerPrivacyTenantAuditTelemetry(meterRegistry)
+        );
+
+        service.findByCriteria("tenant-a", PrivacyAuditQueryCriteria.recent(10));
+        service.computeStats("tenant-a", PrivacyAuditQueryCriteria.recent(10));
+
+        assertThat(meterRegistry.get("privacy.audit.tenant.read.path").tag("domain", "audit").tag("path", "fallback").counter().count()).isEqualTo(1.0d);
+        assertThat(meterRegistry.get("privacy.audit.tenant.read.path").tag("domain", "audit_stats").tag("path", "fallback").counter().count()).isEqualTo(1.0d);
     }
 
     private PrivacyAuditEvent event(String resourceId, String tenant) {
