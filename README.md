@@ -271,6 +271,7 @@ When Actuator is present, the starter can expose:
 - `privacy.audit.deadletters.receiver.replay_store.cleanup.last_timestamp`
 - `privacy.audit.deadletters.receiver.verification.failures{reason=*}`
 - `privacy.audit.tenant.read.path{domain=*,path=*}`
+- `privacy.audit.tenant.write.path{domain=*,path=*}`
 
 ### Built-in Webhook Alerts
 

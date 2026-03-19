@@ -12,9 +12,15 @@ public class RepositoryPrivacyAuditPublisher implements PrivacyAuditPublisher {
     private final PrivacyAuditRepository privacyAuditRepository;
     private final PrivacyTenantProvider tenantProvider;
     private final PrivacyTenantAuditPolicyResolver tenantAuditPolicyResolver;
+    private final PrivacyTenantAuditTelemetry telemetry;
 
     public RepositoryPrivacyAuditPublisher(PrivacyAuditRepository privacyAuditRepository) {
-        this(privacyAuditRepository, PrivacyTenantProvider.noop(), PrivacyTenantAuditPolicyResolver.noop());
+        this(
+                privacyAuditRepository,
+                PrivacyTenantProvider.noop(),
+                PrivacyTenantAuditPolicyResolver.noop(),
+                PrivacyTenantAuditTelemetry.noop()
+        );
     }
 
     public RepositoryPrivacyAuditPublisher(
@@ -22,17 +28,33 @@ public class RepositoryPrivacyAuditPublisher implements PrivacyAuditPublisher {
             PrivacyTenantProvider tenantProvider,
             PrivacyTenantAuditPolicyResolver tenantAuditPolicyResolver
     ) {
+        this(
+                privacyAuditRepository,
+                tenantProvider,
+                tenantAuditPolicyResolver,
+                PrivacyTenantAuditTelemetry.noop()
+        );
+    }
+
+    public RepositoryPrivacyAuditPublisher(
+            PrivacyAuditRepository privacyAuditRepository,
+            PrivacyTenantProvider tenantProvider,
+            PrivacyTenantAuditPolicyResolver tenantAuditPolicyResolver,
+            PrivacyTenantAuditTelemetry telemetry
+    ) {
         this.privacyAuditRepository = privacyAuditRepository;
         this.tenantProvider = tenantProvider == null ? PrivacyTenantProvider.noop() : tenantProvider;
         this.tenantAuditPolicyResolver = tenantAuditPolicyResolver == null
                 ? PrivacyTenantAuditPolicyResolver.noop()
                 : tenantAuditPolicyResolver;
+        this.telemetry = telemetry == null ? PrivacyTenantAuditTelemetry.noop() : telemetry;
     }
 
     @Override
     public void publish(PrivacyAuditEvent event) {
         if (privacyAuditRepository instanceof PrivacyTenantAuditWriteRepository tenantAwareRepository) {
             String tenantId = currentTenantId();
+            telemetry.recordWritePath("audit_write", "native");
             tenantAwareRepository.save(new PrivacyTenantAuditWriteRequest(
                     event,
                     tenantId,
@@ -40,6 +62,7 @@ public class RepositoryPrivacyAuditPublisher implements PrivacyAuditPublisher {
             ));
             return;
         }
+        telemetry.recordWritePath("audit_write", "fallback");
         privacyAuditRepository.save(event);
     }
 

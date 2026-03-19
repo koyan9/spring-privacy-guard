@@ -6,6 +6,7 @@
 package io.github.koyan9.privacy.audit;
 
 import io.github.koyan9.privacy.core.PrivacyTenantContextHolder;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -44,10 +45,12 @@ class RepositoryBackedPrivacyAuditDeadLetterHandlerTest {
         }
         PrivacyTenantContextHolder.setTenantId("tenant-a");
         try {
+            SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
             RepositoryBackedPrivacyAuditDeadLetterHandler handler = new RepositoryBackedPrivacyAuditDeadLetterHandler(
                     new TenantAwareDeadLetterRepository(),
                     PrivacyTenantContextHolder::getTenantId,
-                    tenantId -> new PrivacyTenantAuditPolicy(java.util.Set.of(), java.util.Set.of(), true, "tenant")
+                    tenantId -> new PrivacyTenantAuditPolicy(java.util.Set.of(), java.util.Set.of(), true, "tenant"),
+                    new MicrometerPrivacyTenantAuditTelemetry(meterRegistry)
             );
             PrivacyAuditEvent event = new PrivacyAuditEvent(Instant.now(), "READ", "Patient", "demo", "actor", "OK", Map.of());
 
@@ -56,8 +59,26 @@ class RepositoryBackedPrivacyAuditDeadLetterHandlerTest {
             assertEquals("tenant-a", saved.get().tenantId());
             assertEquals("tenant", saved.get().tenantDetailKey());
             assertEquals("demo", saved.get().entry().resourceId());
+            assertEquals(1.0d, meterRegistry.get("privacy.audit.tenant.write.path").tag("domain", "dead_letter_write").tag("path", "native").counter().count());
         } finally {
             PrivacyTenantContextHolder.clear();
         }
+    }
+
+    @Test
+    void recordsFallbackDeadLetterWritePathWhenTenantAwareRepositoryUnavailable() {
+        AtomicReference<PrivacyAuditDeadLetterEntry> saved = new AtomicReference<>();
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        RepositoryBackedPrivacyAuditDeadLetterHandler handler = new RepositoryBackedPrivacyAuditDeadLetterHandler(
+                saved::set,
+                () -> "tenant-a",
+                tenantId -> new PrivacyTenantAuditPolicy(java.util.Set.of(), java.util.Set.of(), true, "tenant"),
+                new MicrometerPrivacyTenantAuditTelemetry(meterRegistry)
+        );
+
+        handler.handle(new PrivacyAuditEvent(Instant.now(), "READ", "Patient", "demo", "actor", "OK", Map.of()), 3, new IllegalStateException("failed"));
+
+        assertEquals("demo", saved.get().resourceId());
+        assertEquals(1.0d, meterRegistry.get("privacy.audit.tenant.write.path").tag("domain", "dead_letter_write").tag("path", "fallback").counter().count());
     }
 }

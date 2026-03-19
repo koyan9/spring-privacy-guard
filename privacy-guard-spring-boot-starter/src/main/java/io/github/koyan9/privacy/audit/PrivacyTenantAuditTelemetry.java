@@ -9,8 +9,17 @@ public interface PrivacyTenantAuditTelemetry {
 
     void recordQueryReadPath(String domain, String pathKind);
 
+    void recordWritePath(String domain, String pathKind);
+
     static PrivacyTenantAuditTelemetry noop() {
-        return (domain, pathKind) -> {
+        return new PrivacyTenantAuditTelemetry() {
+            @Override
+            public void recordQueryReadPath(String domain, String pathKind) {
+            }
+
+            @Override
+            public void recordWritePath(String domain, String pathKind) {
+            }
         };
     }
 }

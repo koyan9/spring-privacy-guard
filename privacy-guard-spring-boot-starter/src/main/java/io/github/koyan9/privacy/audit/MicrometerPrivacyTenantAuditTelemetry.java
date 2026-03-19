@@ -26,6 +26,17 @@ public class MicrometerPrivacyTenantAuditTelemetry implements PrivacyTenantAudit
         ).increment();
     }
 
+    @Override
+    public void recordWritePath(String domain, String pathKind) {
+        meterRegistry.counter(
+                "privacy.audit.tenant.write.path",
+                "domain",
+                normalizeDomain(domain),
+                "path",
+                normalizePath(pathKind)
+        ).increment();
+    }
+
     private String normalizeDomain(String value) {
         if (value == null || value.isBlank()) {
             return "unknown";

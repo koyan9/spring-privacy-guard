@@ -313,14 +313,16 @@ public class PrivacyGuardAutoConfiguration {
     public PrivacyAuditDeadLetterHandler privacyAuditDeadLetterHandler(
             ObjectProvider<PrivacyAuditDeadLetterRepository> repositories,
             PrivacyTenantProvider tenantProvider,
-            PrivacyTenantAuditPolicyResolver tenantAuditPolicyResolver
+            PrivacyTenantAuditPolicyResolver tenantAuditPolicyResolver,
+            ObjectProvider<PrivacyTenantAuditTelemetry> telemetryProvider
     ) {
         PrivacyAuditDeadLetterRepository repository = repositories.getIfAvailable();
         if (repository != null) {
             return new RepositoryBackedPrivacyAuditDeadLetterHandler(
                     repository,
                     tenantProvider,
-                    tenantAuditPolicyResolver
+                    tenantAuditPolicyResolver,
+                    telemetryProvider.getIfAvailable(PrivacyTenantAuditTelemetry::noop)
             );
         }
         return new LoggingPrivacyAuditDeadLetterHandler();
@@ -417,12 +419,18 @@ public class PrivacyGuardAutoConfiguration {
             ApplicationEventPublisher applicationEventPublisher,
             ObjectProvider<PrivacyAuditRepository> privacyAuditRepositories,
             PrivacyTenantProvider tenantProvider,
-            PrivacyTenantAuditPolicyResolver tenantAuditPolicyResolver
+            PrivacyTenantAuditPolicyResolver tenantAuditPolicyResolver,
+            ObjectProvider<PrivacyTenantAuditTelemetry> telemetryProvider
     ) {
         List<PrivacyAuditPublisher> publishers = new ArrayList<>();
         publishers.add(new ApplicationEventPrivacyAuditPublisher(applicationEventPublisher));
         privacyAuditRepositories.orderedStream()
-                .map(repository -> new RepositoryPrivacyAuditPublisher(repository, tenantProvider, tenantAuditPolicyResolver))
+                .map(repository -> new RepositoryPrivacyAuditPublisher(
+                        repository,
+                        tenantProvider,
+                        tenantAuditPolicyResolver,
+                        telemetryProvider.getIfAvailable(PrivacyTenantAuditTelemetry::noop)
+                ))
                 .forEach(publishers::add);
         return new CompositePrivacyAuditPublisher(publishers);
     }
@@ -457,7 +465,8 @@ public class PrivacyGuardAutoConfiguration {
             PrivacyAuditDeadLetterHandler deadLetterHandler,
             @Qualifier("privacyAuditExecutor") ObjectProvider<ScheduledExecutorService> privacyAuditExecutorProvider,
             PrivacyTenantProvider tenantProvider,
-            PrivacyTenantAuditPolicyResolver tenantAuditPolicyResolver
+            PrivacyTenantAuditPolicyResolver tenantAuditPolicyResolver,
+            ObjectProvider<PrivacyTenantAuditTelemetry> telemetryProvider
     ) {
         List<PrivacyAuditPublisher> publishers = new ArrayList<>();
         publishers.add(maybeAsync(
@@ -473,7 +482,8 @@ public class PrivacyGuardAutoConfiguration {
                         deadLetterHandler,
                         privacyAuditExecutorProvider,
                         tenantProvider,
-                        tenantAuditPolicyResolver
+                        tenantAuditPolicyResolver,
+                        telemetryProvider.getIfAvailable(PrivacyTenantAuditTelemetry::noop)
                 ))
                 .forEach(publishers::add);
         return new CompositePrivacyAuditPublisher(publishers);
@@ -528,7 +538,8 @@ public class PrivacyGuardAutoConfiguration {
             PrivacyAuditDeadLetterHandler deadLetterHandler,
             ObjectProvider<ScheduledExecutorService> privacyAuditExecutorProvider,
             PrivacyTenantProvider tenantProvider,
-            PrivacyTenantAuditPolicyResolver tenantAuditPolicyResolver
+            PrivacyTenantAuditPolicyResolver tenantAuditPolicyResolver,
+            PrivacyTenantAuditTelemetry telemetry
     ) {
         if (properties.getAudit().getBatch().isEnabled()) {
             return new BufferedPrivacyAuditPublisher(
@@ -540,11 +551,12 @@ public class PrivacyGuardAutoConfiguration {
                     properties.getAudit().getRetry().getBackoff(),
                     deadLetterHandler,
                     tenantProvider,
-                    tenantAuditPolicyResolver
+                    tenantAuditPolicyResolver,
+                    telemetry
             );
         }
         return maybeAsync(
-                new RepositoryPrivacyAuditPublisher(repository, tenantProvider, tenantAuditPolicyResolver),
+                new RepositoryPrivacyAuditPublisher(repository, tenantProvider, tenantAuditPolicyResolver, telemetry),
                 properties,
                 deadLetterHandler,
                 privacyAuditExecutorProvider

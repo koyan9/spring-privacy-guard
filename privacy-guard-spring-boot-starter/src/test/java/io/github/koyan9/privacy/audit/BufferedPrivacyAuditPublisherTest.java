@@ -6,6 +6,7 @@
 package io.github.koyan9.privacy.audit;
 
 import io.github.koyan9.privacy.core.PrivacyTenantContextHolder;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -182,6 +183,7 @@ class BufferedPrivacyAuditPublisherTest {
     void capturesTenantMetadataPerBufferedEventWhenTenantAwareWriteRepositoryIsAvailable() throws Exception {
         TenantAwareRecordingRepository repository = new TenantAwareRecordingRepository(1);
         ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
         BufferedPrivacyAuditPublisher publisher = new BufferedPrivacyAuditPublisher(
                 repository,
                 executor,
@@ -192,7 +194,8 @@ class BufferedPrivacyAuditPublisherTest {
                 (event, retryAttempts, exception) -> {
                 },
                 PrivacyTenantContextHolder::getTenantId,
-                tenantId -> new PrivacyTenantAuditPolicy(java.util.Set.of(), java.util.Set.of(), true, "tenant")
+                tenantId -> new PrivacyTenantAuditPolicy(java.util.Set.of(), java.util.Set.of(), true, "tenant"),
+                new MicrometerPrivacyTenantAuditTelemetry(meterRegistry)
         );
 
         try {
@@ -203,6 +206,39 @@ class BufferedPrivacyAuditPublisherTest {
 
             assertTrue(repository.await());
             assertThat(repository.tenantIds()).containsExactly("tenant-a", "tenant-b");
+            assertEquals(1.0d, meterRegistry.get("privacy.audit.tenant.write.path").tag("domain", "audit_batch_write").tag("path", "native").counter().count());
+        } finally {
+            PrivacyTenantContextHolder.clear();
+            publisher.destroy();
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void recordsFallbackBatchWritePathWhenTenantAwareRepositoryUnavailable() throws Exception {
+        RecordingRepository repository = new RecordingRepository(1);
+        ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        BufferedPrivacyAuditPublisher publisher = new BufferedPrivacyAuditPublisher(
+                repository,
+                executor,
+                2,
+                Duration.ofSeconds(30),
+                2,
+                Duration.ZERO,
+                (event, retryAttempts, exception) -> {
+                },
+                PrivacyTenantContextHolder::getTenantId,
+                tenantId -> new PrivacyTenantAuditPolicy(java.util.Set.of(), java.util.Set.of(), true, "tenant"),
+                new MicrometerPrivacyTenantAuditTelemetry(meterRegistry)
+        );
+
+        try {
+            publisher.publish(event("first"));
+            publisher.publish(event("second"));
+
+            assertTrue(repository.await());
+            assertEquals(1.0d, meterRegistry.get("privacy.audit.tenant.write.path").tag("domain", "audit_batch_write").tag("path", "fallback").counter().count());
         } finally {
             PrivacyTenantContextHolder.clear();
             publisher.destroy();
