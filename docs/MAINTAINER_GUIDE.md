@@ -55,6 +55,7 @@ This guide is for maintainers responsible for releases, triage, and repository h
 ## CI and Hygiene
 
 - CI runs `python scripts/check_repo_hygiene.py --ci` before tests.
+- Keep GitHub Actions pinned to Node 24-ready versions to avoid runner deprecation failures during CI or release execution.
 - Keep `.editorconfig` and `.gitattributes` aligned with repo conventions.
 - Fix trailing whitespace before merging (run `git diff --check`).
 
