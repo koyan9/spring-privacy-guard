@@ -16,7 +16,16 @@ public class PrivacyLogbackConfigurer implements DisposableBean {
     private final boolean turboFilterInstalled;
 
     public PrivacyLogbackConfigurer(PrivacyLogSanitizer privacyLogSanitizer, boolean installTurboFilter, boolean blockUnsafeMessages) {
-        PrivacyLogbackRuntime.set(privacyLogSanitizer);
+        this(privacyLogSanitizer, installTurboFilter, blockUnsafeMessages, PrivacyLogbackSanitizerSettings.disabled());
+    }
+
+    public PrivacyLogbackConfigurer(
+            PrivacyLogSanitizer privacyLogSanitizer,
+            boolean installTurboFilter,
+            boolean blockUnsafeMessages,
+            PrivacyLogbackSanitizerSettings sanitizerSettings
+    ) {
+        PrivacyLogbackRuntime.set(privacyLogSanitizer, sanitizerSettings);
         if (installTurboFilter && LoggerFactory.getILoggerFactory() instanceof LoggerContext loggerContext) {
             PrivacyBlockingTurboFilter turboFilter = new PrivacyBlockingTurboFilter();
             turboFilter.setBlockUnsafeMessages(blockUnsafeMessages);

@@ -22,6 +22,34 @@ privacy:
   guard:
     enabled: true
     fallback-mask-char: "*"
+    tenant:
+      enabled: true
+      header-name: X-Privacy-Tenant
+      default-tenant: public
+      policies:
+        public:
+          audit:
+            attach-tenant-id: true
+            tenant-detail-key: tenant
+        tenant-a:
+          fallback-mask-char: "#"
+          text:
+            additional-patterns:
+              - type: GENERIC
+                pattern: EMP\d{4}
+          audit:
+            include-detail-keys:
+              - phone
+              - employeeCode
+            attach-tenant-id: true
+            tenant-detail-key: tenant
+        tenant-b:
+          fallback-mask-char: X
+          audit:
+            include-detail-keys:
+              - phone
+            attach-tenant-id: true
+            tenant-detail-key: tenant
     audit:
       repository-type: IN_MEMORY
       dead-letter:

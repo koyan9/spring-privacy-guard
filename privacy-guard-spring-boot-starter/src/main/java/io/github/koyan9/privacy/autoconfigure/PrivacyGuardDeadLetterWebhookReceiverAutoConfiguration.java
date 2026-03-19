@@ -12,14 +12,18 @@ import io.github.koyan9.privacy.audit.JdbcPrivacyAuditDeadLetterWebhookReplaySto
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookBodyCachingFilter;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStore;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStoreJdbcProperties;
+import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStoreRedisProperties;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStoreMetricsBinder;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStoreObservationService;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStoreSchemaLocationResolver;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookRequestVerifier;
+import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookVerificationTelemetry;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookVerificationFilter;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookVerificationInterceptor;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookVerificationSettings;
 import io.github.koyan9.privacy.audit.PrivacyAuditSchemaInitializer;
+import io.github.koyan9.privacy.audit.RedisPrivacyAuditDeadLetterWebhookReplayStore;
+import io.github.koyan9.privacy.audit.MicrometerPrivacyAuditDeadLetterWebhookVerificationTelemetry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -33,8 +37,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Conditional;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ResourceLoader;
-import org.springframework.jdbc.core.JdbcOperations;
 import org.springframework.util.StringUtils;
 
 import javax.sql.DataSource;
@@ -128,6 +132,7 @@ public class PrivacyGuardDeadLetterWebhookReceiverAutoConfiguration {
     @ConditionalOnMissingBean(PrivacyAuditDeadLetterWebhookReplayStore.class)
     @ConditionalOnExpression(
             "'${privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.enabled:false}' != 'true' and " +
+                    "'${privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.redis.enabled:false}' != 'true' and " +
                     "'${privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.file.enabled:false}' != 'true'"
     )
     public InMemoryPrivacyAuditDeadLetterWebhookReplayStore privacyAuditDeadLetterWebhookReplayStore() {
@@ -175,64 +180,19 @@ public class PrivacyGuardDeadLetterWebhookReceiverAutoConfiguration {
     }
 
     @Bean
-    @ConditionalOnClass(name = "org.springframework.jdbc.core.JdbcOperations")
+    @ConditionalOnClass(name = "io.micrometer.core.instrument.MeterRegistry")
+    @ConditionalOnBean(type = "io.micrometer.core.instrument.MeterRegistry")
     @Conditional(ReceiverVerificationEnabledCondition.class)
-    @ConditionalOnMissingBean(PrivacyAuditDeadLetterWebhookReplayStore.class)
     @ConditionalOnProperty(
-            prefix = "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc",
+            prefix = "privacy.guard.audit.dead-letter.observability.alert.receiver.metrics",
             name = "enabled",
-            havingValue = "true"
+            havingValue = "true",
+            matchIfMissing = true
     )
-    public JdbcPrivacyAuditDeadLetterWebhookReplayStore jdbcPrivacyAuditDeadLetterWebhookReplayStore(
-            JdbcOperations jdbcOperations,
-            PrivacyGuardProperties properties
+    public PrivacyAuditDeadLetterWebhookVerificationTelemetry privacyAuditDeadLetterWebhookVerificationTelemetry(
+            io.micrometer.core.instrument.MeterRegistry meterRegistry
     ) {
-        PrivacyAuditDeadLetterWebhookReplayStoreJdbcProperties jdbcProperties = properties.getAudit()
-                .getDeadLetter()
-                .getObservability()
-                .getAlert()
-                .getReceiver()
-                .getReplayStore()
-                .getJdbc();
-        return new JdbcPrivacyAuditDeadLetterWebhookReplayStore(
-                jdbcOperations,
-                jdbcProperties.getTableName(),
-                jdbcProperties.getCleanupInterval(),
-                jdbcProperties.getCleanupBatchSize()
-        );
-    }
-
-    @Bean
-    @ConditionalOnClass(name = "org.springframework.jdbc.core.JdbcOperations")
-    @Conditional(ReceiverVerificationEnabledCondition.class)
-    @ConditionalOnProperty(
-            prefix = "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc",
-            name = {"enabled", "initialize-schema"},
-            havingValue = "true"
-    )
-    public PrivacyAuditSchemaInitializer privacyAuditDeadLetterWebhookReplayStoreSchemaInitializer(
-            JdbcOperations jdbcOperations,
-            ResourceLoader resourceLoader,
-            ObjectProvider<DataSource> dataSourceProvider,
-            PrivacyAuditDeadLetterWebhookReplayStoreSchemaLocationResolver schemaLocationResolver,
-            PrivacyGuardProperties properties
-    ) {
-        PrivacyAuditDeadLetterWebhookReplayStoreJdbcProperties jdbcProperties = properties.getAudit()
-                .getDeadLetter()
-                .getObservability()
-                .getAlert()
-                .getReceiver()
-                .getReplayStore()
-                .getJdbc();
-        String schemaLocation = schemaLocationResolver.resolve(jdbcProperties, dataSourceProvider.getIfAvailable());
-        PrivacyAuditSchemaInitializer initializer = new PrivacyAuditSchemaInitializer(
-                jdbcOperations,
-                resourceLoader,
-                schemaLocation,
-                jdbcProperties.getTableName()
-        );
-        initializer.initialize();
-        return initializer;
+        return new MicrometerPrivacyAuditDeadLetterWebhookVerificationTelemetry(meterRegistry);
     }
 
     @Bean
@@ -244,7 +204,10 @@ public class PrivacyGuardDeadLetterWebhookReceiverAutoConfiguration {
             name = "enabled",
             havingValue = "true"
     )
-    @ConditionalOnExpression("'${privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.enabled:false}' != 'true'")
+    @ConditionalOnExpression(
+            "'${privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.enabled:false}' != 'true' and " +
+                    "'${privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.redis.enabled:false}' != 'true'"
+    )
     public FilePrivacyAuditDeadLetterWebhookReplayStore filePrivacyAuditDeadLetterWebhookReplayStore(
             ObjectMapper objectMapper,
             PrivacyGuardProperties properties
@@ -270,11 +233,13 @@ public class PrivacyGuardDeadLetterWebhookReceiverAutoConfiguration {
     @ConditionalOnExpression("'${privacy.guard.audit.dead-letter.observability.alert.receiver.filter.enabled:false}' == 'true' and '${privacy.guard.audit.dead-letter.observability.alert.receiver.interceptor.enabled:false}' != 'true'")
     public PrivacyAuditDeadLetterWebhookVerificationFilter privacyAuditDeadLetterWebhookVerificationFilter(
             PrivacyAuditDeadLetterWebhookRequestVerifier verifier,
-            PrivacyGuardProperties properties
+            PrivacyGuardProperties properties,
+            ObjectProvider<PrivacyAuditDeadLetterWebhookVerificationTelemetry> telemetryProvider
     ) {
         return new PrivacyAuditDeadLetterWebhookVerificationFilter(
                 verifier,
-                properties.getAudit().getDeadLetter().getObservability().getAlert().getReceiver().getFilter().getPathPattern()
+                properties.getAudit().getDeadLetter().getObservability().getAlert().getReceiver().getFilter().getPathPattern(),
+                telemetryProvider.getIfAvailable(PrivacyAuditDeadLetterWebhookVerificationTelemetry::noop)
         );
     }
 
@@ -308,11 +273,13 @@ public class PrivacyGuardDeadLetterWebhookReceiverAutoConfiguration {
     )
     public PrivacyAuditDeadLetterWebhookVerificationInterceptor privacyAuditDeadLetterWebhookVerificationInterceptor(
             PrivacyAuditDeadLetterWebhookRequestVerifier verifier,
-            PrivacyGuardProperties properties
+            PrivacyGuardProperties properties,
+            ObjectProvider<PrivacyAuditDeadLetterWebhookVerificationTelemetry> telemetryProvider
     ) {
         return new PrivacyAuditDeadLetterWebhookVerificationInterceptor(
                 verifier,
-                properties.getAudit().getDeadLetter().getObservability().getAlert().getReceiver().getInterceptor().getPathPattern()
+                properties.getAudit().getDeadLetter().getObservability().getAlert().getReceiver().getInterceptor().getPathPattern(),
+                telemetryProvider.getIfAvailable(PrivacyAuditDeadLetterWebhookVerificationTelemetry::noop)
         );
     }
 
@@ -334,5 +301,105 @@ public class PrivacyGuardDeadLetterWebhookReceiverAutoConfiguration {
                 interceptor,
                 properties.getAudit().getDeadLetter().getObservability().getAlert().getReceiver().getInterceptor().getPathPattern()
         );
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(name = "org.springframework.jdbc.core.JdbcOperations")
+    static class JdbcReplayStoreConfiguration {
+
+        @Bean
+        @Conditional(ReceiverVerificationEnabledCondition.class)
+        @ConditionalOnMissingBean(PrivacyAuditDeadLetterWebhookReplayStore.class)
+        @ConditionalOnProperty(
+                prefix = "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc",
+                name = "enabled",
+                havingValue = "true"
+        )
+        public JdbcPrivacyAuditDeadLetterWebhookReplayStore jdbcPrivacyAuditDeadLetterWebhookReplayStore(
+                org.springframework.jdbc.core.JdbcOperations jdbcOperations,
+                PrivacyGuardProperties properties
+        ) {
+            PrivacyAuditDeadLetterWebhookReplayStoreJdbcProperties jdbcProperties = properties.getAudit()
+                    .getDeadLetter()
+                    .getObservability()
+                    .getAlert()
+                    .getReceiver()
+                    .getReplayStore()
+                    .getJdbc();
+            return new JdbcPrivacyAuditDeadLetterWebhookReplayStore(
+                    jdbcOperations,
+                    jdbcProperties.getTableName(),
+                    jdbcProperties.getCleanupInterval(),
+                    jdbcProperties.getCleanupBatchSize()
+            );
+        }
+
+        @Bean
+        @Conditional(ReceiverVerificationEnabledCondition.class)
+        @ConditionalOnProperty(
+                prefix = "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc",
+                name = {"enabled", "initialize-schema"},
+                havingValue = "true"
+        )
+        public PrivacyAuditSchemaInitializer privacyAuditDeadLetterWebhookReplayStoreSchemaInitializer(
+                org.springframework.jdbc.core.JdbcOperations jdbcOperations,
+                ResourceLoader resourceLoader,
+                ObjectProvider<DataSource> dataSourceProvider,
+                PrivacyAuditDeadLetterWebhookReplayStoreSchemaLocationResolver schemaLocationResolver,
+                PrivacyGuardProperties properties
+        ) {
+            PrivacyAuditDeadLetterWebhookReplayStoreJdbcProperties jdbcProperties = properties.getAudit()
+                    .getDeadLetter()
+                    .getObservability()
+                    .getAlert()
+                    .getReceiver()
+                    .getReplayStore()
+                    .getJdbc();
+            String schemaLocation = schemaLocationResolver.resolve(jdbcProperties, dataSourceProvider.getIfAvailable());
+            PrivacyAuditSchemaInitializer initializer = new PrivacyAuditSchemaInitializer(
+                    jdbcOperations,
+                    resourceLoader,
+                    schemaLocation,
+                    jdbcProperties.getTableName()
+            );
+            initializer.initialize();
+            return initializer;
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(name = "org.springframework.data.redis.connection.RedisConnectionFactory")
+    static class RedisReplayStoreConfiguration {
+
+        @Bean
+        @ConditionalOnBean(type = "org.springframework.data.redis.connection.RedisConnectionFactory")
+        @Conditional(ReceiverVerificationEnabledCondition.class)
+        @ConditionalOnMissingBean(PrivacyAuditDeadLetterWebhookReplayStore.class)
+        @ConditionalOnProperty(
+                prefix = "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.redis",
+                name = "enabled",
+                havingValue = "true"
+        )
+        @ConditionalOnExpression("'${privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.enabled:false}' != 'true'")
+        public RedisPrivacyAuditDeadLetterWebhookReplayStore redisPrivacyAuditDeadLetterWebhookReplayStore(
+                org.springframework.data.redis.connection.RedisConnectionFactory redisConnectionFactory,
+                PrivacyGuardProperties properties
+        ) {
+            PrivacyAuditDeadLetterWebhookReplayStoreRedisProperties redisProperties = properties.getAudit()
+                    .getDeadLetter()
+                    .getObservability()
+                    .getAlert()
+                    .getReceiver()
+                    .getReplayStore()
+                    .getRedis();
+            org.springframework.data.redis.core.StringRedisTemplate redisTemplate =
+                    new org.springframework.data.redis.core.StringRedisTemplate(redisConnectionFactory);
+            redisTemplate.afterPropertiesSet();
+            return new RedisPrivacyAuditDeadLetterWebhookReplayStore(
+                    redisTemplate,
+                    redisProperties.getKeyPrefix(),
+                    redisProperties.getScanBatchSize()
+            );
+        }
     }
 }

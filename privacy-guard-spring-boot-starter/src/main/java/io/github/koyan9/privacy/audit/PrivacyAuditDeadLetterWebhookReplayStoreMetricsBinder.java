@@ -14,6 +14,9 @@ public class PrivacyAuditDeadLetterWebhookReplayStoreMetricsBinder implements Me
     private static final String COUNT_METRIC = "privacy.audit.deadletters.receiver.replay_store.count";
     private static final String EXPIRING_SOON_METRIC = "privacy.audit.deadletters.receiver.replay_store.expiring_soon";
     private static final String EXPIRY_METRIC = "privacy.audit.deadletters.receiver.replay_store.expiry_seconds";
+    private static final String CLEANUP_COUNT_METRIC = "privacy.audit.deadletters.receiver.replay_store.cleanup.last_count";
+    private static final String CLEANUP_DURATION_METRIC = "privacy.audit.deadletters.receiver.replay_store.cleanup.last_duration_ms";
+    private static final String CLEANUP_TIMESTAMP_METRIC = "privacy.audit.deadletters.receiver.replay_store.cleanup.last_timestamp";
 
     private final PrivacyAuditDeadLetterWebhookReplayStoreObservationService observationService;
 
@@ -44,6 +47,20 @@ public class PrivacyAuditDeadLetterWebhookReplayStoreMetricsBinder implements Me
                 .description("Latest replay-store expiry timestamp as epoch seconds")
                 .tag("kind", "latest")
                 .register(registry);
+
+        Gauge.builder(CLEANUP_COUNT_METRIC, this, binder -> binder.cleanupSnapshot().lastCleanupCount())
+                .description("Number of expired replay-store entries removed in the last cleanup pass")
+                .baseUnit("entries")
+                .register(registry);
+
+        Gauge.builder(CLEANUP_DURATION_METRIC, this, binder -> binder.cleanupSnapshot().lastCleanupDurationMillis())
+                .description("Duration in milliseconds of the last replay-store cleanup pass")
+                .baseUnit("ms")
+                .register(registry);
+
+        Gauge.builder(CLEANUP_TIMESTAMP_METRIC, this, binder -> binder.lastCleanupTimestamp())
+                .description("Last replay-store cleanup timestamp as epoch seconds")
+                .register(registry);
     }
 
     private double earliestExpiry() {
@@ -54,7 +71,16 @@ public class PrivacyAuditDeadLetterWebhookReplayStoreMetricsBinder implements Me
         return snapshot().latestExpiry() == null ? 0.0d : snapshot().latestExpiry().getEpochSecond();
     }
 
+    private double lastCleanupTimestamp() {
+        PrivacyAuditDeadLetterWebhookReplayStoreCleanupSnapshot snapshot = cleanupSnapshot();
+        return snapshot.lastCleanupAt() == null ? 0.0d : snapshot.lastCleanupAt().getEpochSecond();
+    }
+
     private PrivacyAuditDeadLetterWebhookReplayStoreSnapshot snapshot() {
         return observationService.currentSnapshot();
+    }
+
+    private PrivacyAuditDeadLetterWebhookReplayStoreCleanupSnapshot cleanupSnapshot() {
+        return observationService.currentCleanupSnapshot();
     }
 }

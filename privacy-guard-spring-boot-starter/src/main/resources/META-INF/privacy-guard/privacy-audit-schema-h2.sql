@@ -7,5 +7,6 @@ create table if not exists ${tableName} (
     resource_id varchar(255),
     actor varchar(255),
     outcome varchar(50) not null,
-    details_json clob
+    details_json clob,
+    ${tenantColumnName} varchar(255)
 );

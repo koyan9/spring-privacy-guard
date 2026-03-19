@@ -22,6 +22,10 @@ class InMemoryPrivacyAuditDeadLetterWebhookReplayStoreTest {
         assertThat(store.markIfNew("nonce-1", expiredNow, Duration.ofSeconds(1))).isTrue();
 
         assertThat(store.snapshot()).isEmpty();
+        PrivacyAuditDeadLetterWebhookReplayStoreCleanupSnapshot cleanup = store.cleanupSnapshot();
+        assertThat(cleanup.lastCleanupCount()).isEqualTo(1L);
+        assertThat(cleanup.lastCleanupAt()).isNotNull();
+        assertThat(cleanup.lastCleanupDurationMillis()).isGreaterThanOrEqualTo(0L);
         assertThat(store.markIfNew("nonce-1", Instant.now(), Duration.ofMinutes(1))).isTrue();
     }
 }

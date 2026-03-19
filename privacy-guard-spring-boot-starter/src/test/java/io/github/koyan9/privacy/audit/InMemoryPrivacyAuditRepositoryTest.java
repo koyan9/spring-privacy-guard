@@ -85,4 +85,19 @@ class InMemoryPrivacyAuditRepositoryTest {
         assertEquals(2L, stats.byAction().get("READ"));
         assertEquals(2L, stats.byResourceType().get("Patient"));
     }
+
+    @Test
+    void returnsTenantNativeFilteredEventsAndStats() {
+        InMemoryPrivacyAuditRepository repository = new InMemoryPrivacyAuditRepository();
+        repository.save(new PrivacyAuditEvent(Instant.parse("2026-03-06T00:00:00Z"), "READ", "Patient", "a1", "alice", "OK", Map.of("tenant", "tenant-a")));
+        repository.save(new PrivacyAuditEvent(Instant.parse("2026-03-06T01:00:00Z"), "READ", "Patient", "a2", "alice", "OK", Map.of("tenant", "tenant-a")));
+        repository.save(new PrivacyAuditEvent(Instant.parse("2026-03-06T02:00:00Z"), "READ", "Patient", "b1", "alice", "OK", Map.of("tenant", "tenant-b")));
+
+        List<PrivacyAuditEvent> events = repository.findByCriteria("tenant-a", "tenant", PrivacyAuditQueryCriteria.recent(10));
+        PrivacyAuditQueryStats stats = repository.computeStats("tenant-a", "tenant", PrivacyAuditQueryCriteria.recent(10));
+
+        assertEquals(List.of("a2", "a1"), events.stream().map(PrivacyAuditEvent::resourceId).toList());
+        assertEquals(2, stats.total());
+        assertEquals(2L, stats.byAction().get("READ"));
+    }
 }

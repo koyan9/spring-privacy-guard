@@ -11,6 +11,7 @@ import io.github.koyan9.privacy.logging.PrivacyLoggerFactory;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 @RestController
@@ -33,16 +34,17 @@ class PatientController {
                 "110101199001011234"
         );
 
+        Map<String, String> details = new LinkedHashMap<>();
+        details.put("phone", "13800138000");
+        details.put("idCard", "110101199001011234");
+        details.put("employeeCode", "EMP1234");
         privacyAuditService.record(
                 "PATIENT_READ",
                 "Patient",
                 "demo-patient-13800138000",
                 "alice@example.com",
                 "SUCCESS",
-                Map.of(
-                        "phone", "13800138000",
-                        "idCard", "110101199001011234"
-                )
+                details
         );
 
         return new PatientView(

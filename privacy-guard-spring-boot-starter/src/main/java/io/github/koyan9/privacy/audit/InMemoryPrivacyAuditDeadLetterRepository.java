@@ -15,7 +15,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class InMemoryPrivacyAuditDeadLetterRepository implements PrivacyAuditDeadLetterRepository, PrivacyAuditDeadLetterStatsRepository {
+public class InMemoryPrivacyAuditDeadLetterRepository implements PrivacyAuditDeadLetterRepository, PrivacyAuditDeadLetterStatsRepository, PrivacyTenantAuditDeadLetterReadRepository, PrivacyTenantAuditDeadLetterWriteRepository {
 
     private final CopyOnWriteArrayList<PrivacyAuditDeadLetterEntry> entries = new CopyOnWriteArrayList<>();
     private final AtomicLong sequence = new AtomicLong();
@@ -63,6 +63,55 @@ public class InMemoryPrivacyAuditDeadLetterRepository implements PrivacyAuditDea
     }
 
     @Override
+    public List<PrivacyAuditDeadLetterEntry> findByCriteria(
+            String tenantId,
+            String tenantDetailKey,
+            PrivacyAuditDeadLetterQueryCriteria criteria
+    ) {
+        PrivacyAuditDeadLetterQueryCriteria normalized = criteria == null
+                ? PrivacyAuditDeadLetterQueryCriteria.recent(100)
+                : criteria.normalize();
+        Stream<PrivacyAuditDeadLetterEntry> stream = filteredStream(normalized, tenantId, tenantDetailKey);
+        if (normalized.offset() > 0) {
+            stream = stream.skip(normalized.offset());
+        }
+        return stream.limit(normalized.limit()).toList();
+    }
+
+    @Override
+    public PrivacyAuditDeadLetterStats computeStats(
+            String tenantId,
+            String tenantDetailKey,
+            PrivacyAuditDeadLetterQueryCriteria criteria
+    ) {
+        List<PrivacyAuditDeadLetterEntry> filtered = filteredStream(
+                criteria == null ? PrivacyAuditDeadLetterQueryCriteria.recent(100) : criteria.normalize(),
+                tenantId,
+                tenantDetailKey
+        ).toList();
+        return new PrivacyAuditDeadLetterStats(
+                filtered.size(),
+                aggregate(filtered, PrivacyAuditDeadLetterEntry::action),
+                aggregate(filtered, PrivacyAuditDeadLetterEntry::outcome),
+                aggregate(filtered, PrivacyAuditDeadLetterEntry::resourceType),
+                aggregate(filtered, PrivacyAuditDeadLetterEntry::errorType)
+        );
+    }
+
+    @Override
+    public void save(PrivacyTenantAuditDeadLetterWriteRequest request) {
+        save(request.entry());
+    }
+
+    @Override
+    public void saveAllTenantAware(List<PrivacyTenantAuditDeadLetterWriteRequest> requests) {
+        if (requests == null || requests.isEmpty()) {
+            return;
+        }
+        this.entries.addAll(requests.stream().map(PrivacyTenantAuditDeadLetterWriteRequest::entry).map(this::assignId).toList());
+    }
+
+    @Override
     public Optional<PrivacyAuditDeadLetterEntry> findById(long id) {
         return entries.stream().filter(entry -> entry.id() != null && entry.id() == id).findFirst();
     }
@@ -89,6 +138,15 @@ public class InMemoryPrivacyAuditDeadLetterRepository implements PrivacyAuditDea
                 .filter(entry -> matchesTo(criteria.failedTo(), entry.failedAt()))
                 .filter(entry -> matchesFrom(criteria.occurredFrom(), entry.occurredAt()))
                 .filter(entry -> matchesTo(criteria.occurredTo(), entry.occurredAt())), criteria.sortDirection());
+    }
+
+    private Stream<PrivacyAuditDeadLetterEntry> filteredStream(
+            PrivacyAuditDeadLetterQueryCriteria criteria,
+            String tenantId,
+            String tenantDetailKey
+    ) {
+        return filteredStream(criteria)
+                .filter(entry -> matchesTenant(entry, tenantId, tenantDetailKey));
     }
 
     private Stream<PrivacyAuditDeadLetterEntry> sort(Stream<PrivacyAuditDeadLetterEntry> stream, PrivacyAuditSortDirection sortDirection) {
@@ -127,6 +185,13 @@ public class InMemoryPrivacyAuditDeadLetterRepository implements PrivacyAuditDea
 
     private boolean matchesTo(java.time.Instant to, java.time.Instant actual) {
         return to == null || (actual != null && !actual.isAfter(to));
+    }
+
+    private boolean matchesTenant(PrivacyAuditDeadLetterEntry entry, String tenantId, String tenantDetailKey) {
+        if (tenantId == null || tenantId.isBlank() || tenantDetailKey == null || tenantDetailKey.isBlank()) {
+            return true;
+        }
+        return tenantId.equals(entry.details().get(tenantDetailKey));
     }
 
     private PrivacyAuditDeadLetterEntry assignId(PrivacyAuditDeadLetterEntry entry) {

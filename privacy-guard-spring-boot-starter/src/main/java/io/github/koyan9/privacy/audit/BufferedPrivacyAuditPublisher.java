@@ -5,6 +5,9 @@
 
 package io.github.koyan9.privacy.audit;
 
+import io.github.koyan9.privacy.core.PrivacyTenantContextHolder;
+import io.github.koyan9.privacy.core.PrivacyTenantContextScope;
+import io.github.koyan9.privacy.core.PrivacyTenantProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;
@@ -30,7 +33,9 @@ public class BufferedPrivacyAuditPublisher implements PrivacyAuditPublisher, Dis
     private final int maxAttempts;
     private final Duration retryBackoff;
     private final PrivacyAuditDeadLetterHandler deadLetterHandler;
-    private final Queue<PrivacyAuditEvent> queue = new ConcurrentLinkedQueue<>();
+    private final PrivacyTenantProvider tenantProvider;
+    private final PrivacyTenantAuditPolicyResolver tenantAuditPolicyResolver;
+    private final Queue<BufferedEvent> queue = new ConcurrentLinkedQueue<>();
     private final AtomicInteger queuedCount = new AtomicInteger();
     private final AtomicBoolean flushing = new AtomicBoolean();
 
@@ -43,12 +48,40 @@ public class BufferedPrivacyAuditPublisher implements PrivacyAuditPublisher, Dis
             Duration retryBackoff,
             PrivacyAuditDeadLetterHandler deadLetterHandler
     ) {
+        this(
+                repository,
+                executor,
+                batchSize,
+                flushInterval,
+                maxAttempts,
+                retryBackoff,
+                deadLetterHandler,
+                PrivacyTenantProvider.noop(),
+                PrivacyTenantAuditPolicyResolver.noop()
+        );
+    }
+
+    public BufferedPrivacyAuditPublisher(
+            PrivacyAuditRepository repository,
+            ScheduledExecutorService executor,
+            int batchSize,
+            Duration flushInterval,
+            int maxAttempts,
+            Duration retryBackoff,
+            PrivacyAuditDeadLetterHandler deadLetterHandler,
+            PrivacyTenantProvider tenantProvider,
+            PrivacyTenantAuditPolicyResolver tenantAuditPolicyResolver
+    ) {
         this.repository = Objects.requireNonNull(repository, "repository must not be null");
         this.executor = Objects.requireNonNull(executor, "executor must not be null");
         this.batchSize = Math.max(1, batchSize);
         this.maxAttempts = Math.max(1, maxAttempts);
         this.retryBackoff = retryBackoff == null ? Duration.ZERO : retryBackoff;
         this.deadLetterHandler = Objects.requireNonNull(deadLetterHandler, "deadLetterHandler must not be null");
+        this.tenantProvider = tenantProvider == null ? PrivacyTenantProvider.noop() : tenantProvider;
+        this.tenantAuditPolicyResolver = tenantAuditPolicyResolver == null
+                ? PrivacyTenantAuditPolicyResolver.noop()
+                : tenantAuditPolicyResolver;
         long intervalMillis = Math.max(1L, flushInterval == null ? 500L : flushInterval.toMillis());
         this.executor.scheduleWithFixedDelay(this::flushSafely, intervalMillis, intervalMillis, TimeUnit.MILLISECONDS);
     }
@@ -58,7 +91,8 @@ public class BufferedPrivacyAuditPublisher implements PrivacyAuditPublisher, Dis
         if (event == null) {
             return;
         }
-        queue.offer(event);
+        String tenantId = currentTenantId();
+        queue.offer(new BufferedEvent(event, tenantId, tenantDetailKey(tenantId)));
         int currentSize = queuedCount.incrementAndGet();
         if (currentSize >= batchSize) {
             requestFlush();
@@ -113,7 +147,7 @@ public class BufferedPrivacyAuditPublisher implements PrivacyAuditPublisher, Dis
 
     private void flushBatches() {
         while (true) {
-            List<PrivacyAuditEvent> batch = drainBatch();
+            List<BufferedEvent> batch = drainBatch();
             if (batch.isEmpty()) {
                 return;
             }
@@ -121,10 +155,10 @@ public class BufferedPrivacyAuditPublisher implements PrivacyAuditPublisher, Dis
         }
     }
 
-    private List<PrivacyAuditEvent> drainBatch() {
-        List<PrivacyAuditEvent> batch = new ArrayList<>(batchSize);
+    private List<BufferedEvent> drainBatch() {
+        List<BufferedEvent> batch = new ArrayList<>(batchSize);
         while (batch.size() < batchSize) {
-            PrivacyAuditEvent event = queue.poll();
+            BufferedEvent event = queue.poll();
             if (event == null) {
                 break;
             }
@@ -134,11 +168,11 @@ public class BufferedPrivacyAuditPublisher implements PrivacyAuditPublisher, Dis
         return batch;
     }
 
-    private void saveBatchWithRetry(List<PrivacyAuditEvent> batch) {
+    private void saveBatchWithRetry(List<BufferedEvent> batch) {
         RuntimeException lastException = null;
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
-                repository.saveAll(batch);
+                saveBatch(batch);
                 return;
             } catch (RuntimeException exception) {
                 lastException = exception;
@@ -149,9 +183,21 @@ public class BufferedPrivacyAuditPublisher implements PrivacyAuditPublisher, Dis
         }
 
         RuntimeException failure = lastException == null ? new IllegalStateException("Unknown buffered audit persistence failure") : lastException;
-        for (PrivacyAuditEvent event : batch) {
-            deadLetterHandler.handle(event, maxAttempts, failure);
+        for (BufferedEvent event : batch) {
+            try (PrivacyTenantContextScope ignored = PrivacyTenantContextHolder.openScope(event.tenantId())) {
+                deadLetterHandler.handle(event.event(), maxAttempts, failure);
+            }
         }
+    }
+
+    private void saveBatch(List<BufferedEvent> batch) {
+        if (repository instanceof PrivacyTenantAuditWriteRepository tenantAwareRepository) {
+            tenantAwareRepository.saveAllTenantAware(batch.stream()
+                    .map(BufferedEvent::toWriteRequest)
+                    .toList());
+            return;
+        }
+        repository.saveAll(batch.stream().map(BufferedEvent::event).toList());
     }
 
     private void sleepBackoff() {
@@ -163,6 +209,22 @@ public class BufferedPrivacyAuditPublisher implements PrivacyAuditPublisher, Dis
             Thread.sleep(backoffMillis);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
+        }
+    }
+
+    private String currentTenantId() {
+        String tenantId = tenantProvider.currentTenantId();
+        return tenantId == null || tenantId.isBlank() ? null : tenantId.trim();
+    }
+
+    private String tenantDetailKey(String tenantId) {
+        PrivacyTenantAuditPolicy policy = tenantAuditPolicyResolver.resolve(tenantId);
+        return policy == null ? "tenantId" : policy.tenantDetailKey();
+    }
+
+    private record BufferedEvent(PrivacyAuditEvent event, String tenantId, String tenantDetailKey) {
+        private PrivacyTenantAuditWriteRequest toWriteRequest() {
+            return new PrivacyTenantAuditWriteRequest(event, tenantId, tenantDetailKey);
         }
     }
 }

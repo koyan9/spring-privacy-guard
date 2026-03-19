@@ -5,6 +5,9 @@
 
 package io.github.koyan9.privacy.audit;
 
+import io.github.koyan9.privacy.core.StableSpi;
+
+@StableSpi
 public interface PrivacyAuditDeadLetterHandler {
 
     void handle(PrivacyAuditEvent event, int attempts, RuntimeException exception);

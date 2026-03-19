@@ -25,7 +25,7 @@ Spring Boot starter for privacy-safe JSON masking, log sanitization, audit trail
 
 ## Suggested Release Name
 
-- `spring-privacy-guard v0.2.0`
+- `spring-privacy-guard v0.3.0`
 
 ## Suggested About Website
 

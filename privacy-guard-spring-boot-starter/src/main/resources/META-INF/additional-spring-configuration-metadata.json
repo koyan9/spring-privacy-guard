@@ -31,6 +31,138 @@
       "defaultValue": true
     },
     {
+      "name": "privacy.guard.logging.mdc.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enables masking of MDC values in Logback events.",
+      "defaultValue": false
+    },
+    {
+      "name": "privacy.guard.logging.mdc.include-keys",
+      "type": "java.util.List",
+      "description": "Optional allowlist of MDC keys to sanitize."
+    },
+    {
+      "name": "privacy.guard.logging.mdc.exclude-keys",
+      "type": "java.util.List",
+      "description": "Optional denylist of MDC keys to skip."
+    },
+    {
+      "name": "privacy.guard.logging.structured.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enables masking of structured key/value logging fields in Logback events.",
+      "defaultValue": false
+    },
+    {
+      "name": "privacy.guard.logging.structured.include-keys",
+      "type": "java.util.List",
+      "description": "Optional allowlist of structured logging keys to sanitize."
+    },
+    {
+      "name": "privacy.guard.logging.structured.exclude-keys",
+      "type": "java.util.List",
+      "description": "Optional denylist of structured logging keys to skip."
+    },
+    {
+      "name": "privacy.guard.tenant.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enables tenant-aware privacy policy resolution and request-header tenant propagation.",
+      "defaultValue": false
+    },
+    {
+      "name": "privacy.guard.tenant.header-name",
+      "type": "java.lang.String",
+      "description": "HTTP header used to populate the current tenant context in servlet applications.",
+      "defaultValue": "X-Privacy-Tenant"
+    },
+    {
+      "name": "privacy.guard.tenant.default-tenant",
+      "type": "java.lang.String",
+      "description": "Fallback tenant identifier used when tenant mode is enabled and no tenant header is present."
+    },
+    {
+      "name": "privacy.guard.tenant.policies",
+      "type": "java.util.Map",
+      "description": "Named tenant policy map that can override fallback mask characters and text masking rules per tenant."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.fallback-mask-char",
+      "type": "java.lang.String",
+      "description": "Fallback mask character applied to the matching tenant policy."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.text.email-pattern",
+      "type": "java.lang.String",
+      "description": "Tenant-specific override for the email detection regex."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.text.phone-pattern",
+      "type": "java.lang.String",
+      "description": "Tenant-specific override for the phone detection regex."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.text.id-card-pattern",
+      "type": "java.lang.String",
+      "description": "Tenant-specific override for the ID card detection regex."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.text.additional-patterns",
+      "type": "java.util.List",
+      "description": "Tenant-specific additional regex patterns mapped to a SensitiveType."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.audit.include-detail-keys",
+      "type": "java.util.List",
+      "description": "Optional allowlist of audit detail keys retained for the tenant."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.audit.exclude-detail-keys",
+      "type": "java.util.List",
+      "description": "Optional denylist of audit detail keys dropped for the tenant."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.audit.attach-tenant-id",
+      "type": "java.lang.Boolean",
+      "description": "Adds the resolved tenant identifier into audit details for the tenant policy.",
+      "defaultValue": false
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.audit.tenant-detail-key",
+      "type": "java.lang.String",
+      "description": "Audit detail key used when tenant identifiers are attached.",
+      "defaultValue": "tenantId"
+    },
+    {
+      "name": "privacy.guard.masking.text.email-pattern",
+      "type": "java.lang.String",
+      "description": "Overrides the default email detection regex used by TextMaskingService."
+    },
+    {
+      "name": "privacy.guard.masking.text.phone-pattern",
+      "type": "java.lang.String",
+      "description": "Overrides the default phone detection regex used by TextMaskingService."
+    },
+    {
+      "name": "privacy.guard.masking.text.id-card-pattern",
+      "type": "java.lang.String",
+      "description": "Overrides the default ID card detection regex used by TextMaskingService."
+    },
+    {
+      "name": "privacy.guard.masking.text.additional-patterns",
+      "type": "java.util.List",
+      "description": "Additional regex patterns mapped to a SensitiveType for text masking."
+    },
+    {
+      "name": "privacy.guard.masking.text.additional-patterns[].type",
+      "type": "io.github.koyan9.privacy.core.SensitiveType",
+      "description": "SensitiveType used for the additional text masking rule.",
+      "defaultValue": "GENERIC"
+    },
+    {
+      "name": "privacy.guard.masking.text.additional-patterns[].pattern",
+      "type": "java.lang.String",
+      "description": "Regex pattern used for the additional text masking rule."
+    },
+    {
       "name": "privacy.guard.audit.enabled",
       "type": "java.lang.Boolean",
       "description": "Enables audit publishers and audit service beans.",
@@ -59,6 +191,12 @@
       "type": "java.lang.String",
       "description": "Thread name prefix used by the built-in async audit executor.",
       "defaultValue": "privacy-audit-"
+    },
+    {
+      "name": "privacy.guard.audit.async.thread-pool-size",
+      "type": "java.lang.Integer",
+      "description": "Thread pool size for the shared async/batch audit executor.",
+      "defaultValue": 1
     },
     {
       "name": "privacy.guard.audit.batch.enabled",
@@ -196,6 +334,23 @@
       "defaultValue": "200ms"
     },
     {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.webhook.backoff-policy",
+      "type": "io.github.koyan9.privacy.autoconfigure.PrivacyGuardProperties$AlertWebhook$BackoffPolicy",
+      "description": "Backoff policy used by the built-in webhook alert callback.",
+      "defaultValue": "FIXED"
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.webhook.max-backoff",
+      "type": "java.time.Duration",
+      "description": "Maximum delay between built-in webhook alert retry attempts. Defaults to 10x backoff capped at 30s when unset."
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.webhook.jitter",
+      "type": "java.lang.Double",
+      "description": "Jitter factor (0-1) applied to webhook alert retry delays.",
+      "defaultValue": 0.0
+    },
+    {
       "name": "privacy.guard.audit.dead-letter.observability.alert.webhook.connect-timeout",
       "type": "java.time.Duration",
       "description": "Connect timeout for the built-in webhook alert HTTP client.",
@@ -318,6 +473,24 @@
       "defaultValue": "privacy-audit-webhook-replay-store.json"
     },
     {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.redis.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enables the Redis-backed replay store for webhook receiver verification.",
+      "defaultValue": false
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.redis.key-prefix",
+      "type": "java.lang.String",
+      "description": "Redis key prefix used to store replay-protection nonces.",
+      "defaultValue": "privacy:audit:webhook:replay:"
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.redis.scan-batch-size",
+      "type": "java.lang.Integer",
+      "description": "Redis SCAN batch size used when snapshotting or clearing replay-store keys.",
+      "defaultValue": 500
+    },
+    {
       "name": "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.enabled",
       "type": "java.lang.Boolean",
       "description": "Enables the JDBC-backed replay store for webhook receiver verification.",
@@ -365,6 +538,17 @@
       "defaultValue": "privacy_audit_dead_letter"
     },
     {
+      "name": "privacy.guard.audit.dead-letter.jdbc.tenant-column-name",
+      "type": "java.lang.String",
+      "description": "Optional dedicated JDBC column used to persist and query tenant identifiers for dead letters."
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.jdbc.tenant-detail-key",
+      "type": "java.lang.String",
+      "description": "Audit detail key copied into the optional dead-letter tenant column when configured.",
+      "defaultValue": "tenantId"
+    },
+    {
       "name": "privacy.guard.audit.dead-letter.jdbc.initialize-schema",
       "type": "java.lang.Boolean",
       "description": "Runs the built-in SQL schema before the dead letter JDBC repository is used.",
@@ -386,6 +570,17 @@
       "type": "java.lang.String",
       "description": "Target JDBC table used by the audit repository.",
       "defaultValue": "privacy_audit_event"
+    },
+    {
+      "name": "privacy.guard.audit.jdbc.tenant-column-name",
+      "type": "java.lang.String",
+      "description": "Optional dedicated JDBC column used to persist and query tenant identifiers for audit events."
+    },
+    {
+      "name": "privacy.guard.audit.jdbc.tenant-detail-key",
+      "type": "java.lang.String",
+      "description": "Audit detail key copied into the optional audit tenant column when configured.",
+      "defaultValue": "tenantId"
     },
     {
       "name": "privacy.guard.audit.jdbc.initialize-schema",
@@ -447,11 +642,19 @@
           "description": "Use the PostgreSQL-specific SQL schema resource."
         }
       ]
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.webhook.backoff-policy",
+      "values": [
+        {
+          "value": "FIXED",
+          "description": "Use a fixed delay between webhook alert retry attempts."
+        },
+        {
+          "value": "EXPONENTIAL",
+          "description": "Exponentially increase webhook alert retry delays until the max backoff cap is reached."
+        }
+      ]
     }
   ]
 }
-
-
-
-
-

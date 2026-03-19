@@ -21,14 +21,24 @@ public class PrivacyAuditDeadLetterWebhookVerificationInterceptor implements Han
 
     private final PrivacyAuditDeadLetterWebhookRequestVerifier verifier;
     private final String pathPattern;
+    private final PrivacyAuditDeadLetterWebhookVerificationTelemetry telemetry;
     private final AntPathMatcher pathMatcher = new AntPathMatcher();
 
     public PrivacyAuditDeadLetterWebhookVerificationInterceptor(
             PrivacyAuditDeadLetterWebhookRequestVerifier verifier,
             String pathPattern
     ) {
+        this(verifier, pathPattern, PrivacyAuditDeadLetterWebhookVerificationTelemetry.noop());
+    }
+
+    public PrivacyAuditDeadLetterWebhookVerificationInterceptor(
+            PrivacyAuditDeadLetterWebhookRequestVerifier verifier,
+            String pathPattern,
+            PrivacyAuditDeadLetterWebhookVerificationTelemetry telemetry
+    ) {
         this.verifier = verifier;
         this.pathPattern = pathPattern;
+        this.telemetry = telemetry == null ? PrivacyAuditDeadLetterWebhookVerificationTelemetry.noop() : telemetry;
     }
 
     @Override
@@ -41,6 +51,7 @@ public class PrivacyAuditDeadLetterWebhookVerificationInterceptor implements Han
             verifier.verify(headers(request), body);
             return true;
         } catch (PrivacyAuditDeadLetterWebhookVerificationException ex) {
+            telemetry.recordFailure(ex.reason());
             response.setStatus(status(ex.reason()));
             response.setContentType("application/json");
             response.getWriter().write("{\"error\":\"" + ex.getMessage() + "\",\"reason\":\"" + ex.reasonCode() + "\"}");

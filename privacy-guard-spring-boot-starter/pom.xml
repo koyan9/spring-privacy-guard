@@ -10,7 +10,7 @@
     <parent>
         <groupId>io.github.koyan9</groupId>
         <artifactId>spring-privacy-guard-parent</artifactId>
-        <version>0.2.0</version>
+        <version>0.3.0</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
@@ -44,6 +44,11 @@
         <dependency>
             <groupId>org.springframework</groupId>
             <artifactId>spring-jdbc</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.data</groupId>
+            <artifactId>spring-data-redis</artifactId>
             <optional>true</optional>
         </dependency>
         <dependency>
@@ -106,7 +111,6 @@
         </plugins>
     </build>
 </project>
-
 
 
 

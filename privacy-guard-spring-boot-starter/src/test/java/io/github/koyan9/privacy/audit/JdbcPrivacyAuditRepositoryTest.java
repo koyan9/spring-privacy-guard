@@ -150,4 +150,169 @@ class JdbcPrivacyAuditRepositoryTest {
         assertEquals(2L, stats.byOutcome().get("OK"));
         assertEquals(2L, stats.byResourceType().get("Patient"));
     }
+
+    @Test
+    void readsTenantNativeFilteredAuditEventsThroughJdbcOperations() throws Exception {
+        JdbcOperations jdbcOperations = mock(JdbcOperations.class);
+        JdbcPrivacyAuditRepository repository = new JdbcPrivacyAuditRepository(jdbcOperations, new ObjectMapper(), "privacy_audit_event");
+
+        doAnswer(invocation -> {
+            RowMapper<?> rowMapper = invocation.getArgument(1);
+            ResultSet resultSet = mock(ResultSet.class);
+            when(resultSet.getTimestamp("occurred_at")).thenReturn(Timestamp.from(Instant.parse("2026-03-06T01:00:00Z")));
+            when(resultSet.getString("action")).thenReturn("READ");
+            when(resultSet.getString("resource_type")).thenReturn("Patient");
+            when(resultSet.getString("resource_id")).thenReturn("tenant-demo");
+            when(resultSet.getString("actor")).thenReturn("actor");
+            when(resultSet.getString("outcome")).thenReturn("OK");
+            when(resultSet.getString("details_json")).thenReturn("{\"tenant\":\"tenant-a\"}");
+            return List.of(rowMapper.mapRow(resultSet, 0));
+        }).when(jdbcOperations).query(
+                eq("select occurred_at, action, resource_type, resource_id, actor, outcome, details_json from privacy_audit_event where 1=1 and action = ? and details_json like ? escape '\\' order by occurred_at DESC limit ? offset ?"),
+                any(RowMapper.class),
+                eq("READ"), eq("%\"tenant\":\"tenant-a\"%"), eq(10), eq(0)
+        );
+
+        List<PrivacyAuditEvent> events = repository.findByCriteria(
+                "tenant-a",
+                "tenant",
+                new PrivacyAuditQueryCriteria(
+                        "READ", null,
+                        null, null,
+                        null, null,
+                        null, null,
+                        null, null,
+                        null, null,
+                        PrivacyAuditSortDirection.DESC,
+                        10,
+                        0
+                )
+        );
+
+        assertEquals(1, events.size());
+        assertEquals("tenant-demo", events.get(0).resourceId());
+    }
+
+    @Test
+    void computesTenantNativeStatsThroughJdbcOperations() throws Exception {
+        JdbcOperations jdbcOperations = mock(JdbcOperations.class);
+        JdbcPrivacyAuditRepository repository = new JdbcPrivacyAuditRepository(jdbcOperations, new ObjectMapper(), "privacy_audit_event");
+
+        when(jdbcOperations.queryForObject(
+                eq("select count(*) from privacy_audit_event where 1=1 and details_json like ? escape '\\'"),
+                eq(Long.class),
+                eq("%\"tenant\":\"tenant-a\"%")
+        )).thenReturn(2L);
+        doAnswer(invocation -> {
+            ResultSetExtractor<?> extractor = invocation.getArgument(1);
+            ResultSet resultSet = mock(ResultSet.class);
+            when(resultSet.next()).thenReturn(true, false);
+            when(resultSet.getString(1)).thenReturn("READ");
+            when(resultSet.getLong(2)).thenReturn(2L);
+            return extractor.extractData(resultSet);
+        }).when(jdbcOperations).query(
+                eq("select action, count(*) as cnt from privacy_audit_event where 1=1 and details_json like ? escape '\\' group by action"),
+                any(ResultSetExtractor.class),
+                eq("%\"tenant\":\"tenant-a\"%")
+        );
+        doAnswer(invocation -> {
+            ResultSetExtractor<?> extractor = invocation.getArgument(1);
+            ResultSet resultSet = mock(ResultSet.class);
+            when(resultSet.next()).thenReturn(true, false);
+            when(resultSet.getString(1)).thenReturn("OK");
+            when(resultSet.getLong(2)).thenReturn(2L);
+            return extractor.extractData(resultSet);
+        }).when(jdbcOperations).query(
+                eq("select outcome, count(*) as cnt from privacy_audit_event where 1=1 and details_json like ? escape '\\' group by outcome"),
+                any(ResultSetExtractor.class),
+                eq("%\"tenant\":\"tenant-a\"%")
+        );
+        doAnswer(invocation -> {
+            ResultSetExtractor<?> extractor = invocation.getArgument(1);
+            ResultSet resultSet = mock(ResultSet.class);
+            when(resultSet.next()).thenReturn(true, false);
+            when(resultSet.getString(1)).thenReturn("Patient");
+            when(resultSet.getLong(2)).thenReturn(2L);
+            return extractor.extractData(resultSet);
+        }).when(jdbcOperations).query(
+                eq("select resource_type, count(*) as cnt from privacy_audit_event where 1=1 and details_json like ? escape '\\' group by resource_type"),
+                any(ResultSetExtractor.class),
+                eq("%\"tenant\":\"tenant-a\"%")
+        );
+
+        PrivacyAuditQueryStats stats = repository.computeStats("tenant-a", "tenant", PrivacyAuditQueryCriteria.recent(10));
+
+        assertEquals(2, stats.total());
+        assertEquals(2L, stats.byAction().get("READ"));
+        assertEquals(2L, stats.byOutcome().get("OK"));
+        assertEquals(2L, stats.byResourceType().get("Patient"));
+    }
+
+    @Test
+    void writesAuditEventWithConfiguredTenantColumn() {
+        JdbcOperations jdbcOperations = mock(JdbcOperations.class);
+        JdbcPrivacyAuditRepository repository = new JdbcPrivacyAuditRepository(
+                jdbcOperations,
+                new ObjectMapper(),
+                "privacy_audit_event",
+                "tenant_id",
+                "tenant"
+        );
+        PrivacyAuditEvent event = new PrivacyAuditEvent(
+                Instant.now(),
+                "READ",
+                "Patient",
+                "demo",
+                "actor",
+                "OK",
+                Map.of("tenant", "tenant-a", "phone", "138****8000")
+        );
+
+        repository.save(event);
+
+        verify(jdbcOperations).update(
+                eq("insert into privacy_audit_event (occurred_at, action, resource_type, resource_id, actor, outcome, details_json, tenant_id) values (?, ?, ?, ?, ?, ?, ?, ?)"),
+                any(), any(), any(), any(), any(), any(),
+                argThat((String json) -> json.contains("\"tenant\":\"tenant-a\"") && json.contains("\"phone\":\"138****8000\"")),
+                eq("tenant-a")
+        );
+    }
+
+    @Test
+    void readsTenantNativeFilteredAuditEventsThroughConfiguredTenantColumn() throws Exception {
+        JdbcOperations jdbcOperations = mock(JdbcOperations.class);
+        JdbcPrivacyAuditRepository repository = new JdbcPrivacyAuditRepository(
+                jdbcOperations,
+                new ObjectMapper(),
+                "privacy_audit_event",
+                "tenant_id",
+                "tenant"
+        );
+
+        doAnswer(invocation -> {
+            RowMapper<?> rowMapper = invocation.getArgument(1);
+            ResultSet resultSet = mock(ResultSet.class);
+            when(resultSet.getTimestamp("occurred_at")).thenReturn(Timestamp.from(Instant.parse("2026-03-06T01:00:00Z")));
+            when(resultSet.getString("action")).thenReturn("READ");
+            when(resultSet.getString("resource_type")).thenReturn("Patient");
+            when(resultSet.getString("resource_id")).thenReturn("tenant-column-demo");
+            when(resultSet.getString("actor")).thenReturn("actor");
+            when(resultSet.getString("outcome")).thenReturn("OK");
+            when(resultSet.getString("details_json")).thenReturn("{\"tenant\":\"tenant-a\"}");
+            return List.of(rowMapper.mapRow(resultSet, 0));
+        }).when(jdbcOperations).query(
+                eq("select occurred_at, action, resource_type, resource_id, actor, outcome, details_json from privacy_audit_event where 1=1 and action = ? and tenant_id = ? order by occurred_at DESC limit ? offset ?"),
+                any(RowMapper.class),
+                eq("READ"), eq("tenant-a"), eq(10), eq(0)
+        );
+
+        List<PrivacyAuditEvent> events = repository.findByCriteria(
+                "tenant-a",
+                "tenant",
+                new PrivacyAuditQueryCriteria("READ", null, null, null, null, null, null, null, null, null, null, null, PrivacyAuditSortDirection.DESC, 10, 0)
+        );
+
+        assertEquals(1, events.size());
+        assertEquals("tenant-column-demo", events.get(0).resourceId());
+    }
 }

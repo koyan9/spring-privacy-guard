@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-public class JdbcPrivacyAuditDeadLetterRepository implements PrivacyAuditDeadLetterRepository, PrivacyAuditDeadLetterStatsRepository {
+public class JdbcPrivacyAuditDeadLetterRepository implements PrivacyAuditDeadLetterRepository, PrivacyAuditDeadLetterStatsRepository, PrivacyTenantAuditDeadLetterReadRepository, PrivacyTenantAuditDeadLetterWriteRepository {
 
     private static final TypeReference<Map<String, String>> DETAILS_TYPE = new TypeReference<>() {
     };
@@ -28,11 +28,25 @@ public class JdbcPrivacyAuditDeadLetterRepository implements PrivacyAuditDeadLet
     private final JdbcOperations jdbcOperations;
     private final ObjectMapper objectMapper;
     private final String tableName;
+    private final String tenantColumnName;
+    private final String tenantDetailKey;
 
     public JdbcPrivacyAuditDeadLetterRepository(JdbcOperations jdbcOperations, ObjectMapper objectMapper, String tableName) {
+        this(jdbcOperations, objectMapper, tableName, null, "tenantId");
+    }
+
+    public JdbcPrivacyAuditDeadLetterRepository(
+            JdbcOperations jdbcOperations,
+            ObjectMapper objectMapper,
+            String tableName,
+            String tenantColumnName,
+            String tenantDetailKey
+    ) {
         this.jdbcOperations = jdbcOperations;
         this.objectMapper = objectMapper;
         this.tableName = tableName;
+        this.tenantColumnName = normalizeColumnName(tenantColumnName);
+        this.tenantDetailKey = normalizeTenantDetailKey(tenantDetailKey);
     }
 
     @Override
@@ -41,11 +55,24 @@ public class JdbcPrivacyAuditDeadLetterRepository implements PrivacyAuditDeadLet
     }
 
     @Override
+    public void save(PrivacyTenantAuditDeadLetterWriteRequest request) {
+        jdbcOperations.update(insertSql(), toSqlArgs(request));
+    }
+
+    @Override
     public void saveAll(List<PrivacyAuditDeadLetterEntry> entries) {
         if (entries == null || entries.isEmpty()) {
             return;
         }
         jdbcOperations.batchUpdate(insertSql(), entries.stream().map(this::toSqlArgs).toList());
+    }
+
+    @Override
+    public void saveAllTenantAware(List<PrivacyTenantAuditDeadLetterWriteRequest> requests) {
+        if (requests == null || requests.isEmpty()) {
+            return;
+        }
+        jdbcOperations.batchUpdate(insertSql(), requests.stream().map(this::toSqlArgs).toList());
     }
 
     @Override
@@ -73,11 +100,49 @@ public class JdbcPrivacyAuditDeadLetterRepository implements PrivacyAuditDeadLet
     }
 
     @Override
+    public List<PrivacyAuditDeadLetterEntry> findByCriteria(
+            String tenantId,
+            String tenantDetailKey,
+            PrivacyAuditDeadLetterQueryCriteria criteria
+    ) {
+        PrivacyAuditDeadLetterQueryCriteria normalized = criteria == null
+                ? PrivacyAuditDeadLetterQueryCriteria.recent(100)
+                : criteria.normalize();
+        QueryParts queryParts = buildWhereClause(normalized, tenantId, tenantDetailKey);
+        String sql = "select id, failed_at, attempts, error_type, error_message, occurred_at, action, resource_type, resource_id, actor, outcome, details_json from "
+                + tableName
+                + queryParts.whereClause()
+                + " order by failed_at " + normalized.sortDirection().name() + ", id " + normalized.sortDirection().name()
+                + " limit ? offset ?";
+        queryParts.args().add(normalized.limit());
+        queryParts.args().add(normalized.offset());
+        return jdbcOperations.query(sql, (resultSet, rowNum) -> mapEntry(resultSet), queryParts.args().toArray());
+    }
+
+    @Override
     public PrivacyAuditDeadLetterStats computeStats(PrivacyAuditDeadLetterQueryCriteria criteria) {
         PrivacyAuditDeadLetterQueryCriteria normalized = criteria == null
                 ? PrivacyAuditDeadLetterQueryCriteria.recent(100)
                 : criteria.normalize();
         QueryParts queryParts = buildWhereClause(normalized);
+        long total = queryForCount("select count(*) from " + tableName + queryParts.whereClause(), queryParts.args());
+        Map<String, Long> byAction = queryForGroupedCount("action", queryParts);
+        Map<String, Long> byOutcome = queryForGroupedCount("outcome", queryParts);
+        Map<String, Long> byResourceType = queryForGroupedCount("resource_type", queryParts);
+        Map<String, Long> byErrorType = queryForGroupedCount("error_type", queryParts);
+        return new PrivacyAuditDeadLetterStats(total, byAction, byOutcome, byResourceType, byErrorType);
+    }
+
+    @Override
+    public PrivacyAuditDeadLetterStats computeStats(
+            String tenantId,
+            String tenantDetailKey,
+            PrivacyAuditDeadLetterQueryCriteria criteria
+    ) {
+        PrivacyAuditDeadLetterQueryCriteria normalized = criteria == null
+                ? PrivacyAuditDeadLetterQueryCriteria.recent(100)
+                : criteria.normalize();
+        QueryParts queryParts = buildWhereClause(normalized, tenantId, tenantDetailKey);
         long total = queryForCount("select count(*) from " + tableName + queryParts.whereClause(), queryParts.args());
         Map<String, Long> byAction = queryForGroupedCount("action", queryParts);
         Map<String, Long> byOutcome = queryForGroupedCount("outcome", queryParts);
@@ -138,7 +203,17 @@ public class JdbcPrivacyAuditDeadLetterRepository implements PrivacyAuditDeadLet
         appendTo(sql, args, "failed_at", criteria.failedTo());
         appendFrom(sql, args, "occurred_at", criteria.occurredFrom());
         appendTo(sql, args, "occurred_at", criteria.occurredTo());
-        return new QueryParts(sql.toString(), args);
+        return new QueryParts(sql, args);
+    }
+
+    private QueryParts buildWhereClause(
+            PrivacyAuditDeadLetterQueryCriteria criteria,
+            String tenantId,
+            String tenantDetailKey
+    ) {
+        QueryParts queryParts = buildWhereClause(criteria);
+        appendTenantDetailContains(queryParts.whereClauseBuilder(), queryParts.args(), tenantId, tenantDetailKey);
+        return queryParts;
     }
 
     private void appendEquals(StringBuilder sql, List<Object> args, String column, String value) {
@@ -153,6 +228,19 @@ public class JdbcPrivacyAuditDeadLetterRepository implements PrivacyAuditDeadLet
             sql.append(" and ").append(column).append(" like ?");
             args.add("%" + value + "%");
         }
+    }
+
+    private void appendTenantDetailContains(StringBuilder sql, List<Object> args, String tenantId, String tenantDetailKey) {
+        if (tenantId == null || tenantId.isBlank() || tenantDetailKey == null || tenantDetailKey.isBlank()) {
+            return;
+        }
+        if (hasTenantColumn()) {
+            sql.append(" and ").append(tenantColumnName).append(" = ?");
+            args.add(tenantId);
+            return;
+        }
+        sql.append(" and details_json like ? escape '\\'");
+        args.add("%" + escapeLike(jsonDetailFragment(tenantDetailKey, tenantId)) + "%");
     }
 
     private void appendFrom(StringBuilder sql, List<Object> args, String column, Instant value) {
@@ -170,10 +258,34 @@ public class JdbcPrivacyAuditDeadLetterRepository implements PrivacyAuditDeadLet
     }
 
     private String insertSql() {
+        if (hasTenantColumn()) {
+            return "insert into " + tableName + " (failed_at, attempts, error_type, error_message, occurred_at, action, resource_type, resource_id, actor, outcome, details_json, " + tenantColumnName + ") values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        }
         return "insert into " + tableName + " (failed_at, attempts, error_type, error_message, occurred_at, action, resource_type, resource_id, actor, outcome, details_json) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     }
 
     private Object[] toSqlArgs(PrivacyAuditDeadLetterEntry entry) {
+        return toSqlArgs(new PrivacyTenantAuditDeadLetterWriteRequest(entry, null, tenantDetailKey));
+    }
+
+    private Object[] toSqlArgs(PrivacyTenantAuditDeadLetterWriteRequest request) {
+        PrivacyAuditDeadLetterEntry entry = request.entry();
+        if (hasTenantColumn()) {
+            return new Object[]{
+                    entry.failedAt(),
+                    entry.attempts(),
+                    entry.errorType(),
+                    entry.errorMessage(),
+                    entry.occurredAt(),
+                    entry.action(),
+                    entry.resourceType(),
+                    entry.resourceId(),
+                    entry.actor(),
+                    entry.outcome(),
+                    toJson(entry),
+                    resolveTenantColumnValue(entry.details(), request.tenantId(), request.tenantDetailKey())
+            };
+        }
         return new Object[]{
                 entry.failedAt(),
                 entry.attempts(),
@@ -231,6 +343,61 @@ public class JdbcPrivacyAuditDeadLetterRepository implements PrivacyAuditDeadLet
         }
     }
 
-    private record QueryParts(String whereClause, List<Object> args) {
+    private String jsonDetailFragment(String key, String value) {
+        try {
+            String json = objectMapper.writeValueAsString(Map.of(key, value));
+            return json.substring(1, json.length() - 1);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Failed to serialize privacy audit dead-letter tenant details", exception);
+        }
+    }
+
+    private String escapeLike(String value) {
+        return value
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
+    }
+
+    private boolean hasTenantColumn() {
+        return tenantColumnName != null;
+    }
+
+    private String resolveTenantColumnValue(Map<String, String> details, String requestTenantId, String requestTenantDetailKey) {
+        if (!hasTenantColumn()) {
+            return null;
+        }
+        String detailKey = normalizeTenantDetailKey(requestTenantDetailKey);
+        String tenantFromDetails = details == null || details.isEmpty() ? null : details.get(detailKey);
+        if (tenantFromDetails != null && !tenantFromDetails.isBlank()) {
+            return tenantFromDetails;
+        }
+        if (requestTenantId != null && !requestTenantId.isBlank()) {
+            return requestTenantId;
+        }
+        if (details == null || details.isEmpty()) {
+            return null;
+        }
+        return details.get(tenantDetailKey);
+    }
+
+    private String normalizeColumnName(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
+    }
+
+    private String normalizeTenantDetailKey(String value) {
+        if (value == null || value.isBlank()) {
+            return "tenantId";
+        }
+        return value.trim();
+    }
+
+    private record QueryParts(StringBuilder whereClauseBuilder, List<Object> args) {
+        private String whereClause() {
+            return whereClauseBuilder.toString();
+        }
     }
 }

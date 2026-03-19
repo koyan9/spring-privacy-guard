@@ -14,13 +14,17 @@ import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterReplayResult;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterService;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterStats;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterStatsService;
+import io.github.koyan9.privacy.audit.PrivacyTenantAuditDeadLetterExchangeService;
+import io.github.koyan9.privacy.audit.PrivacyTenantAuditDeadLetterOperationsService;
+import io.github.koyan9.privacy.audit.PrivacyTenantAuditDeadLetterQueryService;
 import io.github.koyan9.privacy.audit.PrivacyAuditEvent;
 import io.github.koyan9.privacy.audit.PrivacyAuditQueryCriteria;
-import io.github.koyan9.privacy.audit.PrivacyAuditQueryService;
 import io.github.koyan9.privacy.audit.PrivacyAuditQueryStats;
 import io.github.koyan9.privacy.audit.PrivacyAuditService;
 import io.github.koyan9.privacy.audit.PrivacyAuditSortDirection;
 import io.github.koyan9.privacy.audit.PrivacyAuditStatsService;
+import io.github.koyan9.privacy.audit.PrivacyTenantAuditManagementService;
+import io.github.koyan9.privacy.audit.PrivacyTenantAuditQueryService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -41,26 +45,14 @@ class AuditEventController {
 
     private static final String ADMIN_ACTOR = "demo-admin";
 
-    private final PrivacyAuditQueryService privacyAuditQueryService;
-    private final PrivacyAuditStatsService privacyAuditStatsService;
-    private final PrivacyAuditDeadLetterService privacyAuditDeadLetterService;
-    private final PrivacyAuditDeadLetterStatsService privacyAuditDeadLetterStatsService;
-    private final PrivacyAuditDeadLetterExchangeService privacyAuditDeadLetterExchangeService;
+    private final PrivacyTenantAuditManagementService privacyTenantAuditManagementService;
     private final PrivacyAuditService privacyAuditService;
 
     AuditEventController(
-            PrivacyAuditQueryService privacyAuditQueryService,
-            PrivacyAuditStatsService privacyAuditStatsService,
-            PrivacyAuditDeadLetterService privacyAuditDeadLetterService,
-            PrivacyAuditDeadLetterStatsService privacyAuditDeadLetterStatsService,
-            PrivacyAuditDeadLetterExchangeService privacyAuditDeadLetterExchangeService,
+            PrivacyTenantAuditManagementService privacyTenantAuditManagementService,
             PrivacyAuditService privacyAuditService
     ) {
-        this.privacyAuditQueryService = privacyAuditQueryService;
-        this.privacyAuditStatsService = privacyAuditStatsService;
-        this.privacyAuditDeadLetterService = privacyAuditDeadLetterService;
-        this.privacyAuditDeadLetterStatsService = privacyAuditDeadLetterStatsService;
-        this.privacyAuditDeadLetterExchangeService = privacyAuditDeadLetterExchangeService;
+        this.privacyTenantAuditManagementService = privacyTenantAuditManagementService;
         this.privacyAuditService = privacyAuditService;
     }
 
@@ -76,6 +68,7 @@ class AuditEventController {
             @RequestParam(required = false) String actorLike,
             @RequestParam(required = false) String outcome,
             @RequestParam(required = false) String outcomeLike,
+            @RequestParam(required = false) String tenant,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant occurredFrom,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant occurredTo,
             @RequestParam(defaultValue = "DESC") PrivacyAuditSortDirection sortDirection,
@@ -93,12 +86,14 @@ class AuditEventController {
                 limit,
                 offset
         );
-        List<PrivacyAuditEvent> events = privacyAuditQueryService.findByCriteria(criteria);
+        List<PrivacyAuditEvent> events = privacyTenantAuditManagementService.findAuditEvents(tenant, criteria);
+        Map<String, String> details = queryDetails(criteria.normalize());
+        putIfPresent(details, "tenant", tenant);
         recordManagementAction(
                 "AUDIT_EVENTS_QUERY",
                 "PrivacyAuditEvent",
                 "query",
-                queryDetails(criteria.normalize())
+                details
         );
         return events;
     }
@@ -115,6 +110,7 @@ class AuditEventController {
             @RequestParam(required = false) String actorLike,
             @RequestParam(required = false) String outcome,
             @RequestParam(required = false) String outcomeLike,
+            @RequestParam(required = false) String tenant,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant occurredFrom,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant occurredTo
     ) {
@@ -129,12 +125,14 @@ class AuditEventController {
                 100,
                 0
         );
-        PrivacyAuditQueryStats stats = privacyAuditStatsService.computeStats(criteria);
+        PrivacyAuditQueryStats stats = privacyTenantAuditManagementService.computeAuditStats(tenant, criteria);
+        Map<String, String> details = queryDetails(criteria.normalize());
+        putIfPresent(details, "tenant", tenant);
         recordManagementAction(
                 "AUDIT_EVENTS_STATS_QUERY",
                 "PrivacyAuditEvent",
                 "stats",
-                queryDetails(criteria.normalize())
+                details
         );
         return stats;
     }
@@ -157,6 +155,7 @@ class AuditEventController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant failedTo,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant occurredFrom,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant occurredTo,
+            @RequestParam(required = false) String tenant,
             @RequestParam(defaultValue = "DESC") PrivacyAuditSortDirection sortDirection,
             @RequestParam(defaultValue = "20") int limit,
             @RequestParam(defaultValue = "0") int offset
@@ -166,12 +165,14 @@ class AuditEventController {
                 actor, actorLike, outcome, outcomeLike, errorType, errorMessageLike,
                 failedFrom, failedTo, occurredFrom, occurredTo, sortDirection, limit, offset
         );
-        List<PrivacyAuditDeadLetterEntry> entries = privacyAuditDeadLetterService.findByCriteria(criteria);
+        List<PrivacyAuditDeadLetterEntry> entries = privacyTenantAuditManagementService.findDeadLetters(tenant, criteria);
+        Map<String, String> details = deadLetterQueryDetails(criteria.normalize());
+        putIfPresent(details, "tenant", tenant);
         recordManagementAction(
                 "AUDIT_DEAD_LETTERS_QUERY",
                 "PrivacyAuditDeadLetter",
                 "query",
-                deadLetterQueryDetails(criteria.normalize())
+                details
         );
         return entries;
     }
@@ -193,19 +194,22 @@ class AuditEventController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant failedFrom,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant failedTo,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant occurredFrom,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant occurredTo
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant occurredTo,
+            @RequestParam(required = false) String tenant
     ) {
         PrivacyAuditDeadLetterQueryCriteria criteria = buildDeadLetterCriteria(
                 action, actionLike, resourceType, resourceTypeLike, resourceId, resourceIdLike,
                 actor, actorLike, outcome, outcomeLike, errorType, errorMessageLike,
                 failedFrom, failedTo, occurredFrom, occurredTo, PrivacyAuditSortDirection.DESC, 100, 0
         );
-        PrivacyAuditDeadLetterStats stats = privacyAuditDeadLetterStatsService.computeStats(criteria);
+        PrivacyAuditDeadLetterStats stats = privacyTenantAuditManagementService.computeDeadLetterStats(tenant, criteria);
+        Map<String, String> details = deadLetterQueryDetails(criteria.normalize());
+        putIfPresent(details, "tenant", tenant);
         recordManagementAction(
                 "AUDIT_DEAD_LETTERS_STATS_QUERY",
                 "PrivacyAuditDeadLetter",
                 "stats",
-                deadLetterQueryDetails(criteria.normalize())
+                details
         );
         return stats;
     }
@@ -229,6 +233,7 @@ class AuditEventController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant failedTo,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant occurredFrom,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant occurredTo,
+            @RequestParam(required = false) String tenant,
             @RequestParam(defaultValue = "DESC") PrivacyAuditSortDirection sortDirection,
             @RequestParam(defaultValue = "100") int limit,
             @RequestParam(defaultValue = "0") int offset
@@ -238,16 +243,17 @@ class AuditEventController {
                 actor, actorLike, outcome, outcomeLike, errorType, errorMessageLike,
                 failedFrom, failedTo, occurredFrom, occurredTo, sortDirection, limit, offset
         );
-        PrivacyAuditDeadLetterExportManifest manifest = privacyAuditDeadLetterExchangeService.exportManifest(criteria, format);
+        PrivacyAuditDeadLetterExportManifest manifest = privacyTenantAuditManagementService.exportDeadLettersManifest(tenant, criteria, format);
+        Map<String, String> details = new LinkedHashMap<>();
+        details.put("format", manifest.format());
+        details.put("total", String.valueOf(manifest.total()));
+        details.put("sha256", manifest.sha256());
+        putIfPresent(details, "tenant", tenant);
         recordManagementAction(
                 "AUDIT_DEAD_LETTERS_EXPORT_MANIFEST",
                 "PrivacyAuditDeadLetter",
                 "manifest",
-                Map.of(
-                        "format", manifest.format(),
-                        "total", String.valueOf(manifest.total()),
-                        "sha256", manifest.sha256()
-                )
+                details
         );
         return manifest;
     }
@@ -270,6 +276,7 @@ class AuditEventController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant failedTo,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant occurredFrom,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant occurredTo,
+            @RequestParam(required = false) String tenant,
             @RequestParam(defaultValue = "DESC") PrivacyAuditSortDirection sortDirection,
             @RequestParam(defaultValue = "100") int limit,
             @RequestParam(defaultValue = "0") int offset
@@ -279,12 +286,16 @@ class AuditEventController {
                 actor, actorLike, outcome, outcomeLike, errorType, errorMessageLike,
                 failedFrom, failedTo, occurredFrom, occurredTo, sortDirection, limit, offset
         );
-        String content = privacyAuditDeadLetterExchangeService.exportJson(criteria);
+        String content = privacyTenantAuditManagementService.exportDeadLettersJson(tenant, criteria);
+        Map<String, String> details = new LinkedHashMap<>();
+        details.put("format", "json");
+        details.put("contentLength", String.valueOf(content.length()));
+        putIfPresent(details, "tenant", tenant);
         recordManagementAction(
                 "AUDIT_DEAD_LETTERS_EXPORT",
                 "PrivacyAuditDeadLetter",
                 "json",
-                Map.of("format", "json", "contentLength", String.valueOf(content.length()))
+                details
         );
         return content;
     }
@@ -307,6 +318,7 @@ class AuditEventController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant failedTo,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant occurredFrom,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant occurredTo,
+            @RequestParam(required = false) String tenant,
             @RequestParam(defaultValue = "DESC") PrivacyAuditSortDirection sortDirection,
             @RequestParam(defaultValue = "100") int limit,
             @RequestParam(defaultValue = "0") int offset
@@ -316,12 +328,16 @@ class AuditEventController {
                 actor, actorLike, outcome, outcomeLike, errorType, errorMessageLike,
                 failedFrom, failedTo, occurredFrom, occurredTo, sortDirection, limit, offset
         );
-        String content = privacyAuditDeadLetterExchangeService.exportCsv(criteria);
+        String content = privacyTenantAuditManagementService.exportDeadLettersCsv(tenant, criteria);
+        Map<String, String> details = new LinkedHashMap<>();
+        details.put("format", "csv");
+        details.put("contentLength", String.valueOf(content.length()));
+        putIfPresent(details, "tenant", tenant);
         recordManagementAction(
                 "AUDIT_DEAD_LETTERS_EXPORT",
                 "PrivacyAuditDeadLetter",
                 "csv",
-                Map.of("format", "csv", "contentLength", String.valueOf(content.length()))
+                details
         );
         return content;
     }
@@ -330,21 +346,28 @@ class AuditEventController {
     public PrivacyAuditDeadLetterImportResult importDeadLettersJson(
             @RequestBody String content,
             @RequestParam(defaultValue = "true") boolean deduplicate,
-            @RequestParam(required = false) String checksum
+            @RequestParam(required = false) String checksum,
+            @RequestParam(required = false) String tenant
     ) {
-        PrivacyAuditDeadLetterImportResult result = privacyAuditDeadLetterExchangeService.importJson(content, deduplicate, checksum);
+        PrivacyAuditDeadLetterImportResult result = privacyTenantAuditManagementService.importDeadLettersJson(
+                tenant,
+                content,
+                deduplicate,
+                checksum
+        );
+        Map<String, String> details = new LinkedHashMap<>();
+        details.put("format", "json");
+        details.put("received", String.valueOf(result.received()));
+        details.put("imported", String.valueOf(result.imported()));
+        details.put("skippedDuplicates", String.valueOf(result.skippedDuplicates()));
+        details.put("deduplicate", String.valueOf(deduplicate));
+        details.put("checksum", result.sha256());
+        putIfPresent(details, "tenant", tenant);
         recordManagementAction(
                 "AUDIT_DEAD_LETTERS_IMPORT",
                 "PrivacyAuditDeadLetter",
                 "json",
-                Map.of(
-                        "format", "json",
-                        "received", String.valueOf(result.received()),
-                        "imported", String.valueOf(result.imported()),
-                        "skippedDuplicates", String.valueOf(result.skippedDuplicates()),
-                        "deduplicate", String.valueOf(deduplicate),
-                        "checksum", result.sha256()
-                )
+                details
         );
         return result;
     }
@@ -353,28 +376,35 @@ class AuditEventController {
     public PrivacyAuditDeadLetterImportResult importDeadLettersCsv(
             @RequestBody String content,
             @RequestParam(defaultValue = "true") boolean deduplicate,
-            @RequestParam(required = false) String checksum
+            @RequestParam(required = false) String checksum,
+            @RequestParam(required = false) String tenant
     ) {
-        PrivacyAuditDeadLetterImportResult result = privacyAuditDeadLetterExchangeService.importCsv(content, deduplicate, checksum);
+        PrivacyAuditDeadLetterImportResult result = privacyTenantAuditManagementService.importDeadLettersCsv(
+                tenant,
+                content,
+                deduplicate,
+                checksum
+        );
+        Map<String, String> details = new LinkedHashMap<>();
+        details.put("format", "csv");
+        details.put("received", String.valueOf(result.received()));
+        details.put("imported", String.valueOf(result.imported()));
+        details.put("skippedDuplicates", String.valueOf(result.skippedDuplicates()));
+        details.put("deduplicate", String.valueOf(deduplicate));
+        details.put("checksum", result.sha256());
+        putIfPresent(details, "tenant", tenant);
         recordManagementAction(
                 "AUDIT_DEAD_LETTERS_IMPORT",
                 "PrivacyAuditDeadLetter",
                 "csv",
-                Map.of(
-                        "format", "csv",
-                        "received", String.valueOf(result.received()),
-                        "imported", String.valueOf(result.imported()),
-                        "skippedDuplicates", String.valueOf(result.skippedDuplicates()),
-                        "deduplicate", String.valueOf(deduplicate),
-                        "checksum", result.sha256()
-                )
+                details
         );
         return result;
     }
 
     @DeleteMapping("/audit-dead-letters/{id}")
     public boolean deleteDeadLetter(@PathVariable long id) {
-        boolean deleted = privacyAuditDeadLetterService.delete(id);
+        boolean deleted = privacyTenantAuditManagementService.deleteDeadLetter(id);
         recordManagementAction(
                 "AUDIT_DEAD_LETTER_DELETE",
                 "PrivacyAuditDeadLetter",
@@ -402,6 +432,7 @@ class AuditEventController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant failedTo,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant occurredFrom,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant occurredTo,
+            @RequestParam(required = false) String tenant,
             @RequestParam(defaultValue = "DESC") PrivacyAuditSortDirection sortDirection,
             @RequestParam(defaultValue = "100") int limit,
             @RequestParam(defaultValue = "0") int offset
@@ -411,8 +442,9 @@ class AuditEventController {
                 actor, actorLike, outcome, outcomeLike, errorType, errorMessageLike,
                 failedFrom, failedTo, occurredFrom, occurredTo, sortDirection, limit, offset
         );
-        int deleted = privacyAuditDeadLetterService.deleteByCriteria(criteria);
+        int deleted = privacyTenantAuditManagementService.deleteDeadLetters(tenant, criteria);
         Map<String, String> details = deadLetterQueryDetails(criteria.normalize());
+        putIfPresent(details, "tenant", tenant);
         details.put("deleted", String.valueOf(deleted));
         recordManagementAction(
                 "AUDIT_DEAD_LETTERS_DELETE",
@@ -425,7 +457,7 @@ class AuditEventController {
 
     @PostMapping("/audit-dead-letters/{id}/replay")
     public boolean replayDeadLetter(@PathVariable long id) {
-        boolean replayed = privacyAuditDeadLetterService.replay(id);
+        boolean replayed = privacyTenantAuditManagementService.replayDeadLetter(id);
         recordManagementAction(
                 "AUDIT_DEAD_LETTER_REPLAY",
                 "PrivacyAuditDeadLetter",
@@ -453,6 +485,7 @@ class AuditEventController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant failedTo,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant occurredFrom,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant occurredTo,
+            @RequestParam(required = false) String tenant,
             @RequestParam(defaultValue = "DESC") PrivacyAuditSortDirection sortDirection,
             @RequestParam(defaultValue = "100") int limit,
             @RequestParam(defaultValue = "0") int offset
@@ -462,8 +495,9 @@ class AuditEventController {
                 actor, actorLike, outcome, outcomeLike, errorType, errorMessageLike,
                 failedFrom, failedTo, occurredFrom, occurredTo, sortDirection, limit, offset
         );
-        PrivacyAuditDeadLetterReplayResult result = privacyAuditDeadLetterService.replayByCriteria(criteria);
+        PrivacyAuditDeadLetterReplayResult result = privacyTenantAuditManagementService.replayDeadLetters(tenant, criteria);
         Map<String, String> details = deadLetterQueryDetails(criteria.normalize());
+        putIfPresent(details, "tenant", tenant);
         details.put("requested", String.valueOf(result.requested()));
         details.put("replayed", String.valueOf(result.replayed()));
         details.put("failed", String.valueOf(result.failed()));

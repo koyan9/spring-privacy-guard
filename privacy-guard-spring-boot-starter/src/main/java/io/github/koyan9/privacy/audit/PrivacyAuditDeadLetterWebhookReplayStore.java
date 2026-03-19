@@ -5,9 +5,12 @@
 
 package io.github.koyan9.privacy.audit;
 
+import io.github.koyan9.privacy.core.StableSpi;
+
 import java.time.Instant;
 import java.util.Map;
 
+@StableSpi
 public interface PrivacyAuditDeadLetterWebhookReplayStore {
 
     boolean markIfNew(String nonce, Instant now, java.time.Duration ttl);

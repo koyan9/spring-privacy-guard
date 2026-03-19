@@ -11,29 +11,31 @@ This document summarizes the runtime logic in the `privacy-guard-core` and `priv
 ## Layered Architecture
 
 1. Core masking (privacy-guard-core)
-The core module provides masking rules and a strategy SPI. The main entry is `MaskingService`, which builds a `MaskingContext` from `SensitiveData` or `SensitiveType`, tries custom strategies first, and then falls back to built-in rules. `TextMaskingService` applies regex-based detection for email, phone, and ID patterns, delegating to `MaskingService` for the actual masking logic.
+The core module provides masking rules and a strategy SPI. The main entry is `MaskingService`, which builds a `MaskingContext` from `SensitiveData` or `SensitiveType`, resolves the current tenant policy when configured, tries custom strategies first, and then falls back to built-in rules. `TextMaskingService` applies regex-based detection for email, phone, and ID patterns (configurable via `privacy.guard.masking.text.*` and tenant overrides), delegating to `MaskingService` for the actual masking logic.
 
 2. Serialization and logging integration (starter)
-The starter integrates core masking with Jackson serialization and application logging. `PrivacyGuardModule` registers a `PrivacyGuardBeanSerializerModifier` which wraps string fields annotated with `@SensitiveData` using `MaskingBeanPropertyWriter`. Logging is handled via `PrivacyLogSanitizer` and `PrivacyLogger`, with optional Logback integration (`PrivacyPatternLayout`, `PrivacySanitizingAppender`, `PrivacyBlockingTurboFilter`) to sanitize formatted output or block unsafe messages.
+The starter integrates core masking with Jackson serialization and application logging. `PrivacyGuardModule` registers a `PrivacyGuardBeanSerializerModifier` which wraps string fields annotated with `@SensitiveData` using `MaskingBeanPropertyWriter`. Logging is handled via `PrivacyLogSanitizer` and `PrivacyLogger`, with optional Logback integration (`PrivacyPatternLayout`, `PrivacySanitizingAppender`, `PrivacyBlockingTurboFilter`) to sanitize formatted output, MDC values, structured key/value fields, or block unsafe messages.
 
 3. Audit pipeline (starter)
-The audit pipeline centers on `PrivacyAuditService.record(...)`, which sanitizes input values and publishes a `PrivacyAuditEvent` through `PrivacyAuditPublisher`. The publisher is typically a `CompositePrivacyAuditPublisher` combining an application event publisher and one or more repository publishers. The pipeline can be wrapped with `AsyncPrivacyAuditPublisher` or `BufferedPrivacyAuditPublisher` depending on configuration, and failures route into a dead-letter handler.
+The audit pipeline centers on `PrivacyAuditService.record(...)`, which sanitizes input values, optionally applies tenant-specific audit detail policy, and publishes a `PrivacyAuditEvent` through `PrivacyAuditPublisher`. The publisher is typically a `CompositePrivacyAuditPublisher` combining an application event publisher and one or more repository publishers. The pipeline can be wrapped with `AsyncPrivacyAuditPublisher` or `BufferedPrivacyAuditPublisher` depending on configuration, and failures route into a dead-letter handler. Tenant-scoped read paths can reuse `PrivacyTenantAuditQueryService`, which filters the existing query results by the configured tenant detail key without changing `PrivacyAuditEvent` or `PrivacyAuditQueryCriteria`.
 
 4. Dead-letter management and exchange (starter)
-Dead-letter persistence is abstracted by `PrivacyAuditDeadLetterRepository` with in-memory or JDBC implementations. `PrivacyAuditDeadLetterService` provides replay, delete, and criteria-based queries, while `PrivacyAuditDeadLetterExchangeService` handles JSON/CSV export, import, checksum verification, and optional deduplication using content fingerprints.
+Dead-letter persistence is abstracted by `PrivacyAuditDeadLetterRepository` with in-memory or JDBC implementations. `PrivacyAuditDeadLetterService` provides replay, delete, and criteria-based queries. `PrivacyTenantAuditDeadLetterQueryService` adds tenant-filtered read and stats helpers based on the configured tenant detail key, `PrivacyTenantAuditDeadLetterOperationsService` applies the same tenant scoping to batch delete and replay flows, and `PrivacyTenantAuditDeadLetterExchangeService` scopes export/import/manifest operations to a tenant while preserving the uploaded checksum contract. `PrivacyTenantAuditManagementService` sits above these helpers as a unified orchestration layer for tenant-scoped audit and dead-letter management flows. `PrivacyAuditDeadLetterExchangeService` remains the tenant-agnostic primitive for JSON/CSV export, import, checksum verification, and optional deduplication using content fingerprints.
 
 5. Observability and alerting (starter)
 Dead-letter observability is built on `PrivacyAuditDeadLetterStatsService`, which feeds `PrivacyAuditDeadLetterObservationService` to produce a backlog snapshot and state. `PrivacyAuditDeadLetterAlertMonitor` schedules periodic checks and invokes alert callbacks (logging, webhook, email). Optional Micrometer binders expose gauge and counter metrics for backlogs and webhook delivery telemetry.
 
 6. Receiver verification and replay protection (starter)
-Incoming webhook verification is handled by `PrivacyAuditDeadLetterWebhookRequestVerifier`. It validates authorization (optional), signature headers, timestamp skew, and replay detection. Replay protection is provided by `PrivacyAuditDeadLetterWebhookReplayStore` with in-memory, file-based, or JDBC-backed implementations. Servlet integration is provided by a filter or interceptor, with a body-caching filter to allow downstream handlers to read the request body when using interceptors.
+Incoming webhook verification is handled by `PrivacyAuditDeadLetterWebhookRequestVerifier`. It validates authorization (optional), signature headers, timestamp skew, and replay detection. Replay protection is provided by `PrivacyAuditDeadLetterWebhookReplayStore` with in-memory, file-based, Redis-backed, or JDBC-backed implementations. Servlet integration is provided by a filter or interceptor, with a body-caching filter to allow downstream handlers to read the request body when using interceptors.
 
 7. Auto-configuration (starter)
-Spring Boot auto-configuration wires the above pieces based on `privacy.guard.*` properties and classpath conditions. It creates default beans for masking, logging, audit repositories, publishers, dead-letter handlers, metrics, and receiver verification components. JDBC repositories and schema initialization are conditional on `JdbcOperations` and explicit property flags.
+Spring Boot auto-configuration wires the above pieces based on `privacy.guard.*` properties and classpath conditions. It creates default beans for masking, tenant policy resolution, logging, audit repositories, publishers, dead-letter handlers, metrics, and receiver verification components. JDBC repositories and schema initialization are conditional on `JdbcOperations` and explicit property flags.
 
 ## Key Data Models
 
 - `SensitiveData` and `SensitiveType` describe masking semantics at the field level.
+- `PrivacyTenantPolicy` describes tenant-specific fallback mask characters and text masking rules.
+- `PrivacyTenantAuditPolicy` describes tenant-specific audit detail filtering and tenant-tagging rules.
 - `PrivacyAuditEvent` captures audit context and is the unit of publishing.
 - `PrivacyAuditDeadLetterEntry` represents failed audit persistence attempts, including error metadata.
 - `PrivacyAuditQueryCriteria` and `PrivacyAuditDeadLetterQueryCriteria` normalize filters, defaulting to `DESC` sort order and a limit of 100 when not specified.
@@ -99,9 +101,9 @@ PrivacyAuditDeadLetterService.replay(id)
 
 ```
 PrivacyAuditDeadLetterExchangeService
-  -> exportJson/exportCsv
-  -> exportManifest (sha256)
-  -> importJson/importCsv
+  -> exportJson/exportCsv (paged writer overloads)
+  -> exportManifest (streamed sha256)
+  -> importJson/importCsv (streaming + batched saveAll)
      -> checksum verify
      -> optional dedup (fingerprint)
      -> saveAll
@@ -143,13 +145,16 @@ Filter or Interceptor
 ## Auto-Configuration Highlights
 
 - `privacy.guard.enabled` gates the entire starter.
+- `privacy.guard.tenant.*` enables tenant-aware masking via request-header propagation and configured tenant policies.
 - `privacy.guard.audit.repository-type` and `privacy.guard.audit.dead-letter.repository-type` select repository implementations.
 - JDBC schema initialization is explicit and conditional on `JdbcOperations` and `*.initialize-schema` flags.
 - Receiver verification requires a user-defined `PrivacyAuditDeadLetterWebhookVerificationSettings` bean; once present, replay store and filter/interceptor components can be auto-configured.
 
 ## Notes on Extensibility
 
+- Types marked with `@StableSpi` are the supported extension surface for the current minor line, including `MaskingStrategy`, tenant policy interfaces, repository/publisher interfaces, alert callbacks, replay-store interfaces, and their directly coupled carrier types.
 - Custom masking is supported via `MaskingStrategy` SPI (ordered injection).
 - Additional repositories can be wired by providing custom `PrivacyAuditRepository`, `PrivacyAuditQueryRepository`, or `PrivacyAuditDeadLetterRepository` beans.
 - Alert delivery can be extended by implementing `PrivacyAuditDeadLetterAlertCallback`.
 - Replay protection can be customized by implementing `PrivacyAuditDeadLetterWebhookReplayStore`.
+- Auto-configuration classes, built-in repository implementations, metrics binders, servlet adapters, and schema helpers are internal runtime wiring rather than stable SPI.

@@ -7,23 +7,31 @@ This runbook is the shortest path to publishing `spring-privacy-guard v0.2.0`.
 Windows:
 
 ```powershell
+mvnw.cmd -q test -pl privacy-guard-core,privacy-guard-spring-boot-starter
 mvnw.cmd -q verify
+python scripts/check_repo_hygiene.py
 ```
 
 macOS / Linux:
 
 ```bash
+./mvnw -q test -pl privacy-guard-core,privacy-guard-spring-boot-starter
 ./mvnw -q verify
+python scripts/check_repo_hygiene.py
 ```
 
-Expected result: full success with no failing modules.
+Expected result: full success with no failing modules and no hygiene errors.
 
 ## 2. Confirm Release Materials
 
 Verify these files are ready:
 
 - `CHANGELOG.md`
+- `README.md`
+- `README.zh-CN.md`
+- `docs/JDBC_PRODUCTION_GUIDE.md`
 - `docs/releases/RELEASE_NOTES_v0.2.0.md`
+- `docs/GITHUB_RELEASE_COPY_v0.2.0.md`
 - `docs/RELEASE_CHECKLIST.md`
 - `docs/RELEASE_DRY_RUN_v0.2.0.md`
 
@@ -72,6 +80,7 @@ After the workflow finishes, check:
 - Open the generated GitHub Release page
 - Check that the tag points to the expected commit
 - Confirm the workflow log shows successful artifact collection and upload
+- Check that `docs/JDBC_PRODUCTION_GUIDE.md` and the README links render correctly in GitHub
 - Update any external documentation pages if needed
 
 ## 7. Rollback If Needed
@@ -89,4 +98,4 @@ Then fix the issue, rerun verification, and recreate the tag.
 
 Use this short summary if you need one for release notes, chat, or an internal update:
 
-`spring-privacy-guard v0.2.0 adds custom masking SPI support, stronger dead-letter operations, built-in signed webhook/email alerting, receiver verification, and richer observability across sender and receiver flows.`
+`spring-privacy-guard v0.2.0 adds stable SPI markers, stronger audit and dead-letter operations, JDBC rollout guidance, signed alert delivery, receiver verification, and richer observability across sender and receiver flows.`

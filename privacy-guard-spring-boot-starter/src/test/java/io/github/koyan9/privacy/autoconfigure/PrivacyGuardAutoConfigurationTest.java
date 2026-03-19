@@ -14,6 +14,9 @@ import io.github.koyan9.privacy.audit.PrivacyAuditEvent;
 import io.github.koyan9.privacy.audit.PrivacyAuditJdbcDialect;
 import io.github.koyan9.privacy.audit.PrivacyAuditPublisher;
 import io.github.koyan9.privacy.audit.PrivacyAuditQueryService;
+import io.github.koyan9.privacy.audit.PrivacyTenantAuditQueryService;
+import io.github.koyan9.privacy.audit.PrivacyTenantAuditDeadLetterOperationsService;
+import io.github.koyan9.privacy.audit.PrivacyTenantAuditDeadLetterQueryService;
 import io.github.koyan9.privacy.audit.PrivacyAuditRepository;
 import io.github.koyan9.privacy.audit.PrivacyAuditRepositoryType;
 import io.github.koyan9.privacy.audit.PrivacyAuditSchemaInitializer;
@@ -21,16 +24,21 @@ import io.github.koyan9.privacy.audit.PrivacyAuditService;
 import io.github.koyan9.privacy.core.MaskingContext;
 import io.github.koyan9.privacy.core.MaskingService;
 import io.github.koyan9.privacy.core.MaskingStrategy;
+import io.github.koyan9.privacy.core.PrivacyTenantAwareMaskingStrategy;
+import io.github.koyan9.privacy.core.PrivacyTenantPolicyResolver;
+import io.github.koyan9.privacy.core.PrivacyTenantProvider;
 import io.github.koyan9.privacy.core.SensitiveData;
 import io.github.koyan9.privacy.core.SensitiveType;
 import io.github.koyan9.privacy.core.TextMaskingService;
 import io.github.koyan9.privacy.logging.PrivacyLogSanitizer;
 import io.github.koyan9.privacy.logging.PrivacyLoggerFactory;
 import io.github.koyan9.privacy.logging.logback.PrivacyLogbackConfigurer;
+import io.github.koyan9.privacy.tenant.PrivacyTenantContextFilter;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
@@ -39,6 +47,7 @@ import org.springframework.jdbc.core.JdbcOperations;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.contains;
@@ -53,6 +62,9 @@ class PrivacyGuardAutoConfigurationTest {
     private final ApplicationContextRunner jacksonContextRunner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(JacksonAutoConfiguration.class, PrivacyGuardAutoConfiguration.class));
 
+    private final WebApplicationContextRunner webContextRunner = new WebApplicationContextRunner()
+            .withConfiguration(AutoConfigurations.of(PrivacyGuardAutoConfiguration.class));
+
     @Test
     void registersBeansWhenEnabled() {
         contextRunner.run(context -> {
@@ -61,10 +73,29 @@ class PrivacyGuardAutoConfigurationTest {
             assertThat(context).hasSingleBean(PrivacyLogSanitizer.class);
             assertThat(context).hasSingleBean(PrivacyLoggerFactory.class);
             assertThat(context).hasSingleBean(PrivacyLogbackConfigurer.class);
+            assertThat(context).hasSingleBean(PrivacyTenantProvider.class);
+            assertThat(context).hasSingleBean(PrivacyTenantPolicyResolver.class);
             assertThat(context).hasSingleBean(PrivacyAuditService.class);
             assertThat(context).hasSingleBean(PrivacyAuditQueryService.class);
+            assertThat(context).hasSingleBean(PrivacyTenantAuditQueryService.class);
             assertThat(context).hasBean("privacyGuardJacksonModule");
         });
+    }
+
+    @Test
+    void overridesTextMaskingPatternsFromProperties() {
+        contextRunner
+                .withPropertyValues(
+                        "privacy.guard.masking.text.email-pattern=foo@bar.com",
+                        "privacy.guard.masking.text.additional-patterns[0].type=GENERIC",
+                        "privacy.guard.masking.text.additional-patterns[0].pattern=EMP\\d{4}"
+                )
+                .run(context -> {
+                    TextMaskingService textMaskingService = context.getBean(TextMaskingService.class);
+                    String sanitized = textMaskingService.sanitize("email=alice@example.com id=EMP1234");
+                    assertThat(sanitized).contains("alice@example.com");
+                    assertThat(sanitized).doesNotContain("EMP1234");
+                });
     }
 
     @Test
@@ -117,6 +148,8 @@ class PrivacyGuardAutoConfigurationTest {
                 .run(context -> {
                     assertThat(context).hasSingleBean(InMemoryPrivacyAuditDeadLetterRepository.class);
                     assertThat(context).hasSingleBean(PrivacyAuditDeadLetterHandler.class);
+                    assertThat(context).hasSingleBean(PrivacyTenantAuditDeadLetterQueryService.class);
+                    assertThat(context).hasSingleBean(PrivacyTenantAuditDeadLetterOperationsService.class);
                 });
     }
 
@@ -166,11 +199,15 @@ class PrivacyGuardAutoConfigurationTest {
         contextRunner
                 .withPropertyValues(
                         "privacy.guard.audit.async.enabled=true",
-                        "privacy.guard.audit.async.thread-name-prefix=audit-worker-"
+                        "privacy.guard.audit.async.thread-name-prefix=audit-worker-",
+                        "privacy.guard.audit.async.thread-pool-size=3"
                 )
                 .run(context -> {
                     assertThat(context).hasBean("privacyAuditExecutor");
-                    assertThat(context.getBean("privacyAuditExecutor", ScheduledExecutorService.class)).isNotNull();
+                    ScheduledExecutorService executor = context.getBean("privacyAuditExecutor", ScheduledExecutorService.class);
+                    assertThat(executor).isNotNull();
+                    assertThat(executor).isInstanceOf(ScheduledThreadPoolExecutor.class);
+                    assertThat(((ScheduledThreadPoolExecutor) executor).getCorePoolSize()).isEqualTo(3);
                     assertThat(context.getBean(PrivacyAuditPublisher.class)).isNotNull();
                 });
     }
@@ -184,6 +221,79 @@ class PrivacyGuardAutoConfigurationTest {
 
                     assertThat(maskingService.mask("Alice", SensitiveType.NAME)).isEqualTo("[bean]Alice");
                 });
+    }
+
+    @Test
+    void appliesTenantPolicyFromProperties() {
+        contextRunner
+                .withPropertyValues(
+                        "privacy.guard.tenant.enabled=true",
+                        "privacy.guard.tenant.default-tenant=tenant-a",
+                        "privacy.guard.tenant.policies[tenant-a].fallback-mask-char=#",
+                        "privacy.guard.tenant.policies[tenant-a].text.additional-patterns[0].type=GENERIC",
+                        "privacy.guard.tenant.policies[tenant-a].text.additional-patterns[0].pattern=EMP\\d{4}"
+                )
+                .run(context -> {
+                    MaskingService maskingService = context.getBean(MaskingService.class);
+                    TextMaskingService textMaskingService = context.getBean(TextMaskingService.class);
+
+                    assertThat(maskingService.mask("13800138000", SensitiveType.PHONE)).isEqualTo("138####8000");
+                    assertThat(textMaskingService.sanitize("id=EMP1234 phone=13800138000"))
+                            .contains("id=E#####4")
+                            .contains("phone=138####8000");
+                });
+    }
+
+    @Test
+    void appliesTenantAuditPolicyFromProperties() {
+        contextRunner
+                .withPropertyValues(
+                        "privacy.guard.tenant.enabled=true",
+                        "privacy.guard.tenant.default-tenant=tenant-a",
+                        "privacy.guard.tenant.policies[tenant-a].fallback-mask-char=#",
+                        "privacy.guard.tenant.policies[tenant-a].text.additional-patterns[0].type=GENERIC",
+                        "privacy.guard.tenant.policies[tenant-a].text.additional-patterns[0].pattern=EMP\\d{4}",
+                        "privacy.guard.tenant.policies[tenant-a].audit.include-detail-keys[0]=phone",
+                        "privacy.guard.tenant.policies[tenant-a].audit.include-detail-keys[1]=employeeCode",
+                        "privacy.guard.tenant.policies[tenant-a].audit.exclude-detail-keys[0]=idCard",
+                        "privacy.guard.tenant.policies[tenant-a].audit.attach-tenant-id=true",
+                        "privacy.guard.tenant.policies[tenant-a].audit.tenant-detail-key=tenant"
+                )
+                .withUserConfiguration(RepositoryConfig.class)
+                .run(context -> {
+                    PrivacyAuditService service = context.getBean(PrivacyAuditService.class);
+                    CapturingRepository repository = (CapturingRepository) context.getBean(PrivacyAuditRepository.class);
+
+                    service.record(
+                            "READ",
+                            "Patient",
+                            "13800138000",
+                            "alice@example.com",
+                            "OK",
+                            java.util.Map.of(
+                                    "phone", "13800138000",
+                                    "idCard", "110101199001011234",
+                                    "employeeCode", "EMP1234"
+                            )
+                    );
+
+                    assertThat(repository.events).hasSize(1);
+                    assertThat(repository.events.get(0).details())
+                            .containsEntry("phone", "138####8000")
+                            .containsEntry("employeeCode", "E#####4")
+                            .containsEntry("tenant", "tenant-a")
+                            .doesNotContainKey("idCard");
+                });
+    }
+
+    @Test
+    void registersTenantContextFilterWhenTenantModeEnabled() {
+        webContextRunner
+                .withPropertyValues(
+                        "privacy.guard.tenant.enabled=true",
+                        "privacy.guard.tenant.header-name=X-Privacy-Tenant"
+                )
+                .run(context -> assertThat(context).hasSingleBean(PrivacyTenantContextFilter.class));
     }
 
     @Test
@@ -207,6 +317,15 @@ class PrivacyGuardAutoConfigurationTest {
                         "privacy.guard.logging.enabled=false",
                         "privacy.guard.logging.logback.install-turbo-filter=true",
                         "privacy.guard.logging.logback.block-unsafe-messages=false",
+                        "privacy.guard.tenant.enabled=true",
+                        "privacy.guard.tenant.header-name=X-Privacy-Tenant",
+                        "privacy.guard.tenant.default-tenant=tenant-a",
+                        "privacy.guard.tenant.policies[tenant-a].fallback-mask-char=#",
+                        "privacy.guard.tenant.policies[tenant-a].text.phone-pattern=9\\d{5}",
+                        "privacy.guard.tenant.policies[tenant-a].audit.include-detail-keys[0]=phone",
+                        "privacy.guard.tenant.policies[tenant-a].audit.exclude-detail-keys[0]=idCard",
+                        "privacy.guard.tenant.policies[tenant-a].audit.attach-tenant-id=true",
+                        "privacy.guard.tenant.policies[tenant-a].audit.tenant-detail-key=tenant",
                         "privacy.guard.audit.enabled=true",
                         "privacy.guard.audit.log-events=false",
                         "privacy.guard.audit.repository-type=JDBC",
@@ -220,6 +339,8 @@ class PrivacyGuardAutoConfigurationTest {
                         "privacy.guard.audit.dead-letter.repository-type=IN_MEMORY",
                         "privacy.guard.audit.jdbc.initialize-schema=true",
                         "privacy.guard.audit.jdbc.table-name=audit_log",
+                        "privacy.guard.audit.jdbc.tenant-column-name=tenant_id",
+                        "privacy.guard.audit.jdbc.tenant-detail-key=tenant",
                         "privacy.guard.audit.jdbc.schema-location=classpath:META-INF/privacy-guard/privacy-audit-schema-h2.sql",
                         "privacy.guard.audit.jdbc.dialect=H2"
                 )
@@ -231,6 +352,16 @@ class PrivacyGuardAutoConfigurationTest {
                     assertThat(properties.getLogging().isEnabled()).isFalse();
                     assertThat(properties.getLogging().getLogback().isInstallTurboFilter()).isTrue();
                     assertThat(properties.getLogging().getLogback().isBlockUnsafeMessages()).isFalse();
+                    assertThat(properties.getTenant().isEnabled()).isTrue();
+                    assertThat(properties.getTenant().getHeaderName()).isEqualTo("X-Privacy-Tenant");
+                    assertThat(properties.getTenant().getDefaultTenant()).isEqualTo("tenant-a");
+                    assertThat(properties.getTenant().getPolicies()).containsKey("tenant-a");
+                    assertThat(properties.getTenant().getPolicies().get("tenant-a").getFallbackMaskChar()).isEqualTo("#");
+                    assertThat(properties.getTenant().getPolicies().get("tenant-a").getText().getPhonePattern()).isEqualTo("9\\d{5}");
+                    assertThat(properties.getTenant().getPolicies().get("tenant-a").getAudit().getIncludeDetailKeys()).containsExactly("phone");
+                    assertThat(properties.getTenant().getPolicies().get("tenant-a").getAudit().getExcludeDetailKeys()).containsExactly("idCard");
+                    assertThat(properties.getTenant().getPolicies().get("tenant-a").getAudit().isAttachTenantId()).isTrue();
+                    assertThat(properties.getTenant().getPolicies().get("tenant-a").getAudit().getTenantDetailKey()).isEqualTo("tenant");
                     assertThat(properties.getAudit().isEnabled()).isTrue();
                     assertThat(properties.getAudit().isLogEvents()).isFalse();
                     assertThat(properties.getAudit().getRepositoryType()).isEqualTo(PrivacyAuditRepositoryType.JDBC);
@@ -244,6 +375,8 @@ class PrivacyGuardAutoConfigurationTest {
                     assertThat(properties.getAudit().getDeadLetter().getRepositoryType()).isEqualTo(PrivacyAuditRepositoryType.IN_MEMORY);
                     assertThat(properties.getAudit().getJdbc().isInitializeSchema()).isTrue();
                     assertThat(properties.getAudit().getJdbc().getTableName()).isEqualTo("audit_log");
+                    assertThat(properties.getAudit().getJdbc().getTenantColumnName()).isEqualTo("tenant_id");
+                    assertThat(properties.getAudit().getJdbc().getTenantDetailKey()).isEqualTo("tenant");
                     assertThat(properties.getAudit().getJdbc().getSchemaLocation())
                             .isEqualTo("classpath:META-INF/privacy-guard/privacy-audit-schema-h2.sql");
                     assertThat(properties.getAudit().getJdbc().getDialect()).isEqualTo(PrivacyAuditJdbcDialect.H2);
@@ -256,6 +389,7 @@ class PrivacyGuardAutoConfigurationTest {
                 .withPropertyValues(
                         "privacy.guard.audit.repository-type=JDBC",
                         "privacy.guard.audit.jdbc.initialize-schema=true",
+                        "privacy.guard.audit.jdbc.tenant-column-name=tenant_key",
                         "privacy.guard.audit.jdbc.schema-location=classpath:META-INF/privacy-guard/privacy-audit-schema-h2.sql",
                         "privacy.guard.audit.jdbc.table-name=audit_log"
                 )
@@ -265,6 +399,7 @@ class PrivacyGuardAutoConfigurationTest {
 
                     assertThat(context).hasSingleBean(PrivacyAuditSchemaInitializer.class);
                     verify(jdbcOperations).execute(contains("create table if not exists audit_log"));
+                    verify(jdbcOperations).execute(contains("tenant_key varchar(255)"));
                 });
     }
 
@@ -300,16 +435,16 @@ class PrivacyGuardAutoConfigurationTest {
         }
     }
 
-    static class OrderedNameMaskingStrategy implements MaskingStrategy, Ordered {
+    static class OrderedNameMaskingStrategy implements PrivacyTenantAwareMaskingStrategy, Ordered {
 
         @Override
-        public boolean supports(MaskingContext context) {
+        public boolean supports(String tenantId, MaskingContext context) {
             return context.sensitiveType() == SensitiveType.NAME;
         }
 
         @Override
-        public String mask(String value, MaskingContext context) {
-            return "[bean]" + value;
+        public String mask(String tenantId, String value, MaskingContext context) {
+            return tenantId == null ? "[bean]" + value : "[bean:" + tenantId + "]" + value;
         }
 
         @Override

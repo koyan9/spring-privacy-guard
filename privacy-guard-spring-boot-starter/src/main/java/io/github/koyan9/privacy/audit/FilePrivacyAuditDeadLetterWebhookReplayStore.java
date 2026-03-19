@@ -17,7 +17,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class FilePrivacyAuditDeadLetterWebhookReplayStore implements PrivacyAuditDeadLetterWebhookReplayStore,
-        PrivacyAuditDeadLetterWebhookReplayStoreStatsProvider {
+        PrivacyAuditDeadLetterWebhookReplayStoreStatsProvider,
+        PrivacyAuditDeadLetterWebhookReplayStoreCleanupStatsProvider {
 
     private static final TypeReference<Map<String, String>> STORE_TYPE = new TypeReference<>() {
     };
@@ -25,6 +26,8 @@ public class FilePrivacyAuditDeadLetterWebhookReplayStore implements PrivacyAudi
     private final Path storeFile;
     private final ObjectMapper objectMapper;
     private final Map<String, Instant> seenNonces = new LinkedHashMap<>();
+    private PrivacyAuditDeadLetterWebhookReplayStoreCleanupSnapshot lastCleanup =
+            PrivacyAuditDeadLetterWebhookReplayStoreCleanupSnapshot.empty();
 
     public FilePrivacyAuditDeadLetterWebhookReplayStore(Path storeFile, ObjectMapper objectMapper) {
         this.storeFile = storeFile.toAbsolutePath();
@@ -84,17 +87,31 @@ public class FilePrivacyAuditDeadLetterWebhookReplayStore implements PrivacyAudi
         );
     }
 
+    @Override
+    public synchronized PrivacyAuditDeadLetterWebhookReplayStoreCleanupSnapshot cleanupSnapshot() {
+        return lastCleanup;
+    }
+
     private void cleanup(Instant now) {
+        long startNanos = System.nanoTime();
+        long removed = 0L;
         boolean changed = false;
         for (Map.Entry<String, Instant> entry : new LinkedHashMap<>(seenNonces).entrySet()) {
             if (entry.getValue().isBefore(now)) {
                 seenNonces.remove(entry.getKey());
                 changed = true;
+                removed++;
             }
         }
         if (changed) {
             persist();
         }
+        recordCleanup(removed, startNanos, now);
+    }
+
+    private void recordCleanup(long removed, long startNanos, Instant now) {
+        long durationMillis = Duration.ofNanos(System.nanoTime() - startNanos).toMillis();
+        lastCleanup = new PrivacyAuditDeadLetterWebhookReplayStoreCleanupSnapshot(removed, durationMillis, now);
     }
 
     private void load() {

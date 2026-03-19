@@ -101,6 +101,7 @@ class PrivacyAuditDeadLetterWebhookAlertCallbackTest {
         assertThat(meterRegistry.get("privacy.audit.deadletters.alert.webhook.failures")
                 .tag("type", "http_status")
                 .tag("retryable", "true")
+                .tag("category", "http_5xx")
                 .counter()
                 .count()).isEqualTo(1.0d);
     }
@@ -130,6 +131,7 @@ class PrivacyAuditDeadLetterWebhookAlertCallbackTest {
         assertThat(meterRegistry.get("privacy.audit.deadletters.alert.webhook.failures")
                 .tag("type", "http_status")
                 .tag("retryable", "true")
+                .tag("category", "http_5xx")
                 .counter()
                 .count()).isEqualTo(2.0d);
     }

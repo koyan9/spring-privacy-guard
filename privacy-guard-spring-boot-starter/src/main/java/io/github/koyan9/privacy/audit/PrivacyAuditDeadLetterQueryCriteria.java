@@ -5,8 +5,11 @@
 
 package io.github.koyan9.privacy.audit;
 
+import io.github.koyan9.privacy.core.StableSpi;
+
 import java.time.Instant;
 
+@StableSpi
 public record PrivacyAuditDeadLetterQueryCriteria(
         String action,
         String actionLike,

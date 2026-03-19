@@ -5,19 +5,39 @@
 
 package io.github.koyan9.privacy.core;
 
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class TextMaskingService {
 
-    private static final Pattern EMAIL_PATTERN = Pattern.compile("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}");
-    private static final Pattern PHONE_PATTERN = Pattern.compile("(?<!\\d)1[3-9]\\d{9}(?!\\d)");
-    private static final Pattern ID_CARD_PATTERN = Pattern.compile("(?<!\\d)\\d{17}[0-9Xx](?!\\d)");
-
     private final MaskingService maskingService;
+    private final List<TextMaskingRule> rules;
+    private final PrivacyTenantProvider tenantProvider;
+    private final PrivacyTenantPolicyResolver tenantPolicyResolver;
 
     public TextMaskingService(MaskingService maskingService) {
+        this(maskingService, null, PrivacyTenantProvider.noop(), PrivacyTenantPolicyResolver.noop());
+    }
+
+    public TextMaskingService(MaskingService maskingService, List<TextMaskingRule> rules) {
+        this(maskingService, rules, PrivacyTenantProvider.noop(), PrivacyTenantPolicyResolver.noop());
+    }
+
+    public TextMaskingService(
+            MaskingService maskingService,
+            List<TextMaskingRule> rules,
+            PrivacyTenantProvider tenantProvider,
+            PrivacyTenantPolicyResolver tenantPolicyResolver
+    ) {
         this.maskingService = maskingService;
+        if (rules == null || rules.isEmpty()) {
+            this.rules = TextMaskingRule.defaults();
+        } else {
+            this.rules = List.copyOf(rules);
+        }
+        this.tenantProvider = tenantProvider == null ? PrivacyTenantProvider.noop() : tenantProvider;
+        this.tenantPolicyResolver = tenantPolicyResolver == null ? PrivacyTenantPolicyResolver.noop() : tenantPolicyResolver;
     }
 
     public String sanitize(String text) {
@@ -25,9 +45,10 @@ public class TextMaskingService {
             return text;
         }
 
-        String sanitized = replaceMatches(text, EMAIL_PATTERN, SensitiveType.EMAIL);
-        sanitized = replaceMatches(sanitized, PHONE_PATTERN, SensitiveType.PHONE);
-        sanitized = replaceMatches(sanitized, ID_CARD_PATTERN, SensitiveType.ID_CARD);
+        String sanitized = text;
+        for (TextMaskingRule rule : rulesForCurrentTenant()) {
+            sanitized = replaceMatches(sanitized, rule.pattern(), rule.sensitiveType());
+        }
         return sanitized;
     }
 
@@ -40,5 +61,16 @@ public class TextMaskingService {
         }
         matcher.appendTail(buffer);
         return buffer.toString();
+    }
+
+    private List<TextMaskingRule> rulesForCurrentTenant() {
+        String tenantId = tenantProvider.currentTenantId();
+        PrivacyTenantPolicy policy = tenantPolicyResolver.resolve(
+                tenantId == null || tenantId.isBlank() ? null : tenantId.trim()
+        );
+        if (policy != null && policy.hasTextMaskingRules()) {
+            return policy.textMaskingRules();
+        }
+        return rules;
     }
 }

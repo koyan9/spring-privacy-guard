@@ -5,10 +5,13 @@
 
 package io.github.koyan9.privacy.audit;
 
+import io.github.koyan9.privacy.core.StableSpi;
+
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+@StableSpi
 public record PrivacyAuditDeadLetterEntry(
         Long id,
         Instant failedAt,

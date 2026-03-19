@@ -9,6 +9,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterCsvCodec;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterExchangeService;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterRepository;
+import io.github.koyan9.privacy.audit.PrivacyTenantAuditManagementService;
+import io.github.koyan9.privacy.audit.PrivacyTenantAuditDeadLetterExchangeService;
+import io.github.koyan9.privacy.audit.PrivacyTenantAuditDeadLetterQueryService;
+import io.github.koyan9.privacy.audit.PrivacyTenantAuditDeadLetterOperationsService;
+import io.github.koyan9.privacy.audit.PrivacyTenantAuditQueryService;
+import io.github.koyan9.privacy.audit.PrivacyAuditQueryService;
+import io.github.koyan9.privacy.audit.PrivacyAuditStatsService;
+import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterService;
+import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterStatsService;
+import io.github.koyan9.privacy.audit.PrivacyTenantAuditPolicyResolver;
+import io.github.koyan9.privacy.core.PrivacyTenantProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -38,5 +49,70 @@ public class PrivacyGuardDeadLetterExchangeAutoConfiguration {
             PrivacyAuditDeadLetterCsvCodec csvCodec
     ) {
         return new PrivacyAuditDeadLetterExchangeService(repository, objectMapper, csvCodec);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnBean({
+            PrivacyAuditDeadLetterExchangeService.class,
+            PrivacyTenantAuditDeadLetterQueryService.class,
+            PrivacyTenantAuditPolicyResolver.class,
+            PrivacyAuditDeadLetterCsvCodec.class,
+            ObjectMapper.class
+    })
+    public PrivacyTenantAuditDeadLetterExchangeService privacyTenantAuditDeadLetterExchangeService(
+            PrivacyAuditDeadLetterExchangeService exchangeService,
+            PrivacyTenantAuditDeadLetterQueryService tenantQueryService,
+            PrivacyTenantAuditPolicyResolver tenantAuditPolicyResolver,
+            PrivacyAuditDeadLetterCsvCodec csvCodec,
+            ObjectMapper objectMapper
+    ) {
+        return new PrivacyTenantAuditDeadLetterExchangeService(
+                exchangeService,
+                tenantQueryService,
+                tenantAuditPolicyResolver,
+                csvCodec,
+                objectMapper
+        );
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    @ConditionalOnBean({
+            PrivacyAuditQueryService.class,
+            PrivacyAuditStatsService.class,
+            PrivacyTenantAuditQueryService.class,
+            PrivacyAuditDeadLetterService.class,
+            PrivacyAuditDeadLetterStatsService.class,
+            PrivacyTenantAuditDeadLetterQueryService.class,
+            PrivacyTenantAuditDeadLetterOperationsService.class,
+            PrivacyAuditDeadLetterExchangeService.class,
+            PrivacyTenantAuditDeadLetterExchangeService.class,
+            PrivacyTenantProvider.class
+    })
+    public PrivacyTenantAuditManagementService privacyTenantAuditManagementService(
+            PrivacyAuditQueryService privacyAuditQueryService,
+            PrivacyAuditStatsService privacyAuditStatsService,
+            PrivacyTenantAuditQueryService privacyTenantAuditQueryService,
+            PrivacyAuditDeadLetterService privacyAuditDeadLetterService,
+            PrivacyAuditDeadLetterStatsService privacyAuditDeadLetterStatsService,
+            PrivacyTenantAuditDeadLetterQueryService privacyTenantAuditDeadLetterQueryService,
+            PrivacyTenantAuditDeadLetterOperationsService privacyTenantAuditDeadLetterOperationsService,
+            PrivacyAuditDeadLetterExchangeService privacyAuditDeadLetterExchangeService,
+            PrivacyTenantAuditDeadLetterExchangeService privacyTenantAuditDeadLetterExchangeService,
+            PrivacyTenantProvider tenantProvider
+    ) {
+        return new PrivacyTenantAuditManagementService(
+                privacyAuditQueryService,
+                privacyAuditStatsService,
+                privacyTenantAuditQueryService,
+                privacyAuditDeadLetterService,
+                privacyAuditDeadLetterStatsService,
+                privacyTenantAuditDeadLetterQueryService,
+                privacyTenantAuditDeadLetterOperationsService,
+                privacyAuditDeadLetterExchangeService,
+                privacyTenantAuditDeadLetterExchangeService,
+                tenantProvider
+        );
     }
 }

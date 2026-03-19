@@ -209,5 +209,9 @@ class JdbcPrivacyAuditDeadLetterWebhookReplayStoreTest {
         store.markIfNew("nonce-3", now, Duration.ofMinutes(5));
 
         verify(jdbcOperations).update(contains("delete from replay_store where nonce in"), eq("nonce-1"), eq("nonce-2"));
+        PrivacyAuditDeadLetterWebhookReplayStoreCleanupSnapshot cleanup = store.cleanupSnapshot();
+        assertThat(cleanup.lastCleanupCount()).isEqualTo(2L);
+        assertThat(cleanup.lastCleanupAt()).isEqualTo(now);
+        assertThat(cleanup.lastCleanupDurationMillis()).isGreaterThanOrEqualTo(0L);
     }
 }

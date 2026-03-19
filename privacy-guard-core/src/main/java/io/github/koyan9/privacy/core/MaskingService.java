@@ -12,22 +12,35 @@ public class MaskingService {
 
     private final String fallbackMaskChar;
     private final List<MaskingStrategy> maskingStrategies;
+    private final PrivacyTenantProvider tenantProvider;
+    private final PrivacyTenantPolicyResolver tenantPolicyResolver;
 
     public MaskingService() {
-        this("*", List.of());
+        this("*", List.of(), PrivacyTenantProvider.noop(), PrivacyTenantPolicyResolver.noop());
     }
 
     public MaskingService(String fallbackMaskChar) {
-        this(fallbackMaskChar, List.of());
+        this(fallbackMaskChar, List.of(), PrivacyTenantProvider.noop(), PrivacyTenantPolicyResolver.noop());
     }
 
     public MaskingService(List<MaskingStrategy> maskingStrategies) {
-        this("*", maskingStrategies);
+        this("*", maskingStrategies, PrivacyTenantProvider.noop(), PrivacyTenantPolicyResolver.noop());
     }
 
     public MaskingService(String fallbackMaskChar, List<MaskingStrategy> maskingStrategies) {
+        this(fallbackMaskChar, maskingStrategies, PrivacyTenantProvider.noop(), PrivacyTenantPolicyResolver.noop());
+    }
+
+    public MaskingService(
+            String fallbackMaskChar,
+            List<MaskingStrategy> maskingStrategies,
+            PrivacyTenantProvider tenantProvider,
+            PrivacyTenantPolicyResolver tenantPolicyResolver
+    ) {
         this.fallbackMaskChar = sanitizeMaskChar(fallbackMaskChar);
         this.maskingStrategies = maskingStrategies == null ? List.of() : List.copyOf(maskingStrategies);
+        this.tenantProvider = tenantProvider == null ? PrivacyTenantProvider.noop() : tenantProvider;
+        this.tenantPolicyResolver = tenantPolicyResolver == null ? PrivacyTenantPolicyResolver.noop() : tenantPolicyResolver;
     }
 
     public String mask(String value, SensitiveData sensitiveData) {
@@ -35,7 +48,9 @@ public class MaskingService {
             return value;
         }
 
-        String maskChar = sanitizeMaskChar(sensitiveData.maskChar());
+        String tenantId = currentTenantId();
+        PrivacyTenantPolicy tenantPolicy = resolveTenantPolicy(tenantId);
+        String maskChar = resolveAnnotationMaskChar(sensitiveData.maskChar(), tenantPolicy);
         MaskingContext context = new MaskingContext(
                 sensitiveData.type(),
                 maskChar,
@@ -48,7 +63,7 @@ public class MaskingService {
             return maskRange(value, left, right, maskChar);
         }
 
-        String customMasked = maskWithStrategies(value, context);
+        String customMasked = maskWithStrategies(value, context, tenantId);
         if (customMasked != null) {
             return customMasked;
         }
@@ -60,16 +75,28 @@ public class MaskingService {
             return value;
         }
 
-        MaskingContext context = new MaskingContext(sensitiveType, fallbackMaskChar, -1, -1);
-        String customMasked = maskWithStrategies(value, context);
+        String tenantId = currentTenantId();
+        PrivacyTenantPolicy tenantPolicy = resolveTenantPolicy(tenantId);
+        String effectiveFallbackMaskChar = resolveFallbackMaskChar(tenantPolicy);
+        MaskingContext context = new MaskingContext(sensitiveType, effectiveFallbackMaskChar, -1, -1);
+        String customMasked = maskWithStrategies(value, context, tenantId);
         if (customMasked != null) {
             return customMasked;
         }
-        return maskBuiltIn(value, sensitiveType, fallbackMaskChar);
+        return maskBuiltIn(value, sensitiveType, effectiveFallbackMaskChar);
     }
 
-    private String maskWithStrategies(String value, MaskingContext context) {
+    private String maskWithStrategies(String value, MaskingContext context, String tenantId) {
         for (MaskingStrategy maskingStrategy : maskingStrategies) {
+            if (maskingStrategy instanceof PrivacyTenantAwareMaskingStrategy tenantAwareStrategy) {
+                if (tenantAwareStrategy.supports(tenantId, context)) {
+                    return Objects.requireNonNull(
+                            tenantAwareStrategy.mask(tenantId, value, context),
+                            "MaskingStrategy must not return null"
+                    );
+                }
+                continue;
+            }
             if (maskingStrategy.supports(context)) {
                 return Objects.requireNonNull(maskingStrategy.mask(value, context), "MaskingStrategy must not return null");
             }
@@ -142,5 +169,34 @@ public class MaskingService {
 
     private String repeat(String maskChar, int count) {
         return maskChar.repeat(Math.max(0, count));
+    }
+
+    private String currentTenantId() {
+        String tenantId = tenantProvider.currentTenantId();
+        if (tenantId == null || tenantId.isBlank()) {
+            return null;
+        }
+        return tenantId.trim();
+    }
+
+    private PrivacyTenantPolicy resolveTenantPolicy(String tenantId) {
+        PrivacyTenantPolicy policy = tenantPolicyResolver.resolve(tenantId);
+        return policy == null ? PrivacyTenantPolicy.none() : policy;
+    }
+
+    private String resolveFallbackMaskChar(PrivacyTenantPolicy tenantPolicy) {
+        if (tenantPolicy != null && tenantPolicy.hasFallbackMaskChar()) {
+            return sanitizeMaskChar(tenantPolicy.fallbackMaskChar());
+        }
+        return fallbackMaskChar;
+    }
+
+    private String resolveAnnotationMaskChar(String configuredMaskChar, PrivacyTenantPolicy tenantPolicy) {
+        if (tenantPolicy != null && tenantPolicy.hasFallbackMaskChar()) {
+            if (configuredMaskChar == null || configuredMaskChar.isBlank() || "*".equals(configuredMaskChar.trim())) {
+                return sanitizeMaskChar(tenantPolicy.fallbackMaskChar());
+            }
+        }
+        return sanitizeMaskChar(configuredMaskChar);
     }
 }

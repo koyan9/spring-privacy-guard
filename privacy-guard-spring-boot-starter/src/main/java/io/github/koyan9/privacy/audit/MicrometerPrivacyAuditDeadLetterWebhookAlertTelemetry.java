@@ -84,6 +84,7 @@ public class MicrometerPrivacyAuditDeadLetterWebhookAlertTelemetry implements Pr
             return;
         }
         String type = normalizeType(detail.failureType());
+        String category = normalizeCategory(detail, type);
         lastFailureType.set(type);
         lastFailureStatus.set(Math.max(0, detail.statusCode()));
         lastFailureRetryable.set(detail.retryable() ? 1 : 0);
@@ -92,7 +93,9 @@ public class MicrometerPrivacyAuditDeadLetterWebhookAlertTelemetry implements Pr
                 "type",
                 type,
                 "retryable",
-                String.valueOf(detail.retryable())
+                String.valueOf(detail.retryable()),
+                "category",
+                category
         ).increment();
     }
 
@@ -103,6 +106,27 @@ public class MicrometerPrivacyAuditDeadLetterWebhookAlertTelemetry implements Pr
         String normalized = value.trim().toLowerCase();
         return switch (normalized) {
             case "http_status", "io_error", "runtime_error" -> normalized;
+            default -> "unknown";
+        };
+    }
+
+    private String normalizeCategory(WebhookAlertFailureDetail detail, String type) {
+        if ("http_status".equals(type)) {
+            int status = detail.statusCode();
+            if (status == 429) {
+                return "http_429";
+            }
+            if (status >= 500) {
+                return "http_5xx";
+            }
+            if (status >= 400) {
+                return "http_4xx";
+            }
+            return "http_unknown";
+        }
+        return switch (type) {
+            case "io_error" -> "io_error";
+            case "runtime_error" -> "runtime_error";
             default -> "unknown";
         };
     }

@@ -5,6 +5,7 @@
 
 package io.github.koyan9.privacy.audit;
 
+import io.github.koyan9.privacy.core.PrivacyTenantContextHolder;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -124,5 +125,35 @@ class AsyncPrivacyAuditPublisherTest {
         publisher.publish(event);
 
         assertEquals(Thread.currentThread().getName(), threadName.get());
+    }
+
+    @Test
+    void propagatesTenantContextToExecutorThread() throws Exception {
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<String> tenantId = new AtomicReference<>();
+        ExecutorService executorService = Executors.newSingleThreadExecutor();
+
+        try {
+            PrivacyTenantContextHolder.setTenantId("tenant-a");
+            AsyncPrivacyAuditPublisher publisher = new AsyncPrivacyAuditPublisher(
+                    publishedEvent -> {
+                        tenantId.set(PrivacyTenantContextHolder.getTenantId());
+                        latch.countDown();
+                    },
+                    executorService,
+                    3,
+                    Duration.ZERO,
+                    (publishedEvent, attempts, exception) -> {
+                    }
+            );
+
+            publisher.publish(new PrivacyAuditEvent(Instant.now(), "READ", "Patient", "demo", "actor", "OK", Map.of()));
+
+            assertTrue(latch.await(5, TimeUnit.SECONDS));
+            assertEquals("tenant-a", tenantId.get());
+        } finally {
+            PrivacyTenantContextHolder.clear();
+            executorService.shutdownNow();
+        }
     }
 }

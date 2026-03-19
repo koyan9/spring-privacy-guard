@@ -5,6 +5,8 @@
 
 package io.github.koyan9.privacy.audit;
 
+import io.github.koyan9.privacy.core.PrivacyTenantContextHolder;
+import io.github.koyan9.privacy.core.PrivacyTenantContextSnapshot;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,13 +40,14 @@ public class AsyncPrivacyAuditPublisher implements PrivacyAuditPublisher {
 
     @Override
     public void publish(PrivacyAuditEvent event) {
-        Runnable task = () -> publishWithRetry(event);
+        PrivacyTenantContextSnapshot tenantContextSnapshot = PrivacyTenantContextHolder.snapshot();
+        Runnable task = tenantContextSnapshot.wrap(() -> publishWithRetry(event));
 
         try {
             executor.execute(task);
         } catch (RuntimeException exception) {
             LOGGER.warn("Async privacy audit executor rejected task, falling back to synchronous publishing: {}", exception.toString());
-            publishWithRetry(event);
+            task.run();
         }
     }
 

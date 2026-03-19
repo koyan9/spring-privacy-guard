@@ -17,7 +17,7 @@ Use this checklist before cutting a new release.
 - Update `samples/privacy-demo/README.md` if sample behavior changed
 - Confirm `CHANGELOG.md` includes the release contents
 - Prepare `docs/releases/RELEASE_NOTES_<tag>.md` or update `docs/releases/RELEASE_NOTES_TEMPLATE.md`
-- Optionally capture a dry run note such as `docs/RELEASE_DRY_RUN_v0.2.0.md`
+- Optionally capture a dry run note such as `docs/RELEASE_DRY_RUN_v0.3.0.md`
 
 ## Release Content
 
@@ -34,5 +34,5 @@ Use this checklist before cutting a new release.
 
 ## Execution
 
-- Follow `docs/RELEASE_EXECUTION_v0.2.0.md` for the actual tag and release steps
-- Use `docs/RELEASE_RUNBOOK_v0.2.0.md` for the concise operator checklist
+- Follow the matching `docs/RELEASE_EXECUTION_<tag>.md` guide for the actual tag and release steps
+- Use the matching `docs/RELEASE_RUNBOOK_<tag>.md` file for the concise operator checklist

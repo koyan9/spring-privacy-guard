@@ -5,9 +5,12 @@
 
 package io.github.koyan9.privacy.audit;
 
+import io.github.koyan9.privacy.core.StableSpi;
+
 import java.util.List;
 import java.util.Optional;
 
+@StableSpi
 public interface PrivacyAuditDeadLetterRepository {
 
     void save(PrivacyAuditDeadLetterEntry entry);

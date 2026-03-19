@@ -56,11 +56,11 @@ public class PrivacySanitizingAppender extends AppenderBase<ILoggingEvent> imple
         sanitized.setSequenceNumber(eventObject.getSequenceNumber());
         Map<String, String> mdc = eventObject.getMDCPropertyMap();
         if (mdc != null) {
-            sanitized.setMDCPropertyMap(mdc);
+            sanitized.setMDCPropertyMap(PrivacyLogbackRuntime.sanitizeMdc(mdc));
         }
         List<KeyValuePair> keyValuePairs = eventObject.getKeyValuePairs();
         if (keyValuePairs != null) {
-            sanitized.setKeyValuePairs(keyValuePairs);
+            sanitized.setKeyValuePairs(PrivacyLogbackRuntime.sanitizeKeyValuePairs(keyValuePairs));
         }
         List<Marker> markers = eventObject.getMarkerList();
         if (markers != null) {

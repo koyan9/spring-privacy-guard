@@ -8,11 +8,11 @@ spring-privacy-guard v0.2.0
 
 Highlights
 
-- Custom masking SPI and stronger masking test coverage
-- Async and batched audit publishing with retry and dead-letter fallback
-- Dead-letter query, cleanup, replay, export/import, checksum validation, and operation audit trails
-- Actuator and Micrometer observability for dead-letter backlog, webhook delivery, receiver replay-store state, and signed alert verification flows
+- Stable custom masking SPI with `@StableSpi` markers and configurable text-pattern masking rules
+- Async and batched audit publishing, dead-letter replay/export/import, and configurable executor concurrency
+- JDBC-backed audit, dead-letter, and receiver replay-store support with production rollout guidance
 - Built-in webhook and email alert callbacks plus signed receiver verification with filter and interceptor modes
+- Actuator and Micrometer observability for backlog state, webhook failures, replay-store cleanup, and verification reason codes
 
 Included Capabilities
 
@@ -22,6 +22,8 @@ Core
 - MaskingStrategy
 - MaskingContext
 - TextMaskingService
+- TextMaskingRule
+- StableSpi
 
 Audit and Dead Letters
 
@@ -29,6 +31,7 @@ Audit and Dead Letters
 - PrivacyAuditQueryService
 - PrivacyAuditStatsService
 - PrivacyAuditDeadLetterService
+- PrivacyAuditDeadLetterRepository
 - AsyncPrivacyAuditPublisher
 - BufferedPrivacyAuditPublisher
 - PrivacyAuditDeadLetterExchangeService
@@ -37,10 +40,11 @@ Observability and Alerts
 
 - PrivacyAuditDeadLetterHealthIndicator
 - PrivacyAuditDeadLetterMetricsBinder
+- PrivacyAuditDeadLetterWebhookAlertTelemetry
+- PrivacyAuditDeadLetterWebhookVerificationTelemetry
 - LoggingPrivacyAuditDeadLetterAlertCallback
 - PrivacyAuditDeadLetterWebhookAlertCallback
 - PrivacyAuditDeadLetterEmailAlertCallback
-- Replay-store metrics for receiver nonce state
 
 Receiver Verification
 
@@ -48,19 +52,22 @@ Receiver Verification
 - PrivacyAuditDeadLetterWebhookReplayStore
 - InMemoryPrivacyAuditDeadLetterWebhookReplayStore
 - FilePrivacyAuditDeadLetterWebhookReplayStore
+- JdbcPrivacyAuditDeadLetterWebhookReplayStore
 - PrivacyAuditDeadLetterWebhookVerificationFilter
 - PrivacyAuditDeadLetterWebhookVerificationInterceptor
 
 Upgrade Notes
 
 - No intentional breaking changes are included in v0.2.0
+- Stable extension points are marked with `@StableSpi`; built-in runtime wiring classes remain internal implementation details
+- Use `docs/JDBC_PRODUCTION_GUIDE.md` for MySQL/PostgreSQL rollout, schema management, and migration planning
 - If you compile or run `samples/privacy-demo/` from a fresh clone, install local starter artifacts first with `./mvnw -q -DskipTests install` or `mvnw.cmd -q -DskipTests install`
-- The project version has already been aligned to `0.2.0` across publishable modules and sample configuration
 
 Verification
 
-- `./mvnw -q verify`
-- `./mvnw -q -f samples/privacy-demo/pom.xml test`
+- `mvnw.cmd -q test -pl privacy-guard-core,privacy-guard-spring-boot-starter` or `./mvnw -q test -pl privacy-guard-core,privacy-guard-spring-boot-starter`
+- `mvnw.cmd -q verify` or `./mvnw -q verify`
+- `python scripts/check_repo_hygiene.py`
 
 ---
 

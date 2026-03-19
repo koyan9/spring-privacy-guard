@@ -41,6 +41,18 @@ class MaskingServiceTest {
     }
 
     @Test
+    void appliesTenantFallbackMaskCharacterWhenTenantPolicyExists() {
+        MaskingService configuredService = new MaskingService(
+                "*",
+                List.of(),
+                () -> "tenant-a",
+                tenantId -> new PrivacyTenantPolicy("#", null)
+        );
+
+        assertEquals("138####8000", configuredService.mask("13800138000", SensitiveType.PHONE));
+    }
+
+    @Test
     void supportsMultiCharacterMaskTokens() {
         MaskingService configuredService = new MaskingService("[x]");
 
@@ -93,6 +105,32 @@ class MaskingServiceTest {
         assertEquals("****", maskingService.mask("abcd", sensitiveData));
     }
 
+    @Test
+    void appliesTenantFallbackMaskCharacterToDefaultAnnotationMask() throws Exception {
+        MaskingService configuredService = new MaskingService(
+                "*",
+                List.of(),
+                () -> "tenant-a",
+                tenantId -> new PrivacyTenantPolicy("#", null)
+        );
+        Field field = DemoRecord.class.getDeclaredField("defaultMaskedValue");
+        SensitiveData sensitiveData = field.getAnnotation(SensitiveData.class);
+
+        assertEquals("A###e", configuredService.mask("Alice", sensitiveData));
+    }
+
+    @Test
+    void supportsTenantAwareMaskingStrategies() {
+        MaskingService configuredService = new MaskingService(
+                "*",
+                List.of(new TenantPrefixStrategy()),
+                () -> "tenant-a",
+                PrivacyTenantPolicyResolver.noop()
+        );
+
+        assertEquals("[tenant-a]Alice", configuredService.mask("Alice", SensitiveType.NAME));
+    }
+
     static class DemoRecord {
 
         @SensitiveData(type = SensitiveType.GENERIC, maskChar = "#", leftVisible = 2, rightVisible = 1)
@@ -103,6 +141,9 @@ class MaskingServiceTest {
 
         @SensitiveData(type = SensitiveType.GENERIC, leftVisible = 3, rightVisible = 3)
         private String overVisibleValue;
+
+        @SensitiveData(type = SensitiveType.NAME)
+        private String defaultMaskedValue;
     }
 
     static class NameWrappingStrategy implements MaskingStrategy {
@@ -128,6 +169,19 @@ class MaskingServiceTest {
         @Override
         public String mask(String value, MaskingContext context) {
             return "CUSTOM";
+        }
+    }
+
+    static class TenantPrefixStrategy implements PrivacyTenantAwareMaskingStrategy {
+
+        @Override
+        public boolean supports(String tenantId, MaskingContext context) {
+            return context.sensitiveType() == SensitiveType.NAME && tenantId != null;
+        }
+
+        @Override
+        public String mask(String tenantId, String value, MaskingContext context) {
+            return "[" + tenantId + "]" + value;
         }
     }
 }

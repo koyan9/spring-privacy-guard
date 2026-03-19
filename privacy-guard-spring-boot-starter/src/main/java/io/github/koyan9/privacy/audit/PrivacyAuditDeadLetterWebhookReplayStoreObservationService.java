@@ -42,4 +42,11 @@ public class PrivacyAuditDeadLetterWebhookReplayStoreObservationService {
                 expiringSoonWindow.toString()
         );
     }
+
+    public PrivacyAuditDeadLetterWebhookReplayStoreCleanupSnapshot currentCleanupSnapshot() {
+        if (replayStore instanceof PrivacyAuditDeadLetterWebhookReplayStoreCleanupStatsProvider statsProvider) {
+            return statsProvider.cleanupSnapshot();
+        }
+        return PrivacyAuditDeadLetterWebhookReplayStoreCleanupSnapshot.empty();
+    }
 }

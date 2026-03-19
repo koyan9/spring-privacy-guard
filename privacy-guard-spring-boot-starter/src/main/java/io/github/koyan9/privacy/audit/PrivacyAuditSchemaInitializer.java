@@ -19,6 +19,7 @@ public class PrivacyAuditSchemaInitializer {
     private final ResourceLoader resourceLoader;
     private final String schemaLocation;
     private final String tableName;
+    private final String tenantColumnName;
 
     public PrivacyAuditSchemaInitializer(
             JdbcOperations jdbcOperations,
@@ -26,15 +27,28 @@ public class PrivacyAuditSchemaInitializer {
             String schemaLocation,
             String tableName
     ) {
+        this(jdbcOperations, resourceLoader, schemaLocation, tableName, null);
+    }
+
+    public PrivacyAuditSchemaInitializer(
+            JdbcOperations jdbcOperations,
+            ResourceLoader resourceLoader,
+            String schemaLocation,
+            String tableName,
+            String tenantColumnName
+    ) {
         this.jdbcOperations = jdbcOperations;
         this.resourceLoader = resourceLoader;
         this.schemaLocation = schemaLocation;
         this.tableName = tableName;
+        this.tenantColumnName = normalizeTenantColumnName(tenantColumnName);
     }
 
     public void initialize() {
         String script = loadScript();
-        String resolvedScript = script.replace("${tableName}", tableName);
+        String resolvedScript = script
+                .replace("${tableName}", tableName)
+                .replace("${tenantColumnName}", tenantColumnName);
         Arrays.stream(resolvedScript.split(";"))
                 .map(String::trim)
                 .filter(statement -> !statement.isBlank())
@@ -51,5 +65,12 @@ public class PrivacyAuditSchemaInitializer {
         } catch (IOException exception) {
             throw new IllegalStateException("Failed to read privacy audit schema resource: " + schemaLocation, exception);
         }
+    }
+
+    private String normalizeTenantColumnName(String value) {
+        if (value == null || value.isBlank()) {
+            return "tenant_id";
+        }
+        return value.trim();
     }
 }

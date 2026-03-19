@@ -12,9 +12,12 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class InMemoryPrivacyAuditDeadLetterWebhookReplayStore implements PrivacyAuditDeadLetterWebhookReplayStore,
-        PrivacyAuditDeadLetterWebhookReplayStoreStatsProvider {
+        PrivacyAuditDeadLetterWebhookReplayStoreStatsProvider,
+        PrivacyAuditDeadLetterWebhookReplayStoreCleanupStatsProvider {
 
     private final ConcurrentHashMap<String, Instant> seenNonces = new ConcurrentHashMap<>();
+    private PrivacyAuditDeadLetterWebhookReplayStoreCleanupSnapshot lastCleanup =
+            PrivacyAuditDeadLetterWebhookReplayStoreCleanupSnapshot.empty();
 
     @Override
     public synchronized boolean markIfNew(String nonce, Instant now, java.time.Duration ttl) {
@@ -62,11 +65,25 @@ public class InMemoryPrivacyAuditDeadLetterWebhookReplayStore implements Privacy
         );
     }
 
+    @Override
+    public synchronized PrivacyAuditDeadLetterWebhookReplayStoreCleanupSnapshot cleanupSnapshot() {
+        return lastCleanup;
+    }
+
     private void cleanup(Instant now) {
+        long startNanos = System.nanoTime();
+        long removed = 0L;
         for (Map.Entry<String, Instant> entry : seenNonces.entrySet()) {
             if (entry.getValue().isBefore(now)) {
                 seenNonces.remove(entry.getKey(), entry.getValue());
+                removed++;
             }
         }
+        recordCleanup(removed, startNanos, now);
+    }
+
+    private void recordCleanup(long removed, long startNanos, Instant now) {
+        long durationMillis = Duration.ofNanos(System.nanoTime() - startNanos).toMillis();
+        lastCleanup = new PrivacyAuditDeadLetterWebhookReplayStoreCleanupSnapshot(removed, durationMillis, now);
     }
 }

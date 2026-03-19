@@ -19,6 +19,10 @@ privacy:
                 enabled: true
                 path-pattern: /demo-alert-receiver
               replay-store:
+                redis:
+                  enabled: false
+                  key-prefix: "privacy:demo:webhook:replay:"
+                  scan-batch-size: 500
                 jdbc:
                   enabled: false
                   initialize-schema: false

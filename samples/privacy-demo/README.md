@@ -8,10 +8,17 @@
 
 `samples/privacy-demo` 是 `spring-privacy-guard` 的可运行示例，展示敏感数据脱敏、审计、死信处理、签名告警、receiver 验签和 replay 防护。
 
+当前示例中的审计与死信管理接口统一通过 starter 提供的 `PrivacyTenantAuditManagementService` 进入多租户管理链路。
+
+示例还提供了专门的租户管理入口：
+
+- `GET /demo-tenants/current`
+- `GET /demo-tenants/policies`
+
 ## 演示内容
 
 - `@SensitiveData` 字段脱敏
-- 自定义 `MaskingStrategy` 示例
+- 自定义 `MaskingStrategy` / `PrivacyTenantAwareMaskingStrategy` 示例
 - 审计事件查询、统计与管理操作留痕
 - 死信查询、清理、重放、JSON/CSV 导入导出
 - 内置 webhook / email 告警配置
@@ -60,12 +67,57 @@ privacy:
 ```
 
 `cleanup-interval` 控制全量清理频率，设置为 `0` 时每次请求都会触发清理。
+生产环境中的 MySQL / PostgreSQL schema 管理、索引建议和迁移步骤，请参考 `../../docs/JDBC_PRODUCTION_GUIDE.md`。
+
+Redis replay-store 示例配置（适合已有 Redis 基础设施的多实例部署）：
+
+```yaml
+privacy:
+  guard:
+    audit:
+      dead-letter:
+        observability:
+          alert:
+            receiver:
+              replay-store:
+                redis:
+                  enabled: true
+                  key-prefix: privacy:demo:webhook:replay:
+                  scan-batch-size: 500
+```
 
 常用端点：
 
 - `GET /demo-alert-receiver/replay-store?limit=20&offset=0`
 - `GET /demo-alert-receiver/replay-store/stats?expiringWithin=PT5M`
 - `DELETE /demo-alert-receiver/replay-store`
+
+## 多租户脱敏演示
+
+示例默认开启基于 `X-Privacy-Tenant` 请求头的租户策略：
+
+- 不传请求头或使用 `public`：保持默认脱敏字符
+- `X-Privacy-Tenant: tenant-a`：使用 `#` 作为 fallback mask char，启用 `EMP\\d{4}` 文本规则，并在审计 detail 中只保留 `phone`、`employeeCode` 与 `tenant`
+- `X-Privacy-Tenant: tenant-b`：使用 `X` 作为 fallback mask char，并在审计 detail 中只保留 `phone` 与 `tenant`
+
+完整的请求头约定、稳定 SPI 扩展点和 `PrivacyTenantAuditManagementService` 管理入口说明，请参考 `../../docs/MULTI_TENANT_GUIDE.md`。
+
+示例请求：
+
+- `curl -H "X-Privacy-Tenant: tenant-a" http://localhost:8088/patients/demo`
+- `curl -H "X-Privacy-Tenant: tenant-b" http://localhost:8088/patients/demo`
+- `curl http://localhost:8088/demo-tenants/current`
+- `curl -H "X-Privacy-Tenant: tenant-a" http://localhost:8088/demo-tenants/current`
+- 触发后可访问 `GET /audit-events?action=PATIENT_READ&tenant=tenant-a`
+- 或 `GET /audit-events/stats?action=PATIENT_READ&tenant=tenant-a`
+- 用于查看不同租户落库的审计 detail 与统计差异
+- 若存在租户标签的死信，还可访问 `GET /audit-dead-letters?tenant=tenant-a`
+- 或 `GET /audit-dead-letters/stats?tenant=tenant-a`
+- 批量管理时可使用 `DELETE /audit-dead-letters?tenant=tenant-a`
+- 或 `POST /audit-dead-letters/replay?tenant=tenant-b`
+- 交换链路可使用 `GET /audit-dead-letters/export.json?tenant=tenant-a`
+- `GET /audit-dead-letters/export.manifest?format=json&tenant=tenant-a`
+- `POST /audit-dead-letters/import.json?tenant=tenant-b`
 
 ## 运行前准备
 
@@ -86,20 +138,31 @@ privacy:
 
 公开接口：
 
+- `GET /demo-tenants/current`
 - `GET /patients/demo`
 - `GET /audit-events`
 - `GET /audit-events/stats`
+- `GET /audit-events?action=PATIENT_READ&tenant=tenant-a`
+- `GET /audit-events/stats?action=PATIENT_READ&tenant=tenant-a`
 - `POST /demo-alert-receiver`
 
 需要 `X-Demo-Admin-Token: demo-admin-token` 的管理接口：
 
+- `GET /demo-tenants/policies`
 - `GET /audit-dead-letters`
 - `GET /audit-dead-letters/stats`
+- `GET /audit-dead-letters?tenant=tenant-a`
+- `GET /audit-dead-letters/stats?tenant=tenant-a`
+- `DELETE /audit-dead-letters?tenant=tenant-a`
+- `POST /audit-dead-letters/replay?tenant=tenant-b`
 - `GET /audit-dead-letters/export.json`
 - `GET /audit-dead-letters/export.csv`
 - `GET /audit-dead-letters/export.manifest?format=json`
+- `GET /audit-dead-letters/export.json?tenant=tenant-a`
+- `GET /audit-dead-letters/export.manifest?format=json&tenant=tenant-a`
 - `POST /audit-dead-letters/import.json`
 - `POST /audit-dead-letters/import.csv`
+- `POST /audit-dead-letters/import.json?tenant=tenant-b`
 - `DELETE /audit-dead-letters/{id}`
 - `POST /audit-dead-letters/{id}/replay`
 - `POST /audit-dead-letters/replay?limit=100`

@@ -17,13 +17,16 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class JdbcPrivacyAuditDeadLetterWebhookReplayStore implements PrivacyAuditDeadLetterWebhookReplayStore,
-        PrivacyAuditDeadLetterWebhookReplayStoreStatsProvider {
+        PrivacyAuditDeadLetterWebhookReplayStoreStatsProvider,
+        PrivacyAuditDeadLetterWebhookReplayStoreCleanupStatsProvider {
 
     private final JdbcOperations jdbcOperations;
     private final String tableName;
     private final Duration cleanupInterval;
     private final int cleanupBatchSize;
     private final AtomicLong lastCleanupAt = new AtomicLong(0L);
+    private volatile PrivacyAuditDeadLetterWebhookReplayStoreCleanupSnapshot lastCleanup =
+            PrivacyAuditDeadLetterWebhookReplayStoreCleanupSnapshot.empty();
 
     public JdbcPrivacyAuditDeadLetterWebhookReplayStore(JdbcOperations jdbcOperations, String tableName) {
         this(jdbcOperations, tableName, Duration.ofMinutes(5));
@@ -94,6 +97,11 @@ public class JdbcPrivacyAuditDeadLetterWebhookReplayStore implements PrivacyAudi
     }
 
     @Override
+    public PrivacyAuditDeadLetterWebhookReplayStoreCleanupSnapshot cleanupSnapshot() {
+        return lastCleanup;
+    }
+
+    @Override
     public void clear() {
         jdbcOperations.update(clearSql());
     }
@@ -139,8 +147,10 @@ public class JdbcPrivacyAuditDeadLetterWebhookReplayStore implements PrivacyAudi
     }
 
     private void cleanupExpiredBatch(Instant now) {
+        long startNanos = System.nanoTime();
         if (cleanupBatchSize <= 0) {
-            jdbcOperations.update(cleanupSql(), Timestamp.from(now));
+            int updated = jdbcOperations.update(cleanupSql(), Timestamp.from(now));
+            recordCleanup(Math.max(0, updated), startNanos, now);
             return;
         }
         List<String> expiredNonces = jdbcOperations.query(
@@ -150,10 +160,13 @@ public class JdbcPrivacyAuditDeadLetterWebhookReplayStore implements PrivacyAudi
                 cleanupBatchSize
         );
         if (expiredNonces.isEmpty()) {
+            recordCleanup(0L, startNanos, now);
             return;
         }
         String deleteSql = deleteExpiredNoncesSql(expiredNonces.size());
-        jdbcOperations.update(deleteSql, expiredNonces.toArray());
+        int updated = jdbcOperations.update(deleteSql, expiredNonces.toArray());
+        long removed = updated > 0 ? updated : expiredNonces.size();
+        recordCleanup(removed, startNanos, now);
     }
 
     private String clearSql() {
@@ -167,6 +180,11 @@ public class JdbcPrivacyAuditDeadLetterWebhookReplayStore implements PrivacyAudi
     private String deleteExpiredNoncesSql(int size) {
         String placeholders = String.join(", ", java.util.Collections.nCopies(size, "?"));
         return "delete from " + tableName + " where nonce in (" + placeholders + ")";
+    }
+
+    private void recordCleanup(long removed, long startNanos, Instant now) {
+        long durationMillis = Duration.ofNanos(System.nanoTime() - startNanos).toMillis();
+        lastCleanup = new PrivacyAuditDeadLetterWebhookReplayStoreCleanupSnapshot(removed, durationMillis, now);
     }
 
     private long queryForCount(String sql, Object... args) {

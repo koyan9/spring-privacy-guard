@@ -108,4 +108,20 @@ class InMemoryPrivacyAuditDeadLetterRepositoryTest {
         assertEquals(2L, stats.byResourceType().get("Patient"));
         assertEquals(2L, stats.byErrorType().get("TypeA"));
     }
+
+    @Test
+    void returnsTenantNativeFilteredDeadLettersAndStats() {
+        InMemoryPrivacyAuditDeadLetterRepository repository = new InMemoryPrivacyAuditDeadLetterRepository();
+        repository.save(new PrivacyAuditDeadLetterEntry(null, Instant.parse("2026-03-06T00:00:00Z"), 3, "TypeA", "one", Instant.parse("2026-03-05T23:00:00Z"), "READ", "Patient", "a1", "alice", "OK", Map.of("tenant", "tenant-a")));
+        repository.save(new PrivacyAuditDeadLetterEntry(null, Instant.parse("2026-03-06T01:00:00Z"), 3, "TypeA", "two", Instant.parse("2026-03-06T00:30:00Z"), "READ", "Patient", "a2", "alice", "OK", Map.of("tenant", "tenant-a")));
+        repository.save(new PrivacyAuditDeadLetterEntry(null, Instant.parse("2026-03-06T02:00:00Z"), 4, "TypeB", "three", Instant.parse("2026-03-06T01:30:00Z"), "WRITE", "Order", "b1", "bob", "DENIED", Map.of("tenant", "tenant-b")));
+
+        List<PrivacyAuditDeadLetterEntry> entries = repository.findByCriteria("tenant-a", "tenant", PrivacyAuditDeadLetterQueryCriteria.recent(10));
+        PrivacyAuditDeadLetterStats stats = repository.computeStats("tenant-a", "tenant", PrivacyAuditDeadLetterQueryCriteria.recent(10));
+
+        assertEquals(List.of("a2", "a1"), entries.stream().map(PrivacyAuditDeadLetterEntry::resourceId).toList());
+        assertEquals(2, stats.total());
+        assertEquals(2L, stats.byAction().get("READ"));
+        assertEquals(2L, stats.byErrorType().get("TypeA"));
+    }
 }

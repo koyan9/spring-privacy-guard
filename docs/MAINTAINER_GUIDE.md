@@ -9,8 +9,9 @@ This guide is for maintainers responsible for releases, triage, and repository h
 - `SUPPORT.md`
 - `docs/GITHUB_LABELS.md`
 - `docs/RELEASE_CHECKLIST.md`
-- `docs/RELEASE_EXECUTION_v0.2.0.md`
-- `docs/releases/RELEASE_NOTES_v0.2.0.md`
+- `docs/RELEASE_EXECUTION_v0.3.0.md`
+- `docs/RELEASE_RUNBOOK_v0.3.0.md`
+- `docs/releases/RELEASE_NOTES_v0.3.0.md`
 
 ## Triage Checklist
 
@@ -22,7 +23,7 @@ This guide is for maintainers responsible for releases, triage, and repository h
 ## Release Workflow
 
 - Follow `docs/RELEASE_CHECKLIST.md` before tagging.
-- Use `docs/RELEASE_EXECUTION_v0.2.0.md` as the step-by-step release guide.
+- Use the current versioned execution guide, `docs/RELEASE_EXECUTION_v0.3.0.md`, as the step-by-step release guide.
 - Validate `docs/releases/RELEASE_NOTES_<tag>.md` before triggering the release workflow.
 - Run `python scripts/check_repo_hygiene.py` before publishing.
 
@@ -31,11 +32,11 @@ This guide is for maintainers responsible for releases, triage, and repository h
 - Confirm the GitHub release exists for the tag and the body matches `docs/releases/RELEASE_NOTES_<tag>.md`.
 - Verify uploaded artifacts include the core and starter jars.
 - Check CI runs are green for the release commit.
-- If a release must be pulled, delete the GitHub release first, then follow the rollback steps in `docs/RELEASE_EXECUTION_v0.2.0.md`.
+- If a release must be pulled, delete the GitHub release first, then follow the rollback steps in the matching `docs/RELEASE_EXECUTION_<tag>.md`.
 
 ## Release FAQ
 
-- **How do I create a release tag?** Follow `docs/RELEASE_EXECUTION_v0.2.0.md` and tag `vX.Y.Z`.
+- **How do I create a release tag?** Follow the current versioned execution guide, now `docs/RELEASE_EXECUTION_v0.3.0.md`, and tag `vX.Y.Z`.
 - **Which workflow inputs do I use?** Use `tag`, `release_name`, and `prerelease` as documented in `.github/workflows/release.yml`.
 - **Where should release notes live?** Put them in `docs/releases/RELEASE_NOTES_<tag>.md` and update `CHANGELOG.md`.
 - **How do I roll back a bad release?** Remove the GitHub release, delete the tag, and re-run the release process after the fix.
@@ -43,7 +44,7 @@ This guide is for maintainers responsible for releases, triage, and repository h
 ## Versioning & Tags
 
 - Version bumps must update root `pom.xml`, module `pom.xml`, and `samples/privacy-demo/pom.xml`.
-- Tags should follow `vX.Y.Z` (for example `v0.2.0`).
+- Tags should follow `vX.Y.Z` (for example `v0.3.0`).
 - Keep release notes in `docs/releases/RELEASE_NOTES_<tag>.md` and update `CHANGELOG.md`.
 
 ## Documentation Expectations

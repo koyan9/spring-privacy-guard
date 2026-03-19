@@ -26,6 +26,7 @@ class DemoWebMvcConfiguration implements WebMvcConfigurer {
                 .addPathPatterns(
                         "/audit-dead-letters",
                         "/audit-dead-letters/**",
+                        "/demo-tenants/policies",
                         "/demo-alert-receiver/last",
                         "/demo-alert-receiver/replay-store",
                         "/demo-alert-receiver/replay-store/**"

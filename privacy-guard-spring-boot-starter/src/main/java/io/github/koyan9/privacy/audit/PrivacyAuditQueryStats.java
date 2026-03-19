@@ -5,8 +5,11 @@
 
 package io.github.koyan9.privacy.audit;
 
+import io.github.koyan9.privacy.core.StableSpi;
+
 import java.util.Map;
 
+@StableSpi
 public record PrivacyAuditQueryStats(
         long total,
         Map<String, Long> byAction,

@@ -17,6 +17,10 @@ import io.github.koyan9.privacy.logging.PrivacyLogSanitizer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
+import org.slf4j.event.KeyValuePair;
+
+import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -32,7 +36,17 @@ class PrivacySanitizingAppenderTest {
     void sanitizesBeforeForwardingToDelegateAppender() {
         LoggerContext context = (LoggerContext) LoggerFactory.getILoggerFactory();
         Logger logger = context.getLogger("privacy-appender-test");
-        PrivacyLogbackRuntime.set(new PrivacyLogSanitizer(new TextMaskingService(new MaskingService())));
+        PrivacyLogbackRuntime.set(
+                new PrivacyLogSanitizer(new TextMaskingService(new MaskingService())),
+                new PrivacyLogbackSanitizerSettings(
+                        true,
+                        java.util.Set.of(),
+                        java.util.Set.of(),
+                        true,
+                        java.util.Set.of(),
+                        java.util.Set.of()
+                )
+        );
 
         CapturingAppender delegate = new CapturingAppender();
         delegate.setContext(context);
@@ -51,12 +65,25 @@ class PrivacySanitizingAppenderTest {
                 null,
                 null
         );
+        event.setMDCPropertyMap(Map.of(
+                "email", "alice@example.com",
+                "safe", "ok"
+        ));
+        event.setKeyValuePairs(List.of(
+                new KeyValuePair("phone", "13800138000"),
+                new KeyValuePair("safe", "ok")
+        ));
 
         appender.doAppend(event);
 
         assertNotNull(delegate.lastEvent);
         assertTrue(delegate.lastEvent.getFormattedMessage().contains("138****8000"));
         assertTrue(delegate.lastEvent.getFormattedMessage().contains("a****@example.com"));
+        assertTrue(delegate.lastEvent.getMDCPropertyMap().get("email").contains("a****@example.com"));
+        assertTrue(delegate.lastEvent.getMDCPropertyMap().get("safe").equals("ok"));
+        List<KeyValuePair> pairs = delegate.lastEvent.getKeyValuePairs();
+        assertNotNull(pairs);
+        assertTrue(pairs.get(0).value.toString().contains("138****8000"));
     }
 
     static class CapturingAppender extends AppenderBase<ILoggingEvent> {

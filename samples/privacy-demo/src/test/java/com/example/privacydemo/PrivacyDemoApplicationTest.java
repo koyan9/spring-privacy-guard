@@ -10,6 +10,7 @@ import io.github.koyan9.privacy.audit.InMemoryPrivacyAuditRepository;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterAlertEvent;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterBacklogState;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterEntry;
+import io.github.koyan9.privacy.audit.PrivacyAuditEvent;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStore;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookSignatureSupport;
 import org.junit.jupiter.api.BeforeEach;
@@ -86,6 +87,91 @@ class PrivacyDemoApplicationTest {
                         """));
 
         assertThat(auditRepository.findAll()).extracting("action").contains("PATIENT_READ");
+    }
+
+    @Test
+    void filtersAuditEventsAndStatsByTenant() throws Exception {
+        mockMvc.perform(get("/patients/demo").with(tenant("tenant-a")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.patientName").value("TENANT-A-A####"));
+
+        mockMvc.perform(get("/patients/demo").with(tenant("tenant-b")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.patientName").value("TENANT-B-AXXXX"));
+
+        mockMvc.perform(get("/patients/demo"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.patientName").value("CUSTOM-A****"));
+
+        mockMvc.perform(get("/audit-events")
+                        .param("action", "PATIENT_READ")
+                        .param("tenant", "tenant-a"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].details.tenant").value("tenant-a"))
+                .andExpect(jsonPath("$[0].details.employeeCode").value("E#####4"))
+                .andExpect(jsonPath("$[0].details.phone").value("138####8000"))
+                .andExpect(jsonPath("$[0].details.idCard").doesNotExist());
+
+        mockMvc.perform(get("/audit-events")
+                        .param("action", "PATIENT_READ")
+                        .param("tenant", "tenant-b"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].details.tenant").value("tenant-b"))
+                .andExpect(jsonPath("$[0].details.phone").value("138XXXX8000"))
+                .andExpect(jsonPath("$[0].details.employeeCode").doesNotExist())
+                .andExpect(jsonPath("$[0].details.idCard").doesNotExist());
+
+        mockMvc.perform(get("/audit-events")
+                        .param("action", "PATIENT_READ")
+                        .param("tenant", "public"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].details.tenant").value("public"))
+                .andExpect(jsonPath("$[0].details.phone").value("138****8000"))
+                .andExpect(jsonPath("$[0].details.employeeCode").value("EMP1234"))
+                .andExpect(jsonPath("$[0].details.idCard").value("1101**********1234"));
+
+        mockMvc.perform(get("/audit-events/stats")
+                        .param("action", "PATIENT_READ")
+                        .param("tenant", "tenant-a"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.byAction.PATIENT_READ").value(1))
+                .andExpect(jsonPath("$.byResourceType.Patient").value(1));
+    }
+
+    @Test
+    void exposesTenantContextAndProtectedTenantPolicyOverview() throws Exception {
+        mockMvc.perform(get("/demo-tenants/current"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tenantModeEnabled").value(true))
+                .andExpect(jsonPath("$.headerName").value("X-Privacy-Tenant"))
+                .andExpect(jsonPath("$.defaultTenant").value("public"))
+                .andExpect(jsonPath("$.currentTenant").value("public"))
+                .andExpect(jsonPath("$.configuredTenants[0]").value("public"))
+                .andExpect(jsonPath("$.managementFacade").value("PrivacyTenantAuditManagementService"));
+
+        mockMvc.perform(get("/demo-tenants/current").with(tenant("tenant-a")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currentTenant").value("tenant-a"));
+
+        mockMvc.perform(get("/demo-tenants/policies"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(get("/demo-tenants/policies").with(adminToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.headerName").value("X-Privacy-Tenant"))
+                .andExpect(jsonPath("$.defaultTenant").value("public"))
+                .andExpect(jsonPath("$.tenants.length()").value(3))
+                .andExpect(jsonPath("$.tenants[1].tenantId").value("tenant-a"))
+                .andExpect(jsonPath("$.tenants[1].fallbackMaskChar").value("#"))
+                .andExpect(jsonPath("$.tenants[1].textAdditionalPatternCount").value(1))
+                .andExpect(jsonPath("$.tenants[1].auditIncludeDetailKeys[0]").value("phone"))
+                .andExpect(jsonPath("$.tenants[1].auditAttachTenantId").value(true))
+                .andExpect(jsonPath("$.tenants[2].tenantId").value("tenant-b"))
+                .andExpect(jsonPath("$.tenants[2].auditTenantDetailKey").value("tenant"));
     }
 
     @Test
@@ -352,6 +438,66 @@ class PrivacyDemoApplicationTest {
     }
 
     @Test
+    void exportsAndImportsDeadLettersWithTenantScope() throws Exception {
+        deadLetterRepository.save(new PrivacyAuditDeadLetterEntry(
+                null,
+                Instant.now(),
+                3,
+                "java.lang.IllegalStateException",
+                "tenant a failure",
+                Instant.parse("2026-03-06T00:00:00Z"),
+                "READ",
+                "Patient",
+                "dead-letter-tenant-a",
+                "actor",
+                "OK",
+                Map.of("tenant", "tenant-a", "phone", "138####8000")
+        ));
+        deadLetterRepository.save(new PrivacyAuditDeadLetterEntry(
+                null,
+                Instant.now(),
+                3,
+                "java.lang.IllegalStateException",
+                "tenant b failure",
+                Instant.parse("2026-03-06T00:00:00Z"),
+                "READ",
+                "Patient",
+                "dead-letter-tenant-b",
+                "actor",
+                "OK",
+                Map.of("tenant", "tenant-b", "phone", "138XXXX8000")
+        ));
+
+        String tenantJson = mockMvc.perform(get("/audit-dead-letters/export.json").with(adminToken()).param("tenant", "tenant-a"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        mockMvc.perform(get("/audit-dead-letters/export.manifest").with(adminToken())
+                        .param("format", "json")
+                        .param("tenant", "tenant-a"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(1));
+
+        assertThat(tenantJson).contains("dead-letter-tenant-a");
+        assertThat(tenantJson).doesNotContain("dead-letter-tenant-b");
+
+        deadLetterRepository.clear();
+
+        mockMvc.perform(post("/audit-dead-letters/import.json").with(adminToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .param("tenant", "tenant-b")
+                        .content(tenantJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.imported").value(1));
+
+        mockMvc.perform(get("/audit-dead-letters").with(adminToken()).param("tenant", "tenant-b"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].details.tenant").value("tenant-b"))
+                .andExpect(jsonPath("$[0].resourceId").value("dead-letter-tenant-a"));
+    }
+
+    @Test
     void filtersDeletesAndReportsDeadLetterStatsThroughHttpEndpoints() throws Exception {
         deadLetterRepository.save(new PrivacyAuditDeadLetterEntry(null, Instant.now(), 3, "java.lang.IllegalStateException", "first failure", Instant.parse("2026-03-06T00:00:00Z"), "READ", "Patient", "dead-letter-a", "actor", "OK", Map.of()));
         deadLetterRepository.save(new PrivacyAuditDeadLetterEntry(null, Instant.now(), 4, "java.lang.IllegalStateException", "second failure", Instant.parse("2026-03-06T00:10:00Z"), "WRITE", "Order", "dead-letter-b", "actor", "DENIED", Map.of()));
@@ -393,6 +539,102 @@ class PrivacyDemoApplicationTest {
         assertThat(deadLetterRepository.findAll()).isEmpty();
         assertThat(auditRepository.findAll()).extracting("action")
                 .contains("AUDIT_DEAD_LETTERS_QUERY", "AUDIT_DEAD_LETTERS_STATS_QUERY", "AUDIT_DEAD_LETTER_DELETE", "AUDIT_DEAD_LETTERS_DELETE");
+    }
+
+    @Test
+    void filtersDeadLettersAndStatsByTenant() throws Exception {
+        deadLetterRepository.save(new PrivacyAuditDeadLetterEntry(
+                null,
+                Instant.now(),
+                3,
+                "java.lang.IllegalStateException",
+                "tenant a failure",
+                Instant.parse("2026-03-06T00:00:00Z"),
+                "READ",
+                "Patient",
+                "dead-letter-tenant-a",
+                "actor",
+                "OK",
+                Map.of("tenant", "tenant-a", "phone", "138####8000")
+        ));
+        deadLetterRepository.save(new PrivacyAuditDeadLetterEntry(
+                null,
+                Instant.now(),
+                4,
+                "java.lang.IllegalStateException",
+                "tenant b failure",
+                Instant.parse("2026-03-06T00:10:00Z"),
+                "READ",
+                "Patient",
+                "dead-letter-tenant-b",
+                "actor",
+                "OK",
+                Map.of("tenant", "tenant-b", "phone", "138XXXX8000")
+        ));
+
+        mockMvc.perform(get("/audit-dead-letters").with(adminToken()).param("tenant", "tenant-a"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].resourceId").value("dead-letter-tenant-a"))
+                .andExpect(jsonPath("$[0].details.tenant").value("tenant-a"));
+
+        mockMvc.perform(get("/audit-dead-letters/stats").with(adminToken()).param("tenant", "tenant-b"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.byAction.READ").value(1))
+                .andExpect(jsonPath("$.byResourceType.Patient").value(1))
+                .andExpect(jsonPath("$.byErrorType['java.lang.IllegalStateException']").value(1));
+    }
+
+    @Test
+    void deletesAndReplaysDeadLettersByTenant() throws Exception {
+        deadLetterRepository.save(new PrivacyAuditDeadLetterEntry(
+                null,
+                Instant.now(),
+                3,
+                "java.lang.IllegalStateException",
+                "tenant a failure",
+                Instant.parse("2026-03-06T00:00:00Z"),
+                "READ",
+                "Patient",
+                "dead-letter-delete-tenant-a",
+                "actor",
+                "OK",
+                Map.of("tenant", "tenant-a", "phone", "138####8000")
+        ));
+        deadLetterRepository.save(new PrivacyAuditDeadLetterEntry(
+                null,
+                Instant.now(),
+                4,
+                "java.lang.IllegalStateException",
+                "tenant b failure",
+                Instant.parse("2026-03-06T00:10:00Z"),
+                "READ",
+                "Patient",
+                "dead-letter-replay-tenant-b",
+                "actor",
+                "OK",
+                Map.of("tenant", "tenant-b", "phone", "138XXXX8000")
+        ));
+
+        mockMvc.perform(delete("/audit-dead-letters").with(adminToken()).param("tenant", "tenant-a"))
+                .andExpect(status().isOk())
+                .andExpect(content().string("1"));
+
+        assertThat(deadLetterRepository.findAll()).extracting(PrivacyAuditDeadLetterEntry::resourceId)
+                .containsExactly("dead-letter-replay-tenant-b");
+
+        mockMvc.perform(post("/audit-dead-letters/replay").with(adminToken()).param("tenant", "tenant-b"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.requested").value(1))
+                .andExpect(jsonPath("$.replayed").value(1))
+                .andExpect(jsonPath("$.failed").value(0));
+
+        assertThat(deadLetterRepository.findAll()).isEmpty();
+        assertThat(auditRepository.findAll()).extracting(PrivacyAuditEvent::resourceId)
+                .contains("dead-letter-replay-tenant-b");
+        assertThat(auditRepository.findAll()).extracting(PrivacyAuditEvent::action)
+                .contains("AUDIT_DEAD_LETTERS_DELETE", "AUDIT_DEAD_LETTERS_REPLAY", "READ");
     }
 
     @Test
@@ -440,7 +682,11 @@ class PrivacyDemoApplicationTest {
             return request;
         };
     }
+
+    private RequestPostProcessor tenant(String tenantId) {
+        return request -> {
+            request.addHeader("X-Privacy-Tenant", tenantId);
+            return request;
+        };
+    }
 }
-
-
-

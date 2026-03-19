@@ -11,11 +11,7 @@
         </encoder>
     </appender>
 
-    <appender name="SANITIZED_CONSOLE" class="io.github.koyan9.privacy.logging.logback.PrivacySanitizingAppender">
-        <appender-ref ref="RAW_CONSOLE" />
-    </appender>
-
     <root level="INFO">
-        <appender-ref ref="SANITIZED_CONSOLE" />
+        <appender-ref ref="RAW_CONSOLE" />
     </root>
 </configuration>

@@ -13,7 +13,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class InMemoryPrivacyAuditRepository implements PrivacyAuditRepository, PrivacyAuditQueryRepository, PrivacyAuditStatsRepository {
+public class InMemoryPrivacyAuditRepository implements PrivacyAuditRepository, PrivacyAuditQueryRepository, PrivacyAuditStatsRepository, PrivacyTenantAuditReadRepository, PrivacyTenantAuditWriteRepository {
 
     private final CopyOnWriteArrayList<PrivacyAuditEvent> events = new CopyOnWriteArrayList<>();
 
@@ -61,6 +61,45 @@ public class InMemoryPrivacyAuditRepository implements PrivacyAuditRepository, P
         );
     }
 
+    @Override
+    public List<PrivacyAuditEvent> findByCriteria(String tenantId, String tenantDetailKey, PrivacyAuditQueryCriteria criteria) {
+        PrivacyAuditQueryCriteria normalized = criteria.normalize();
+        Comparator<PrivacyAuditEvent> comparator = Comparator.comparing(PrivacyAuditEvent::occurredAt);
+        if (normalized.sortDirection() == PrivacyAuditSortDirection.DESC) {
+            comparator = comparator.reversed();
+        }
+
+        Stream<PrivacyAuditEvent> stream = filteredStream(normalized, tenantId, tenantDetailKey).sorted(comparator);
+        if (normalized.offset() > 0) {
+            stream = stream.skip(normalized.offset());
+        }
+        return stream.limit(normalized.limit()).toList();
+    }
+
+    @Override
+    public PrivacyAuditQueryStats computeStats(String tenantId, String tenantDetailKey, PrivacyAuditQueryCriteria criteria) {
+        List<PrivacyAuditEvent> filtered = filteredStream(criteria.normalize(), tenantId, tenantDetailKey).toList();
+        return new PrivacyAuditQueryStats(
+                filtered.size(),
+                aggregate(filtered, PrivacyAuditEvent::action),
+                aggregate(filtered, PrivacyAuditEvent::outcome),
+                aggregate(filtered, PrivacyAuditEvent::resourceType)
+        );
+    }
+
+    @Override
+    public void save(PrivacyTenantAuditWriteRequest request) {
+        save(request.event());
+    }
+
+    @Override
+    public void saveAllTenantAware(List<PrivacyTenantAuditWriteRequest> requests) {
+        if (requests == null || requests.isEmpty()) {
+            return;
+        }
+        this.events.addAll(requests.stream().map(PrivacyTenantAuditWriteRequest::event).toList());
+    }
+
     public void clear() {
         events.clear();
     }
@@ -74,6 +113,11 @@ public class InMemoryPrivacyAuditRepository implements PrivacyAuditRepository, P
                 .filter(event -> matches(criteria.outcome(), criteria.outcomeLike(), event.outcome()))
                 .filter(event -> matchesFrom(criteria, event))
                 .filter(event -> matchesTo(criteria, event));
+    }
+
+    private Stream<PrivacyAuditEvent> filteredStream(PrivacyAuditQueryCriteria criteria, String tenantId, String tenantDetailKey) {
+        return filteredStream(criteria)
+                .filter(event -> matchesTenant(event, tenantId, tenantDetailKey));
     }
 
     private Map<String, Long> aggregate(List<PrivacyAuditEvent> events, Function<PrivacyAuditEvent, String> classifier) {
@@ -99,5 +143,12 @@ public class InMemoryPrivacyAuditRepository implements PrivacyAuditRepository, P
 
     private boolean matchesTo(PrivacyAuditQueryCriteria criteria, PrivacyAuditEvent event) {
         return criteria.occurredTo() == null || !event.occurredAt().isAfter(criteria.occurredTo());
+    }
+
+    private boolean matchesTenant(PrivacyAuditEvent event, String tenantId, String tenantDetailKey) {
+        if (tenantId == null || tenantId.isBlank() || tenantDetailKey == null || tenantDetailKey.isBlank()) {
+            return true;
+        }
+        return tenantId.equals(event.details().get(tenantDetailKey));
     }
 }

@@ -12,8 +12,12 @@ import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStore;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStoreMetricsBinder;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStoreObservationService;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookRequestVerifier;
+import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookVerificationTelemetry;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookVerificationSettings;
 import io.github.koyan9.privacy.audit.PrivacyAuditSchemaInitializer;
+import io.github.koyan9.privacy.audit.RedisPrivacyAuditDeadLetterWebhookReplayStore;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
@@ -21,6 +25,7 @@ import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.jdbc.core.JdbcOperations;
 
 import java.nio.file.Files;
@@ -44,12 +49,13 @@ class PrivacyGuardDeadLetterWebhookReceiverAutoConfigurationTest {
     @Test
     void createsVerifierAndDefaultReplayStoreWhenSettingsBeanExists() {
         contextRunner
-                .withUserConfiguration(VerificationSettingsConfig.class)
+                .withUserConfiguration(VerificationSettingsConfig.class, MeterRegistryConfig.class)
                 .run(context -> {
                     assertThat(context).hasSingleBean(PrivacyAuditDeadLetterWebhookRequestVerifier.class);
                     assertThat(context).hasSingleBean(InMemoryPrivacyAuditDeadLetterWebhookReplayStore.class);
                     assertThat(context).hasSingleBean(PrivacyAuditDeadLetterWebhookReplayStoreObservationService.class);
                     assertThat(context).hasSingleBean(PrivacyAuditDeadLetterWebhookReplayStoreMetricsBinder.class);
+                    assertThat(context).hasSingleBean(PrivacyAuditDeadLetterWebhookVerificationTelemetry.class);
                 });
     }
 
@@ -99,6 +105,18 @@ class PrivacyGuardDeadLetterWebhookReceiverAutoConfigurationTest {
                 .run(context -> {
                     assertThat(context).hasSingleBean(PrivacyAuditDeadLetterWebhookReplayStoreObservationService.class);
                     assertThat(context).doesNotHaveBean(PrivacyAuditDeadLetterWebhookReplayStoreMetricsBinder.class);
+                    assertThat(context).doesNotHaveBean(PrivacyAuditDeadLetterWebhookVerificationTelemetry.class);
+                });
+    }
+
+    @Test
+    void stillLoadsWhenJdbcAndRedisClasspathSupportAreMissing() {
+        contextRunner
+                .withClassLoader(new FilteredClassLoader("org.springframework.jdbc", "org.springframework.data.redis"))
+                .withPropertyValues("privacy.guard.audit.dead-letter.observability.alert.receiver.verification.enabled=true")
+                .run(context -> {
+                    assertThat(context).hasSingleBean(PrivacyAuditDeadLetterWebhookRequestVerifier.class);
+                    assertThat(context).hasSingleBean(InMemoryPrivacyAuditDeadLetterWebhookReplayStore.class);
                 });
     }
 
@@ -140,6 +158,18 @@ class PrivacyGuardDeadLetterWebhookReceiverAutoConfigurationTest {
     }
 
     @Test
+    void createsRedisReplayStoreWhenEnabled() {
+        contextRunner
+                .withUserConfiguration(VerificationSettingsConfig.class, RedisConfig.class)
+                .withPropertyValues("privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.redis.enabled=true")
+                .run(context -> {
+                    assertThat(context).hasSingleBean(RedisPrivacyAuditDeadLetterWebhookReplayStore.class);
+                    assertThat(context).doesNotHaveBean(InMemoryPrivacyAuditDeadLetterWebhookReplayStore.class);
+                    assertThat(context).doesNotHaveBean(FilePrivacyAuditDeadLetterWebhookReplayStore.class);
+                });
+    }
+
+    @Test
     void prefersJdbcReplayStoreWhenJdbcAndFileEnabled() throws Exception {
         Path tempFile = Files.createTempFile("privacy-guard", ".json");
         Files.deleteIfExists(tempFile);
@@ -155,6 +185,38 @@ class PrivacyGuardDeadLetterWebhookReceiverAutoConfigurationTest {
                     assertThat(context).hasSingleBean(JdbcPrivacyAuditDeadLetterWebhookReplayStore.class);
                     assertThat(context).doesNotHaveBean(FilePrivacyAuditDeadLetterWebhookReplayStore.class);
                     assertThat(context).doesNotHaveBean(InMemoryPrivacyAuditDeadLetterWebhookReplayStore.class);
+                });
+    }
+
+    @Test
+    void prefersRedisReplayStoreWhenRedisAndFileEnabled() throws Exception {
+        Path tempFile = Files.createTempFile("privacy-guard", ".json");
+        Files.deleteIfExists(tempFile);
+        contextRunner
+                .withUserConfiguration(VerificationSettingsConfig.class, RedisConfig.class)
+                .withPropertyValues(
+                        "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.redis.enabled=true",
+                        "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.file.enabled=true",
+                        "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.file.path=" + tempFile
+                )
+                .run(context -> {
+                    assertThat(context).hasSingleBean(RedisPrivacyAuditDeadLetterWebhookReplayStore.class);
+                    assertThat(context).doesNotHaveBean(FilePrivacyAuditDeadLetterWebhookReplayStore.class);
+                    assertThat(context).doesNotHaveBean(InMemoryPrivacyAuditDeadLetterWebhookReplayStore.class);
+                });
+    }
+
+    @Test
+    void prefersJdbcReplayStoreWhenJdbcAndRedisEnabled() {
+        contextRunner
+                .withUserConfiguration(VerificationSettingsConfig.class, JdbcConfig.class, RedisConfig.class)
+                .withPropertyValues(
+                        "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.enabled=true",
+                        "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.redis.enabled=true"
+                )
+                .run(context -> {
+                    assertThat(context).hasSingleBean(JdbcPrivacyAuditDeadLetterWebhookReplayStore.class);
+                    assertThat(context).doesNotHaveBean(RedisPrivacyAuditDeadLetterWebhookReplayStore.class);
                 });
     }
 
@@ -216,12 +278,30 @@ class PrivacyGuardDeadLetterWebhookReceiverAutoConfigurationTest {
         }
     }
 
+    @Configuration
+    static class MeterRegistryConfig {
+
+        @Bean
+        MeterRegistry meterRegistry() {
+            return new SimpleMeterRegistry();
+        }
+    }
+
     @Configuration(proxyBeanMethods = false)
     static class JdbcConfig {
 
         @Bean
         JdbcOperations jdbcOperations() {
             return mock(JdbcOperations.class);
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class RedisConfig {
+
+        @Bean
+        RedisConnectionFactory redisConnectionFactory() {
+            return mock(RedisConnectionFactory.class);
         }
     }
 }

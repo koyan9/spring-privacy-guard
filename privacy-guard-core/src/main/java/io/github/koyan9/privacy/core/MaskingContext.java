@@ -5,6 +5,7 @@
 
 package io.github.koyan9.privacy.core;
 
+@StableSpi
 public record MaskingContext(
         SensitiveType sensitiveType,
         String maskChar,

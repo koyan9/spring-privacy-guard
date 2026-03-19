@@ -31,4 +31,21 @@ class PrivacyAuditSchemaInitializerTest {
 
         verify(jdbcOperations).execute(contains("create table if not exists audit_event"));
     }
+
+    @Test
+    void initializesSchemaWithConfiguredTenantColumnName() {
+        JdbcOperations jdbcOperations = mock(JdbcOperations.class);
+        ResourceLoader resourceLoader = new DefaultResourceLoader();
+        PrivacyAuditSchemaInitializer initializer = new PrivacyAuditSchemaInitializer(
+                jdbcOperations,
+                resourceLoader,
+                "classpath:META-INF/privacy-guard/privacy-audit-schema-h2.sql",
+                "audit_event",
+                "tenant_key"
+        );
+
+        initializer.initialize();
+
+        verify(jdbcOperations).execute(contains("tenant_key varchar(255)"));
+    }
 }

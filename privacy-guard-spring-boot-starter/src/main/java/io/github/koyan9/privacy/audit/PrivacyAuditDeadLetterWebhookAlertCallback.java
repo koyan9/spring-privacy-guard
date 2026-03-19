@@ -23,6 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.HexFormat;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class PrivacyAuditDeadLetterWebhookAlertCallback implements PrivacyAuditDeadLetterAlertCallback {
 
@@ -74,7 +75,7 @@ public class PrivacyAuditDeadLetterWebhookAlertCallback implements PrivacyAuditD
                     throw ex;
                 }
                 telemetry.recordRetryScheduled(attempt + 1);
-                pauseBeforeRetry();
+                pauseBeforeRetry(attempt);
             }
         }
         if (lastFailure != null) {
@@ -133,9 +134,17 @@ public class PrivacyAuditDeadLetterWebhookAlertCallback implements PrivacyAuditD
         }
     }
 
-    private void pauseBeforeRetry() {
+    private void pauseBeforeRetry(int attempt) {
+        long delayMillis = PrivacyAuditDeadLetterWebhookBackoffSupport.computeDelayMillis(
+                properties,
+                attempt,
+                ThreadLocalRandom.current().nextDouble()
+        );
+        if (delayMillis <= 0L) {
+            return;
+        }
         try {
-            Thread.sleep(Math.max(1L, properties.getBackoff().toMillis()));
+            Thread.sleep(delayMillis);
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Webhook alert callback retry interrupted", ex);

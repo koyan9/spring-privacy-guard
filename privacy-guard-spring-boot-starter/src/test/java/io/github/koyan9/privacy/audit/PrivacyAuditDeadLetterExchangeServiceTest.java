@@ -8,6 +8,7 @@ package io.github.koyan9.privacy.audit;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
 import java.time.Instant;
 import java.util.Map;
 
@@ -29,6 +30,16 @@ class PrivacyAuditDeadLetterExchangeServiceTest {
         String json = service.exportJson(PrivacyAuditDeadLetterQueryCriteria.recent(10));
 
         assertThat(json).contains("demo").contains("TypeA");
+    }
+
+    @Test
+    void exportsDeadLettersAsJsonInPages() {
+        repository.save(new PrivacyAuditDeadLetterEntry(null, Instant.now(), 1, "TypeA", "failure", Instant.now(), "READ", "Patient", "demo-1", "actor", "OK", Map.of()));
+        repository.save(new PrivacyAuditDeadLetterEntry(null, Instant.now(), 1, "TypeB", "failure", Instant.now(), "READ", "Patient", "demo-2", "actor", "OK", Map.of()));
+
+        String json = service.exportJson(PrivacyAuditDeadLetterQueryCriteria.recent(10), 1);
+
+        assertThat(json).contains("demo-1").contains("demo-2");
     }
 
     @Test
@@ -74,6 +85,33 @@ class PrivacyAuditDeadLetterExchangeServiceTest {
     }
 
     @Test
+    void importsDeadLettersFromJsonStream() {
+        String json = """
+                [
+                  {
+                    "failedAt": "2026-03-06T00:00:00Z",
+                    "attempts": 3,
+                    "errorType": "TypeA",
+                    "errorMessage": "failure",
+                    "occurredAt": "2026-03-05T23:00:00Z",
+                    "action": "READ",
+                    "resourceType": "Patient",
+                    "resourceId": "demo-stream",
+                    "actor": "actor",
+                    "outcome": "OK",
+                    "details": {
+                      "phone": "138****8000"
+                    }
+                  }
+                ]
+                """;
+        PrivacyAuditDeadLetterImportResult imported = service.importJson(new ByteArrayInputStream(json.getBytes(java.nio.charset.StandardCharsets.UTF_8)), true, null);
+
+        assertEquals(1, imported.imported());
+        assertThat(repository.findAll()).singleElement().satisfies(entry -> assertThat(entry.resourceId()).isEqualTo("demo-stream"));
+    }
+
+    @Test
     void skipsDuplicateImportsWhenEnabled() {
         repository.save(new PrivacyAuditDeadLetterEntry(null, Instant.parse("2026-03-06T00:00:00Z"), 3, "TypeA", "failure", Instant.parse("2026-03-05T23:00:00Z"), "READ", "Patient", "demo", "actor", "OK", Map.of("phone", "138****8000")));
         String json = service.exportJson(PrivacyAuditDeadLetterQueryCriteria.recent(10));
@@ -99,6 +137,16 @@ class PrivacyAuditDeadLetterExchangeServiceTest {
     }
 
     @Test
+    void exportsDeadLettersAsCsvInPages() {
+        repository.save(new PrivacyAuditDeadLetterEntry(null, Instant.parse("2026-03-06T00:00:00Z"), 3, "TypeA", "failure", Instant.parse("2026-03-05T23:00:00Z"), "READ", "Patient", "demo-1", "actor", "OK", Map.of()));
+        repository.save(new PrivacyAuditDeadLetterEntry(null, Instant.parse("2026-03-06T00:01:00Z"), 3, "TypeB", "failure", Instant.parse("2026-03-05T23:01:00Z"), "READ", "Patient", "demo-2", "actor", "OK", Map.of()));
+
+        String csv = service.exportCsv(PrivacyAuditDeadLetterQueryCriteria.recent(10), 1);
+
+        assertThat(csv).contains("demo-1").contains("demo-2");
+    }
+
+    @Test
     void importsDeadLettersFromCsv() {
         repository.save(new PrivacyAuditDeadLetterEntry(null, Instant.parse("2026-03-06T00:00:00Z"), 3, "TypeA", "failure", Instant.parse("2026-03-05T23:00:00Z"), "READ", "Patient", "demo", "actor", "OK", Map.of("phone", "138****8000")));
         String csv = service.exportCsv(PrivacyAuditDeadLetterQueryCriteria.recent(10));
@@ -111,5 +159,18 @@ class PrivacyAuditDeadLetterExchangeServiceTest {
             assertThat(entry.resourceId()).isEqualTo("demo");
             assertThat(entry.details().get("phone")).isEqualTo("138****8000");
         });
+    }
+
+    @Test
+    void importsDeadLettersFromCsvStream() {
+        String csv = """
+                id,failed_at,attempts,error_type,error_message,occurred_at,action,resource_type,resource_id,actor,outcome,details_json
+                ,"2026-03-06T00:00:00Z",3,TypeA,failure,"2026-03-05T23:00:00Z",READ,Patient,demo-stream,actor,OK,"{""phone"":""138****8000""}"
+                """;
+
+        PrivacyAuditDeadLetterImportResult imported = service.importCsv(new ByteArrayInputStream(csv.getBytes(java.nio.charset.StandardCharsets.UTF_8)), true, null);
+
+        assertEquals(1, imported.imported());
+        assertThat(repository.findAll()).singleElement().satisfies(entry -> assertThat(entry.resourceId()).isEqualTo("demo-stream"));
     }
 }

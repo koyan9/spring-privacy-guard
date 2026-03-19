@@ -5,6 +5,7 @@
 
 package io.github.koyan9.privacy.audit;
 
+import io.github.koyan9.privacy.core.PrivacyTenantContextHolder;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -26,5 +27,37 @@ class RepositoryBackedPrivacyAuditDeadLetterHandlerTest {
         assertEquals("demo", saved.get().resourceId());
         assertEquals(3, saved.get().attempts());
         assertEquals("failed", saved.get().errorMessage());
+    }
+
+    @Test
+    void routesThroughTenantAwareDeadLetterWriteRepositoryWhenAvailable() {
+        AtomicReference<PrivacyTenantAuditDeadLetterWriteRequest> saved = new AtomicReference<>();
+        class TenantAwareDeadLetterRepository implements PrivacyAuditDeadLetterRepository, PrivacyTenantAuditDeadLetterWriteRepository {
+            @Override
+            public void save(PrivacyAuditDeadLetterEntry entry) {
+            }
+
+            @Override
+            public void save(PrivacyTenantAuditDeadLetterWriteRequest request) {
+                saved.set(request);
+            }
+        }
+        PrivacyTenantContextHolder.setTenantId("tenant-a");
+        try {
+            RepositoryBackedPrivacyAuditDeadLetterHandler handler = new RepositoryBackedPrivacyAuditDeadLetterHandler(
+                    new TenantAwareDeadLetterRepository(),
+                    PrivacyTenantContextHolder::getTenantId,
+                    tenantId -> new PrivacyTenantAuditPolicy(java.util.Set.of(), java.util.Set.of(), true, "tenant")
+            );
+            PrivacyAuditEvent event = new PrivacyAuditEvent(Instant.now(), "READ", "Patient", "demo", "actor", "OK", Map.of());
+
+            handler.handle(event, 3, new IllegalStateException("failed"));
+
+            assertEquals("tenant-a", saved.get().tenantId());
+            assertEquals("tenant", saved.get().tenantDetailKey());
+            assertEquals("demo", saved.get().entry().resourceId());
+        } finally {
+            PrivacyTenantContextHolder.clear();
+        }
     }
 }

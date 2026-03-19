@@ -11,8 +11,10 @@ import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.List;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TextMaskingServiceTest {
 
@@ -66,6 +68,41 @@ class TextMaskingServiceTest {
         );
 
         assertEquals("email=<EMAIL>", customTextMaskingService.sanitize("email=alice@example.com"));
+    }
+
+    @Test
+    void supportsCustomRuleSets() {
+        TextMaskingService customTextMaskingService = new TextMaskingService(
+                new MaskingService(),
+                List.of(new TextMaskingRule(SensitiveType.GENERIC, Pattern.compile("EMP\\d{4}")))
+        );
+
+        String sanitized = customTextMaskingService.sanitize("id=EMP1234 phone=13800138000");
+
+        assertTrue(sanitized.contains("id=E"));
+        assertTrue(sanitized.contains("phone=13800138000"));
+        assertTrue(!sanitized.contains("EMP1234"));
+    }
+
+    @Test
+    void usesTenantSpecificRuleSetsWhenProvided() {
+        TextMaskingService tenantAwareService = new TextMaskingService(
+                new MaskingService(
+                        "*",
+                        List.of(),
+                        () -> "tenant-a",
+                        tenantId -> new PrivacyTenantPolicy(null, List.of(new TextMaskingRule(SensitiveType.GENERIC, Pattern.compile("EMP\\d{4}"))))
+                ),
+                TextMaskingRule.defaults(),
+                () -> "tenant-a",
+                tenantId -> new PrivacyTenantPolicy(null, List.of(new TextMaskingRule(SensitiveType.GENERIC, Pattern.compile("EMP\\d{4}"))))
+        );
+
+        String sanitized = tenantAwareService.sanitize("id=EMP1234 phone=13800138000");
+
+        assertTrue(sanitized.contains("id=E"));
+        assertTrue(sanitized.contains("phone=13800138000"));
+        assertTrue(!sanitized.contains("EMP1234"));
     }
 
     static class EmailTokenStrategy implements MaskingStrategy {

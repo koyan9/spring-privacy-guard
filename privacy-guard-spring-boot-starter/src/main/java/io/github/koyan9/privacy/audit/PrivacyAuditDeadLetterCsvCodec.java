@@ -10,6 +10,8 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
+import java.io.Reader;
+import java.io.UncheckedIOException;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -31,40 +33,76 @@ public class PrivacyAuditDeadLetterCsvCodec {
     }
 
     public String exportEntries(List<PrivacyAuditDeadLetterEntry> entries) {
-        StringBuilder builder = new StringBuilder(HEADER).append('\n');
-        for (PrivacyAuditDeadLetterEntry entry : entries) {
-            builder.append(csv(entry.id() == null ? null : String.valueOf(entry.id()))).append(',')
-                    .append(csv(toText(entry.failedAt()))).append(',')
-                    .append(csv(String.valueOf(entry.attempts()))).append(',')
-                    .append(csv(entry.errorType())).append(',')
-                    .append(csv(entry.errorMessage())).append(',')
-                    .append(csv(toText(entry.occurredAt()))).append(',')
-                    .append(csv(entry.action())).append(',')
-                    .append(csv(entry.resourceType())).append(',')
-                    .append(csv(entry.resourceId())).append(',')
-                    .append(csv(entry.actor())).append(',')
-                    .append(csv(entry.outcome())).append(',')
-                    .append(csv(toJson(entry.details())))
-                    .append('\n');
+        StringBuilder builder = new StringBuilder();
+        writeHeader(builder);
+        if (entries != null) {
+            for (PrivacyAuditDeadLetterEntry entry : entries) {
+                writeEntry(builder, entry);
+            }
         }
         return builder.toString();
     }
 
     public List<PrivacyAuditDeadLetterEntry> importEntries(String content) {
-        List<List<String>> rows = parseCsv(content == null ? "" : content);
-        if (rows.isEmpty()) {
-            return List.of();
-        }
-        int startIndex = isHeader(rows.get(0)) ? 1 : 0;
         List<PrivacyAuditDeadLetterEntry> entries = new ArrayList<>();
-        for (int index = startIndex; index < rows.size(); index++) {
-            List<String> columns = rows.get(index);
-            if (columns.isEmpty() || columns.stream().allMatch(String::isBlank)) {
-                continue;
-            }
-            entries.add(fromCsv(columns));
-        }
+        importEntries(new java.io.StringReader(content == null ? "" : content), entries::add);
         return List.copyOf(entries);
+    }
+
+    public void writeHeader(Appendable appendable) {
+        append(appendable, HEADER);
+        append(appendable, "\n");
+    }
+
+    public void writeEntry(Appendable appendable, PrivacyAuditDeadLetterEntry entry) {
+        append(appendable, csv(entry.id() == null ? null : String.valueOf(entry.id())));
+        append(appendable, ",");
+        append(appendable, csv(toText(entry.failedAt())));
+        append(appendable, ",");
+        append(appendable, csv(String.valueOf(entry.attempts())));
+        append(appendable, ",");
+        append(appendable, csv(entry.errorType()));
+        append(appendable, ",");
+        append(appendable, csv(entry.errorMessage()));
+        append(appendable, ",");
+        append(appendable, csv(toText(entry.occurredAt())));
+        append(appendable, ",");
+        append(appendable, csv(entry.action()));
+        append(appendable, ",");
+        append(appendable, csv(entry.resourceType()));
+        append(appendable, ",");
+        append(appendable, csv(entry.resourceId()));
+        append(appendable, ",");
+        append(appendable, csv(entry.actor()));
+        append(appendable, ",");
+        append(appendable, csv(entry.outcome()));
+        append(appendable, ",");
+        append(appendable, csv(toJson(entry.details())));
+        append(appendable, "\n");
+    }
+
+    public void importEntries(Reader reader, java.util.function.Consumer<PrivacyAuditDeadLetterEntry> consumer) {
+        Objects.requireNonNull(reader, "reader must not be null");
+        Objects.requireNonNull(consumer, "consumer must not be null");
+        try {
+            CsvRowReader rowReader = new CsvRowReader(reader);
+            boolean headerChecked = false;
+            List<String> row;
+            while ((row = rowReader.nextRow()) != null) {
+                if (!headerChecked) {
+                    headerChecked = true;
+                    if (isHeader(row)) {
+                        continue;
+                    }
+                }
+                if (row.isEmpty() || row.stream().allMatch(String::isBlank)) {
+                    continue;
+                }
+                consumer.accept(fromCsv(row));
+            }
+        } catch (IOException exception) {
+            throw new UncheckedIOException("Failed to import privacy audit dead letters from CSV", exception);
+        }
     }
 
     private boolean isHeader(List<String> row) {
@@ -137,44 +175,74 @@ public class PrivacyAuditDeadLetterCsvCodec {
         return '"' + value.replace("\"", "\"\"") + '"';
     }
 
-    private List<List<String>> parseCsv(String content) {
-        List<List<String>> rows = new ArrayList<>();
-        List<String> currentRow = new ArrayList<>();
-        StringBuilder current = new StringBuilder();
-        boolean inQuotes = false;
+    private void append(Appendable appendable, String value) {
+        try {
+            appendable.append(value);
+        } catch (IOException exception) {
+            throw new UncheckedIOException(exception);
+        }
+    }
 
-        for (int index = 0; index < content.length(); index++) {
-            char ch = content.charAt(index);
-            if (inQuotes) {
-                if (ch == '"') {
-                    if (index + 1 < content.length() && content.charAt(index + 1) == '"') {
-                        current.append('"');
-                        index++;
+    private static final class CsvRowReader {
+
+        private final java.io.PushbackReader reader;
+        private boolean reachedEof;
+
+        private CsvRowReader(Reader reader) {
+            this.reader = new java.io.PushbackReader(reader, 1);
+        }
+
+        List<String> nextRow() throws IOException {
+            if (reachedEof) {
+                return null;
+            }
+            List<String> currentRow = new ArrayList<>();
+            StringBuilder current = new StringBuilder();
+            boolean inQuotes = false;
+            boolean sawAny = false;
+
+            while (true) {
+                int raw = reader.read();
+                if (raw == -1) {
+                    reachedEof = true;
+                    break;
+                }
+                sawAny = true;
+                char ch = (char) raw;
+                if (inQuotes) {
+                    if (ch == '"') {
+                        int next = reader.read();
+                        if (next == '"') {
+                            current.append('"');
+                        } else {
+                            inQuotes = false;
+                            if (next != -1) {
+                                reader.unread(next);
+                            }
+                        }
                     } else {
-                        inQuotes = false;
+                        current.append(ch);
                     }
-                } else {
+                } else if (ch == '"') {
+                    inQuotes = true;
+                } else if (ch == ',') {
+                    currentRow.add(current.toString());
+                    current.setLength(0);
+                } else if (ch == '\n') {
+                    currentRow.add(current.toString());
+                    return currentRow;
+                } else if (ch != '\r') {
                     current.append(ch);
                 }
-            } else if (ch == '"') {
-                inQuotes = true;
-            } else if (ch == ',') {
-                currentRow.add(current.toString());
-                current.setLength(0);
-            } else if (ch == '\n') {
-                currentRow.add(current.toString());
-                rows.add(currentRow);
-                currentRow = new ArrayList<>();
-                current.setLength(0);
-            } else if (ch != '\r') {
-                current.append(ch);
             }
-        }
 
-        if (current.length() > 0 || !currentRow.isEmpty()) {
-            currentRow.add(current.toString());
-            rows.add(currentRow);
+            if (!sawAny && currentRow.isEmpty() && current.length() == 0) {
+                return null;
+            }
+            if (current.length() > 0 || !currentRow.isEmpty()) {
+                currentRow.add(current.toString());
+            }
+            return currentRow.isEmpty() ? null : currentRow;
         }
-        return rows;
     }
 }

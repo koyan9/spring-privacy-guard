@@ -5,6 +5,7 @@
 
 package io.github.koyan9.privacy.audit;
 
+import io.github.koyan9.privacy.core.PrivacyTenantContextHolder;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -115,7 +116,7 @@ class BufferedPrivacyAuditPublisherTest {
     }
 
     @Test
-    void sendsBatchEventsToDeadLetterHandlerWhenRetriesAreExhausted() {
+    void sendsBatchEventsToDeadLetterHandlerWhenRetriesAreExhausted() throws Exception {
         RecordingRepository repository = new RecordingRepository(0) {
             @Override
             public synchronized void saveAll(List<PrivacyAuditEvent> events) {
@@ -123,6 +124,7 @@ class BufferedPrivacyAuditPublisherTest {
             }
         };
         List<String> deadLetterResourceIds = new ArrayList<>();
+        CountDownLatch deadLetterLatch = new CountDownLatch(2);
         ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
         BufferedPrivacyAuditPublisher publisher = new BufferedPrivacyAuditPublisher(
                 repository,
@@ -131,7 +133,10 @@ class BufferedPrivacyAuditPublisherTest {
                 Duration.ofSeconds(30),
                 2,
                 Duration.ZERO,
-                (event, attempts, exception) -> deadLetterResourceIds.add(event.resourceId())
+                (event, attempts, exception) -> {
+                    deadLetterResourceIds.add(event.resourceId());
+                    deadLetterLatch.countDown();
+                }
         );
 
         try {
@@ -139,7 +144,9 @@ class BufferedPrivacyAuditPublisherTest {
             publisher.publish(event("second"));
             publisher.destroy();
 
-            assertThat(deadLetterResourceIds).containsExactly("first", "second");
+            assertTrue(deadLetterLatch.await(5, TimeUnit.SECONDS));
+            assertEquals(2, deadLetterResourceIds.size());
+            assertTrue(deadLetterResourceIds.containsAll(List.of("first", "second")));
         } finally {
             executor.shutdownNow();
         }
@@ -171,6 +178,38 @@ class BufferedPrivacyAuditPublisherTest {
         }
     }
 
+    @Test
+    void capturesTenantMetadataPerBufferedEventWhenTenantAwareWriteRepositoryIsAvailable() throws Exception {
+        TenantAwareRecordingRepository repository = new TenantAwareRecordingRepository(1);
+        ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+        BufferedPrivacyAuditPublisher publisher = new BufferedPrivacyAuditPublisher(
+                repository,
+                executor,
+                2,
+                Duration.ofSeconds(30),
+                2,
+                Duration.ZERO,
+                (event, retryAttempts, exception) -> {
+                },
+                PrivacyTenantContextHolder::getTenantId,
+                tenantId -> new PrivacyTenantAuditPolicy(java.util.Set.of(), java.util.Set.of(), true, "tenant")
+        );
+
+        try {
+            PrivacyTenantContextHolder.setTenantId("tenant-a");
+            publisher.publish(event("first"));
+            PrivacyTenantContextHolder.setTenantId("tenant-b");
+            publisher.publish(event("second"));
+
+            assertTrue(repository.await());
+            assertThat(repository.tenantIds()).containsExactly("tenant-a", "tenant-b");
+        } finally {
+            PrivacyTenantContextHolder.clear();
+            publisher.destroy();
+            executor.shutdownNow();
+        }
+    }
+
     private PrivacyAuditEvent event(String resourceId) {
         return new PrivacyAuditEvent(Instant.now(), "READ", "Patient", resourceId, "actor", "OK", Map.of());
     }
@@ -197,6 +236,40 @@ class BufferedPrivacyAuditPublisherTest {
 
         synchronized List<List<String>> resourceIdBatches() {
             return List.copyOf(resourceIdBatches);
+        }
+
+        boolean await() throws InterruptedException {
+            return latch.await(5, TimeUnit.SECONDS);
+        }
+    }
+
+    static class TenantAwareRecordingRepository implements PrivacyAuditRepository, PrivacyTenantAuditWriteRepository {
+
+        private final CountDownLatch latch;
+        private final List<String> tenantIds = new ArrayList<>();
+
+        TenantAwareRecordingRepository(int expectedFlushes) {
+            this.latch = new CountDownLatch(expectedFlushes);
+        }
+
+        @Override
+        public void save(PrivacyAuditEvent event) {
+            throw new UnsupportedOperationException("save should not be used in this test");
+        }
+
+        @Override
+        public void save(PrivacyTenantAuditWriteRequest request) {
+            throw new UnsupportedOperationException("save should not be used in this test");
+        }
+
+        @Override
+        public synchronized void saveAllTenantAware(List<PrivacyTenantAuditWriteRequest> requests) {
+            tenantIds.addAll(requests.stream().map(PrivacyTenantAuditWriteRequest::tenantId).toList());
+            latch.countDown();
+        }
+
+        List<String> tenantIds() {
+            return List.copyOf(tenantIds);
         }
 
         boolean await() throws InterruptedException {

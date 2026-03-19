@@ -57,9 +57,13 @@ public class PrivacyLogSanitizer {
                 sanitized[index] = argument;
                 continue;
             }
-            sanitized[index] = sanitizeValue(argument);
+            sanitized[index] = sanitizeValueInternal(argument);
         }
         return sanitized;
+    }
+
+    public Object sanitizeValue(Object value) {
+        return sanitizeValueInternal(value);
     }
 
     private boolean containsSensitiveValue(Object value) {
@@ -98,7 +102,7 @@ public class PrivacyLogSanitizer {
         return containsSensitiveData(text);
     }
 
-    private Object sanitizeValue(Object value) {
+    private Object sanitizeValueInternal(Object value) {
         if (value == null) {
             return null;
         }
@@ -108,14 +112,14 @@ public class PrivacyLogSanitizer {
         if (value instanceof Map<?, ?> map) {
             Map<Object, Object> sanitized = new LinkedHashMap<>();
             for (Map.Entry<?, ?> entry : map.entrySet()) {
-                sanitized.put(entry.getKey(), sanitizeValue(entry.getValue()));
+                sanitized.put(entry.getKey(), sanitizeValueInternal(entry.getValue()));
             }
             return sanitized;
         }
         if (value instanceof Iterable<?> iterable) {
             List<Object> sanitized = new ArrayList<>();
             for (Object item : iterable) {
-                sanitized.add(sanitizeValue(item));
+                sanitized.add(sanitizeValueInternal(item));
             }
             return sanitized;
         }
@@ -123,7 +127,7 @@ public class PrivacyLogSanitizer {
             int length = Array.getLength(value);
             List<Object> sanitized = new ArrayList<>(length);
             for (int index = 0; index < length; index++) {
-                sanitized.add(sanitizeValue(Array.get(value, index)));
+                sanitized.add(sanitizeValueInternal(Array.get(value, index)));
             }
             return sanitized;
         }

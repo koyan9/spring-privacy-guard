@@ -8,6 +8,7 @@ The starter ships with three implementations:
 
 - `InMemoryPrivacyAuditDeadLetterWebhookReplayStore` for local development and tests
 - `FilePrivacyAuditDeadLetterWebhookReplayStore` for single-instance deployments
+- `RedisPrivacyAuditDeadLetterWebhookReplayStore` for shared nonce state with native TTL
 - `JdbcPrivacyAuditDeadLetterWebhookReplayStore` for shared, multi-instance deployments
 
 If you run multiple receiver instances, use a shared store implementation to avoid replay gaps.
@@ -17,6 +18,7 @@ Implement `PrivacyAuditDeadLetterWebhookReplayStore` and wire it as a bean to ov
 
 - Use `InMemoryPrivacyAuditDeadLetterWebhookReplayStore` for local runs and tests only.
 - Use `FilePrivacyAuditDeadLetterWebhookReplayStore` when you run a single receiver instance and can persist the file.
+- Use `RedisPrivacyAuditDeadLetterWebhookReplayStore` when you already operate Redis and want shared nonce state without JDBC schema management.
 - Use `JdbcPrivacyAuditDeadLetterWebhookReplayStore` when you run multiple receiver instances or need shared state.
 
 ### Verification Settings
@@ -52,10 +54,9 @@ Reason codes include `INVALID_AUTHORIZATION`, `MISSING_SIGNATURE_HEADERS`, `INVA
 
 ### Migrating from File to JDBC
 
-- Plan for a clean cutover: existing nonces in the file store will not be automatically imported.
-- During migration, rotate receiver secrets if you want to invalidate old nonces.
-- Schedule a brief maintenance window and clear the replay store before switching.
-- After migration, enable `replay-store.jdbc.initialize-schema` once, then disable it if you manage schema separately.
+- Existing nonces in the file store are not imported automatically.
+- Rotate receiver secrets during cutover if you want to invalidate previously accepted nonces.
+- Follow `docs/JDBC_PRODUCTION_GUIDE.md` for the recommended cutover order, schema-management strategy, and post-migration validation.
 
 ### File Replay Store
 
@@ -101,6 +102,28 @@ You can override the schema location or dialect via:
 - `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.dialect`
 
 `cleanup-interval` controls how often the global cleanup runs. Set it to `0` to clean on every request.
+For broader MySQL / PostgreSQL production rollout guidance, index recommendations, and migration notes, see `docs/JDBC_PRODUCTION_GUIDE.md`.
+
+### Redis Replay Store
+
+Enable the Redis replay store when you want shared nonce protection with native key expiry:
+
+```yaml
+privacy:
+  guard:
+    audit:
+      dead-letter:
+        observability:
+          alert:
+            receiver:
+              replay-store:
+                redis:
+                  enabled: true
+                  key-prefix: privacy:audit:webhook:replay:
+                  scan-batch-size: 500
+```
+
+Redis mode stores one key per nonce and relies on Redis TTL for expiry. Snapshot and clear operations iterate keys by prefix, so use a dedicated prefix for this library.
 
 ### Schema Notes
 
@@ -119,14 +142,18 @@ Receiver replay-store metrics are exposed when Micrometer is available:
 
 Webhook alert delivery diagnostics metrics (when enabled):
 
-- `privacy.audit.deadletters.alert.webhook.failures{type=*,retryable=*}`
+- `privacy.audit.deadletters.alert.webhook.failures{type=*,retryable=*,category=*}`
 - `privacy.audit.deadletters.alert.webhook.last_failure_status`
 - `privacy.audit.deadletters.alert.webhook.last_failure_retryable`
 - `privacy.audit.deadletters.alert.webhook.last_failure_type{type=*}`
+- `privacy.audit.deadletters.receiver.verification.failures{reason=*}`
 
 - `privacy.audit.deadletters.receiver.replay_store.count`
 - `privacy.audit.deadletters.receiver.replay_store.expiring_soon`
 - `privacy.audit.deadletters.receiver.replay_store.expiry_seconds{kind=*}`
+- `privacy.audit.deadletters.receiver.replay_store.cleanup.last_count`
+- `privacy.audit.deadletters.receiver.replay_store.cleanup.last_duration_ms`
+- `privacy.audit.deadletters.receiver.replay_store.cleanup.last_timestamp`
 
 Snapshot and metric counts exclude expired entries even if cleanup has not run yet.
 
@@ -136,6 +163,9 @@ Use Actuator to query these metrics:
 GET /actuator/metrics/privacy.audit.deadletters.receiver.replay_store.count
 GET /actuator/metrics/privacy.audit.deadletters.receiver.replay_store.expiring_soon
 GET /actuator/metrics/privacy.audit.deadletters.receiver.replay_store.expiry_seconds?tag=kind:earliest
+GET /actuator/metrics/privacy.audit.deadletters.receiver.replay_store.cleanup.last_count
+GET /actuator/metrics/privacy.audit.deadletters.receiver.replay_store.cleanup.last_duration_ms
+GET /actuator/metrics/privacy.audit.deadletters.receiver.replay_store.cleanup.last_timestamp
 ```
 
 ## Dashboard Suggestions
@@ -145,6 +175,7 @@ Recommended charts:
 - Replay store size: `privacy.audit.deadletters.receiver.replay_store.count`
 - Expiring soon: `privacy.audit.deadletters.receiver.replay_store.expiring_soon`
 - Earliest expiry: `privacy.audit.deadletters.receiver.replay_store.expiry_seconds{kind="earliest"}`
+- Last cleanup count: `privacy.audit.deadletters.receiver.replay_store.cleanup.last_count`
 
 Alerting ideas:
 
