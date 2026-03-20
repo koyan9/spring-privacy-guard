@@ -468,6 +468,7 @@ Post-release themes and longer-term follow-up stay in `docs/ROADMAP.md`.
 - JDBC production guide: `docs/JDBC_PRODUCTION_GUIDE.md`
 - Multi-tenant guide: `docs/MULTI_TENANT_GUIDE.md`
 - Tenant adoption playbook: `docs/TENANT_ADOPTION_PLAYBOOK.md`
+- Tenant observability guide: `docs/TENANT_OBSERVABILITY_GUIDE.md`
 - Maintainer guide: `docs/MAINTAINER_GUIDE.md`
 - Receiver operations: `docs/RECEIVER_OPERATIONS.md`
 - Roadmap: `docs/ROADMAP.md`

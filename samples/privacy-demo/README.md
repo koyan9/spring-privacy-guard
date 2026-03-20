@@ -182,6 +182,8 @@ Actuator 指标示例：
 - `GET /actuator/metrics/privacy.audit.deadletters.receiver.replay_store.count`
 - `GET /actuator/metrics/privacy.audit.deadletters.receiver.replay_store.expiring_soon`
 - `GET /actuator/metrics/privacy.audit.deadletters.receiver.replay_store.expiry_seconds?tag=kind:earliest`
+- `GET /actuator/metrics/privacy.audit.tenant.read.path?tag=domain:audit&tag=path:native`
+- `GET /actuator/metrics/privacy.audit.tenant.write.path?tag=domain:audit_batch_write&tag=path:native`
 
 ## Receiver 验证脚本
 

@@ -318,4 +318,5 @@ try (PrivacyTenantContextScope ignored = PrivacyTenantContextHolder.openScope("t
 - `docs/LOGIC_WALKTHROUGH.md`
 - `docs/JDBC_PRODUCTION_GUIDE.md`
 - `docs/TENANT_ADOPTION_PLAYBOOK.md`
+- `docs/TENANT_OBSERVABILITY_GUIDE.md`
 - `samples/privacy-demo/README.md`

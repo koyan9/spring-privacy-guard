@@ -9,6 +9,7 @@
 - JDBC production guide: `docs/JDBC_PRODUCTION_GUIDE.md`
 - Multi-tenant guide: `docs/MULTI_TENANT_GUIDE.md`
 - Tenant adoption playbook: `docs/TENANT_ADOPTION_PLAYBOOK.md`
+- Tenant observability guide: `docs/TENANT_OBSERVABILITY_GUIDE.md`
 - Maintainer guide: `docs/MAINTAINER_GUIDE.md`
 - Logic walkthrough: `docs/LOGIC_WALKTHROUGH.md`
 - Changelog: `CHANGELOG.md`
@@ -43,6 +44,7 @@
 - JDBC / database rollout reference: `docs/JDBC_PRODUCTION_GUIDE.md`
 - Multi-tenant integration reference: `docs/MULTI_TENANT_GUIDE.md`
 - Multi-tenant rollout decision reference: `docs/TENANT_ADOPTION_PLAYBOOK.md`
+- Multi-tenant observability reference: `docs/TENANT_OBSERVABILITY_GUIDE.md`
 
 ## Published Release Docs
 

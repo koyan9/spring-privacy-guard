@@ -6,6 +6,7 @@ Use it together with:
 
 - `docs/MULTI_TENANT_GUIDE.md`
 - `docs/JDBC_PRODUCTION_GUIDE.md`
+- `docs/TENANT_OBSERVABILITY_GUIDE.md`
 
 ## Decision Matrix
 
@@ -170,6 +171,7 @@ Before calling your tenant model rollout complete, verify:
 6. Async and buffered publishing preserve tenant context.
 7. Your migration tool owns all non-bootstrap DDL and index changes.
 8. `privacy.audit.tenant.read.path{domain=*,path=*}` reflects the expected native or fallback query path during rollout.
+9. `privacy.audit.tenant.write.path{domain=*,path=*}` reflects the expected native or fallback persistence path during rollout.
 
 ## Anti-Patterns
 
