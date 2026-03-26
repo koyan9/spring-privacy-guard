@@ -1,8 +1,5 @@
 # spring-privacy-guard v0.4.0
 
-Draft release notes for the next versioned release after `v0.3.0`.
-Update dates, version numbers, and the final scope before tagging.
-
 ## Highlights
 
 - Expanded the multi-tenant policy surface beyond masking and audit-detail filtering with stable tenant logging policy support and tenant-scoped dead-letter observability policy overrides.
@@ -43,7 +40,7 @@ Update dates, version numbers, and the final scope before tagging.
 
 ## Upgrade Notes
 
-- No intentional breaking changes are planned in `v0.4.0`.
+- No intentional breaking changes are included in `v0.4.0`.
 - Stable event and query contracts remain tenant-agnostic.
 - Existing stable carrier types remain unchanged; tenant observability overrides are introduced as sibling policy/resolver types.
 - Tenant dead-letter import now prefers tenant-aware bulk persistence when the repository implements `PrivacyTenantAuditDeadLetterWriteRepository`.

@@ -4,7 +4,7 @@ All notable changes to `spring-privacy-guard` will be documented in this file.
 
 ## [Unreleased]
 
-## [0.4.0] - TBD
+## [0.4.0] - 2026-03-27
 
 ### Added
 

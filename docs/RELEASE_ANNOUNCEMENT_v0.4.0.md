@@ -1,6 +1,6 @@
 # Release Announcement: v0.4.0
 
-Use this document as the draft short external-facing announcement copy for the upcoming `spring-privacy-guard v0.4.0` release.
+Use this document as the short external-facing announcement copy for the published `spring-privacy-guard v0.4.0` release.
 
 ## One-Line Summary
 
@@ -16,16 +16,16 @@ Use this document as the draft short external-facing announcement copy for the u
 
 ## Suggested GitHub / Community Post
 
-We are preparing `spring-privacy-guard v0.4.0`.
+We have released `spring-privacy-guard v0.4.0`.
 
 This release candidate focuses on making the starter easier to evaluate and operate in multi-tenant deployments. It expands tenant policy coverage, adds clearer operational telemetry for dead-letter and receiver flows, and broadens the sample matrix so teams can compare built-in native, fallback, and custom repository implementations before rollout.
 
-If you need privacy-safe masking, log sanitization, audit trails, dead-letter operations, receiver verification, and a clearer path to multi-tenant rollout validation in a Spring Boot starter, `v0.4.0` is the next planned upgrade after `v0.3.0`.
+If you need privacy-safe masking, log sanitization, audit trails, dead-letter operations, receiver verification, and a clearer path to multi-tenant rollout validation in a Spring Boot starter, `v0.4.0` is the recommended upgrade after `v0.3.0`.
 
 ## Related Release Assets
 
-- Draft release notes: `docs/releases/RELEASE_NOTES_v0.4.0.md`
-- Draft GitHub release copy: `docs/GITHUB_RELEASE_COPY_v0.4.0.md`
+- Release notes: `docs/releases/RELEASE_NOTES_v0.4.0.md`
+- GitHub release copy: `docs/GITHUB_RELEASE_COPY_v0.4.0.md`
 - Tenant observability guide: `docs/TENANT_OBSERVABILITY_GUIDE.md`
 - Tenant adoption playbook: `docs/TENANT_ADOPTION_PLAYBOOK.md`
-- Draft release runbook: `docs/RELEASE_RUNBOOK_v0.4.0.md`
+- Release runbook: `docs/RELEASE_RUNBOOK_v0.4.0.md`

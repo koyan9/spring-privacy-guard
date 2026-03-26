@@ -43,7 +43,7 @@ Sample Matrix
 
 Upgrade Notes
 
-- No intentional breaking changes are planned in v0.4.0
+- No intentional breaking changes are included in v0.4.0
 - Stable event and query contracts remain tenant-agnostic
 - Existing stable carrier types remain unchanged
 - Tenant dead-letter import now prefers tenant-aware bulk persistence when the repository implements the tenant write SPI

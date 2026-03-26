@@ -1,6 +1,6 @@
 # 发布公告：v0.4.0
 
-本文档可作为即将发布的 `spring-privacy-guard v0.4.0` 简版对外公告草案。
+本文档可作为 `spring-privacy-guard v0.4.0` 的简版对外发布公告。
 
 ## 一句话概述
 
@@ -16,16 +16,16 @@
 
 ## 建议用于 GitHub / 社区的发布文案
 
-`spring-privacy-guard v0.4.0` 正在准备发布。
+`spring-privacy-guard v0.4.0` 已正式发布。
 
 这一版重点增强了多租户场景下的可观测性、可验证性和 rollout 参考能力。除了扩展 tenant policy surface，还补上了 dead-letter 与 receiver 流程的 tenant telemetry，并通过更完整的 sample 矩阵，让团队可以在正式上线前对 built-in native、fallback 和 custom repository SPI 实现进行本地对照验证。
 
-如果你的 Spring Boot 应用需要统一处理敏感字段脱敏、日志清洗、隐私审计追踪、死信处理、receiver 验签，以及多租户 rollout 的可观测性验证，`v0.4.0` 会是 `v0.3.0` 之后的下一版升级目标。
+如果你的 Spring Boot 应用需要统一处理敏感字段脱敏、日志清洗、隐私审计追踪、死信处理、receiver 验签，以及多租户 rollout 的可观测性验证，`v0.4.0` 是 `v0.3.0` 之后的推荐升级版本。
 
 ## 相关发布材料
 
-- 草案发布说明：`docs/releases/RELEASE_NOTES_v0.4.0.md`
-- 草案 GitHub Release 文案：`docs/GITHUB_RELEASE_COPY_v0.4.0.md`
+- 发布说明：`docs/releases/RELEASE_NOTES_v0.4.0.md`
+- GitHub Release 文案：`docs/GITHUB_RELEASE_COPY_v0.4.0.md`
 - 租户可观测性指南：`docs/TENANT_OBSERVABILITY_GUIDE.md`
 - 租户采纳手册：`docs/TENANT_ADOPTION_PLAYBOOK.md`
-- 草案发布运行手册：`docs/RELEASE_RUNBOOK_v0.4.0.md`
+- 发布运行手册：`docs/RELEASE_RUNBOOK_v0.4.0.md`

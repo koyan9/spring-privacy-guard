@@ -4,8 +4,8 @@
 
 [![CI](https://github.com/koyan9/spring-privacy-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/koyan9/spring-privacy-guard/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/koyan9/spring-privacy-guard?display_name=tag)](https://github.com/koyan9/spring-privacy-guard/releases/latest)
-[![Changelog](https://img.shields.io/badge/Changelog-0.3.0-0f766e)](CHANGELOG.md)
-[![Release Notes](https://img.shields.io/badge/Release%20Notes-v0.3.0-1d4ed8)](docs/releases/RELEASE_NOTES_v0.3.0.md)
+[![Changelog](https://img.shields.io/badge/Changelog-0.4.0-0f766e)](CHANGELOG.md)
+[![Release Notes](https://img.shields.io/badge/Release%20Notes-v0.4.0-1d4ed8)](docs/releases/RELEASE_NOTES_v0.4.0.md)
 [![Security](https://img.shields.io/badge/Security-Policy-7f1d1d)](SECURITY.md)
 [![Support](https://img.shields.io/badge/Support-Guide-1f2937)](SUPPORT.md)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
@@ -17,9 +17,8 @@ A Spring Boot starter for masking sensitive data, sanitizing logs, tracing priva
 
 ## Development Status
 
-- Latest published release: `v0.3.0`
-- Next release candidate target prepared in this branch: `v0.4.0`
-- Current unreleased focus: post-`v0.3.0` multi-tenant hardening across observability, tenant-scoped dead-letter management, receiver routing, and multi-instance sample workflows
+- Latest published release: `v0.4.0`
+- Current next-work focus after `v0.4.0`: deeper repository-native tenant isolation beyond the current built-in SPI coverage, broader production rollout guides, and the next release cycle setup
 - Newly completed in the current development cycle: tenant-native dead-letter replay for built-in `IN_MEMORY` / `JDBC` repositories, stable tenant logging policy resolution, tenant-scoped dead-letter observability policy overrides, tenant operational telemetry for alerting and receiver routes, and PostgreSQL + Redis multi-instance sample recipes
 - Best sources for current progress: `CHANGELOG.md` for completed/unreleased work, `docs/ROADMAP.md` for next priorities, and `docs/INDEX.md` for the doc map
 
@@ -53,7 +52,7 @@ Add the starter:
 <dependency>
     <groupId>io.github.koyan9</groupId>
     <artifactId>spring-privacy-guard-spring-boot-starter</artifactId>
-    <version>0.3.0</version>
+    <version>0.4.0</version>
 </dependency>
 ```
 
@@ -605,8 +604,7 @@ The sample uses filter mode by default. To switch to interceptor mode:
 
 - Triage using `SUPPORT.md`, `SECURITY.md`, and `docs/GITHUB_LABELS.md`
 - Run `python scripts/check_repo_hygiene.py` before tagging
-- Follow `docs/MAINTAINER_GUIDE.md`; until a newer versioned guide exists, reuse `docs/RELEASE_EXECUTION_v0.3.0.md` as the latest published release template
-- Draft next release materials are prepared under `docs/releases/RELEASE_NOTES_v0.4.0.md`, `docs/RELEASE_EXECUTION_v0.4.0.md`, and `docs/RELEASE_RUNBOOK_v0.4.0.md`
+- Follow `docs/MAINTAINER_GUIDE.md`; the latest published release template is now `docs/RELEASE_EXECUTION_v0.4.0.md`
 
 ## Roadmap
 
@@ -636,21 +634,15 @@ Post-release themes and longer-term follow-up stay in `docs/ROADMAP.md`.
 - Receiver operations: `docs/RECEIVER_OPERATIONS.md`
 - Roadmap: `docs/ROADMAP.md`
 - Release checklist: `docs/RELEASE_CHECKLIST.md`
-- Current published release notes: `docs/releases/RELEASE_NOTES_v0.3.0.md`
-- Current published release execution guide: `docs/RELEASE_EXECUTION_v0.3.0.md`
-- Current published release runbook: `docs/RELEASE_RUNBOOK_v0.3.0.md`
-- Current published release dry run record: `docs/RELEASE_DRY_RUN_v0.3.0.md`
-- Next draft release notes: `docs/releases/RELEASE_NOTES_v0.4.0.md`
-- Next draft release execution guide: `docs/RELEASE_EXECUTION_v0.4.0.md`
-- Next draft release runbook: `docs/RELEASE_RUNBOOK_v0.4.0.md`
-- Next draft release dry run: `docs/RELEASE_DRY_RUN_v0.4.0.md`
-- Next draft release announcement: `docs/RELEASE_ANNOUNCEMENT_v0.4.0.md`
-- Next draft release announcement (zh-CN): `docs/RELEASE_ANNOUNCEMENT_v0.4.0.zh-CN.md`
-- Current published release announcement: `docs/RELEASE_ANNOUNCEMENT_v0.3.0.md`
-- Current published release announcement (zh-CN): `docs/RELEASE_ANNOUNCEMENT_v0.3.0.zh-CN.md`
-- Current published GitHub release copy: `docs/GITHUB_RELEASE_COPY_v0.3.0.md`
-- Next draft GitHub release copy: `docs/GITHUB_RELEASE_COPY_v0.4.0.md`
-- Previous release notes archive: `docs/releases/RELEASE_NOTES_v0.2.0.md`
+- Current published release notes: `docs/releases/RELEASE_NOTES_v0.4.0.md`
+- Current published release execution guide: `docs/RELEASE_EXECUTION_v0.4.0.md`
+- Current published release runbook: `docs/RELEASE_RUNBOOK_v0.4.0.md`
+- Current published release dry run record: `docs/RELEASE_DRY_RUN_v0.4.0.md`
+- Current published release announcement: `docs/RELEASE_ANNOUNCEMENT_v0.4.0.md`
+- Current published release announcement (zh-CN): `docs/RELEASE_ANNOUNCEMENT_v0.4.0.zh-CN.md`
+- Current published GitHub release copy: `docs/GITHUB_RELEASE_COPY_v0.4.0.md`
+- Previous release notes archive: `docs/releases/RELEASE_NOTES_v0.3.0.md`
+- Older release notes archive: `docs/releases/RELEASE_NOTES_v0.2.0.md`
 - GitHub metadata: `docs/GITHUB_METADATA.md`
 
 ## Release Notes
