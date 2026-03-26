@@ -1,6 +1,6 @@
 # Release Announcement: v0.3.0
 
-Use this document as the short external-facing announcement draft for the planned `spring-privacy-guard v0.3.0` release.
+Use this document as the short external-facing announcement copy for the published `spring-privacy-guard v0.3.0` release.
 
 ## One-Line Summary
 
@@ -16,9 +16,7 @@ Use this document as the short external-facing announcement draft for the planne
 - Fixed receiver auto-configuration so optional JDBC and Redis replay-store dependencies do not cause startup failures when absent
 - Added dedicated multi-tenant and JDBC production rollout guides for operators and adopters
 
-## Suggested GitHub / Community Post After Release
-
-Use the text below once `v0.3.0` is actually published:
+## Suggested GitHub / Community Post
 
 We have released `spring-privacy-guard v0.3.0`.
 

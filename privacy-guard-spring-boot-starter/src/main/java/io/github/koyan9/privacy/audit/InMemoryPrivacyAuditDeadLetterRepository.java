@@ -15,7 +15,13 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class InMemoryPrivacyAuditDeadLetterRepository implements PrivacyAuditDeadLetterRepository, PrivacyAuditDeadLetterStatsRepository, PrivacyTenantAuditDeadLetterReadRepository, PrivacyTenantAuditDeadLetterWriteRepository {
+public class InMemoryPrivacyAuditDeadLetterRepository implements
+        PrivacyAuditDeadLetterRepository,
+        PrivacyAuditDeadLetterStatsRepository,
+        PrivacyTenantAuditDeadLetterReadRepository,
+        PrivacyTenantAuditDeadLetterWriteRepository,
+        PrivacyTenantAuditDeadLetterDeleteRepository,
+        PrivacyTenantAuditDeadLetterReplayRepository {
 
     private final CopyOnWriteArrayList<PrivacyAuditDeadLetterEntry> entries = new CopyOnWriteArrayList<>();
     private final AtomicLong sequence = new AtomicLong();
@@ -119,6 +125,55 @@ public class InMemoryPrivacyAuditDeadLetterRepository implements PrivacyAuditDea
     @Override
     public boolean deleteById(long id) {
         return entries.removeIf(entry -> entry.id() != null && entry.id() == id);
+    }
+
+    @Override
+    public int deleteByCriteria(String tenantId, String tenantDetailKey, PrivacyAuditDeadLetterQueryCriteria criteria) {
+        List<Long> selectedIds = findByCriteria(tenantId, tenantDetailKey, criteria).stream()
+                .map(PrivacyAuditDeadLetterEntry::id)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        if (selectedIds.isEmpty()) {
+            return 0;
+        }
+        java.util.Set<Long> selected = java.util.Set.copyOf(selectedIds);
+        return (int) entries.stream()
+                .filter(entry -> entry.id() != null && selected.contains(entry.id()))
+                .map(PrivacyAuditDeadLetterEntry::id)
+                .distinct()
+                .filter(this::deleteById)
+                .count();
+    }
+
+    @Override
+    public PrivacyAuditDeadLetterReplayResult replayByCriteria(
+            String tenantId,
+            String tenantDetailKey,
+            PrivacyAuditDeadLetterQueryCriteria criteria,
+            java.util.function.Predicate<PrivacyAuditDeadLetterEntry> replayAction
+    ) {
+        List<PrivacyAuditDeadLetterEntry> selected = findByCriteria(tenantId, tenantDetailKey, criteria);
+        List<Long> replayedIds = new java.util.ArrayList<>();
+        List<Long> failedIds = new java.util.ArrayList<>();
+        for (PrivacyAuditDeadLetterEntry entry : selected) {
+            if (entry.id() == null) {
+                continue;
+            }
+            if (!replayAction.test(entry)) {
+                failedIds.add(entry.id());
+                continue;
+            }
+            if (deleteById(entry.id())) {
+                replayedIds.add(entry.id());
+            }
+        }
+        return new PrivacyAuditDeadLetterReplayResult(
+                selected.size(),
+                replayedIds.size(),
+                failedIds.size(),
+                List.copyOf(replayedIds),
+                List.copyOf(failedIds)
+        );
     }
 
     public void clear() {

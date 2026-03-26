@@ -1,10 +1,11 @@
 # Release Execution Guide: v0.3.0
 
-Use this guide when you are ready to publish `spring-privacy-guard v0.3.0`.
+This guide records the execution flow used for the published `spring-privacy-guard v0.3.0` release on 2026-03-20.
+Reuse it as the latest versioned template until a newer release-specific guide exists.
 
 ## Release Validation Commands
 
-Run these before tagging:
+These were the validation commands used before tagging:
 
 ```bash
 python scripts/check_repo_hygiene.py

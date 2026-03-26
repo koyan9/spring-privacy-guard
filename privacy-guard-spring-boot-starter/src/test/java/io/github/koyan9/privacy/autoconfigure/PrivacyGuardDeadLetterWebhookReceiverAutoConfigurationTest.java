@@ -12,6 +12,7 @@ import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStore;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStoreMetricsBinder;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStoreObservationService;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookRequestVerifier;
+import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookVerificationRouteRegistry;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookVerificationTelemetry;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookVerificationSettings;
 import io.github.koyan9.privacy.audit.PrivacyAuditSchemaInitializer;
@@ -70,7 +71,8 @@ class PrivacyGuardDeadLetterWebhookReceiverAutoConfigurationTest {
                         "privacy.guard.audit.dead-letter.observability.alert.receiver.verification.signature-header=X-Signature",
                         "privacy.guard.audit.dead-letter.observability.alert.receiver.verification.timestamp-header=X-Timestamp",
                         "privacy.guard.audit.dead-letter.observability.alert.receiver.verification.nonce-header=X-Nonce",
-                        "privacy.guard.audit.dead-letter.observability.alert.receiver.verification.max-skew=10s"
+                        "privacy.guard.audit.dead-letter.observability.alert.receiver.verification.max-skew=10s",
+                        "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.namespace=tenant-a-receiver"
                 )
                 .run(context -> {
                     assertThat(context).hasSingleBean(PrivacyAuditDeadLetterWebhookVerificationSettings.class);
@@ -82,7 +84,27 @@ class PrivacyGuardDeadLetterWebhookReceiverAutoConfigurationTest {
                     assertThat(settings.timestampHeader()).isEqualTo("X-Timestamp");
                     assertThat(settings.nonceHeader()).isEqualTo("X-Nonce");
                     assertThat(settings.maxSkew()).isEqualTo(Duration.ofSeconds(10));
+                    assertThat(settings.replayNamespace()).isEqualTo("tenant-a-receiver");
                     assertThat(context).hasSingleBean(InMemoryPrivacyAuditDeadLetterWebhookReplayStore.class);
+                });
+    }
+
+    @Test
+    void createsVerificationRouteRegistryFromTenantReceiverRoutes() {
+        contextRunner
+                .withPropertyValues(
+                        "privacy.guard.audit.dead-letter.observability.alert.receiver.filter.enabled=true",
+                        "privacy.guard.audit.dead-letter.observability.alert.tenant.routes.tenant-a.receiver.path-pattern=/receiver/tenant-a-alerts",
+                        "privacy.guard.audit.dead-letter.observability.alert.tenant.routes.tenant-a.receiver.bearer-token=tenant-a-token",
+                        "privacy.guard.audit.dead-letter.observability.alert.tenant.routes.tenant-a.receiver.signature-secret=tenant-a-secret",
+                        "privacy.guard.audit.dead-letter.observability.alert.tenant.routes.tenant-a.receiver.replay-namespace=tenant-a-receiver"
+                )
+                .run(context -> {
+                    assertThat(context).hasSingleBean(PrivacyAuditDeadLetterWebhookVerificationRouteRegistry.class);
+                    PrivacyAuditDeadLetterWebhookVerificationRouteRegistry registry =
+                            context.getBean(PrivacyAuditDeadLetterWebhookVerificationRouteRegistry.class);
+                    assertThat(registry.hasRoutes()).isTrue();
+                    assertThat(registry.pathPatterns()).containsExactly("/receiver/tenant-a-alerts");
                 });
     }
 
@@ -250,7 +272,8 @@ class PrivacyGuardDeadLetterWebhookReceiverAutoConfigurationTest {
                     "X-Signature",
                     "X-Timestamp",
                     "X-Nonce",
-                    Duration.ofMinutes(5)
+                    Duration.ofMinutes(5),
+                    null
             );
         }
     }

@@ -9,21 +9,30 @@ import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookVerificationI
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+import java.util.List;
+
 class PrivacyGuardDeadLetterWebhookReceiverMvcConfigurer implements WebMvcConfigurer {
 
     private final PrivacyAuditDeadLetterWebhookVerificationInterceptor interceptor;
-    private final String pathPattern;
+    private final List<String> pathPatterns;
 
     PrivacyGuardDeadLetterWebhookReceiverMvcConfigurer(
             PrivacyAuditDeadLetterWebhookVerificationInterceptor interceptor,
             String pathPattern
     ) {
+        this(interceptor, List.of(pathPattern));
+    }
+
+    PrivacyGuardDeadLetterWebhookReceiverMvcConfigurer(
+            PrivacyAuditDeadLetterWebhookVerificationInterceptor interceptor,
+            List<String> pathPatterns
+    ) {
         this.interceptor = interceptor;
-        this.pathPattern = pathPattern;
+        this.pathPatterns = pathPatterns == null ? List.of() : List.copyOf(pathPatterns);
     }
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(interceptor).addPathPatterns(pathPattern);
+        registry.addInterceptor(interceptor).addPathPatterns(pathPatterns);
     }
 }

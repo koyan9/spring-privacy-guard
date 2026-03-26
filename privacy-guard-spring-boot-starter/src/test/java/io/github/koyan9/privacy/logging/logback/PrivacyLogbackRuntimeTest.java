@@ -6,6 +6,8 @@
 package io.github.koyan9.privacy.logging.logback;
 
 import io.github.koyan9.privacy.core.MaskingService;
+import io.github.koyan9.privacy.core.PrivacyTenantContextHolder;
+import io.github.koyan9.privacy.core.PrivacyTenantContextScope;
 import io.github.koyan9.privacy.core.TextMaskingService;
 import io.github.koyan9.privacy.logging.PrivacyLogSanitizer;
 import org.junit.jupiter.api.AfterEach;
@@ -23,6 +25,7 @@ class PrivacyLogbackRuntimeTest {
     @AfterEach
     void clearRuntime() {
         PrivacyLogbackRuntime.clear();
+        PrivacyTenantContextHolder.clear();
     }
 
     @Test
@@ -54,5 +57,54 @@ class PrivacyLogbackRuntimeTest {
         ));
         assertThat(sanitizedPairs.get(0).value.toString()).contains("138****8000");
         assertThat(sanitizedPairs.get(1).value.toString()).isEqualTo("alice@example.com");
+    }
+
+    @Test
+    void resolvesSettingsDynamicallyPerTenant() {
+        PrivacyLogbackRuntime.set(
+                new PrivacyLogSanitizer(new TextMaskingService(new MaskingService())),
+                () -> {
+                    String tenantId = PrivacyTenantContextHolder.getTenantId();
+                    if ("tenant-a".equals(tenantId)) {
+                        return new PrivacyLogbackSanitizerSettings(
+                                true,
+                                Set.of("phone"),
+                                Set.of(),
+                                false,
+                                Set.of(),
+                                Set.of()
+                        );
+                    }
+                    return new PrivacyLogbackSanitizerSettings(
+                            true,
+                            Set.of("email"),
+                            Set.of(),
+                            true,
+                            Set.of("phone"),
+                            Set.of()
+                    );
+                }
+        );
+
+        try (PrivacyTenantContextScope ignored = PrivacyTenantContextHolder.openScope("tenant-a")) {
+            Map<String, String> tenantMdc = PrivacyLogbackRuntime.sanitizeMdc(Map.of(
+                    "email", "alice@example.com",
+                    "phone", "13800138000"
+            ));
+            assertThat(tenantMdc.get("email")).isEqualTo("alice@example.com");
+            assertThat(tenantMdc.get("phone")).contains("138****8000");
+
+            List<KeyValuePair> tenantPairs = PrivacyLogbackRuntime.sanitizeKeyValuePairs(List.of(
+                    new KeyValuePair("phone", "13800138000")
+            ));
+            assertThat(tenantPairs.get(0).value.toString()).isEqualTo("13800138000");
+        }
+
+        Map<String, String> defaultMdc = PrivacyLogbackRuntime.sanitizeMdc(Map.of(
+                "email", "alice@example.com",
+                "phone", "13800138000"
+        ));
+        assertThat(defaultMdc.get("email")).contains("a****@example.com");
+        assertThat(defaultMdc.get("phone")).isEqualTo("13800138000");
     }
 }

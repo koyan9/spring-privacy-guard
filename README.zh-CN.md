@@ -4,8 +4,8 @@
 
 [![CI](https://github.com/koyan9/spring-privacy-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/koyan9/spring-privacy-guard/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/koyan9/spring-privacy-guard?display_name=tag)](https://github.com/koyan9/spring-privacy-guard/releases/latest)
-[![Changelog](https://img.shields.io/badge/Changelog-0.2.0-0f766e)](CHANGELOG.md)
-[![Release Notes](https://img.shields.io/badge/Release%20Notes-v0.2.0-1d4ed8)](docs/releases/RELEASE_NOTES_v0.2.0.md)
+[![Changelog](https://img.shields.io/badge/Changelog-0.3.0-0f766e)](CHANGELOG.md)
+[![Release Notes](https://img.shields.io/badge/Release%20Notes-v0.3.0-1d4ed8)](docs/releases/RELEASE_NOTES_v0.3.0.md)
 [![Security](https://img.shields.io/badge/Security-Policy-7f1d1d)](SECURITY.md)
 [![Support](https://img.shields.io/badge/Support-Guide-1f2937)](SUPPORT.md)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
@@ -13,27 +13,43 @@
 [![Docs Index](https://img.shields.io/badge/Docs-Index-6f42c1)](docs/INDEX.md)
 [![English Docs](https://img.shields.io/badge/Docs-English-blue)](README.md)
 
-`spring-privacy-guard` 是一个面向 Spring Boot 的隐私保护 Starter，用于敏感数据脱敏、日志清洗、隐私审计追踪，以及安全可运维的死信处理与告警。
+一个面向 Spring Boot 的隐私安全 Starter，用于敏感数据脱敏、日志清洗、隐私审计跟踪，以及可安全运维的死信、告警和 receiver 验签流程。
+
+## 当前状态
+
+- 最新已发布版本：`v0.3.0`
+- 当前分支准备中的下一版候选：`v0.4.0`
+- 当前未发布开发重点：`v0.3.0` 之后的多租户补强，包括 observability、tenant-scoped dead-letter management、receiver routing，以及多实例 sample workflow
+- 本开发周期已完成：
+  - tenant-native dead-letter replay
+  - stable tenant logging policy
+  - tenant dead-letter observability policy
+  - tenant operational telemetry
+  - import/export/manifest exchange-path telemetry
+  - built-in / fallback / custom native / custom JDBC / production-like sample 对照矩阵
+- 当前进度建议优先阅读：`CHANGELOG.md`、`docs/ROADMAP.md`、`docs/INDEX.md`
 
 ## 模块说明
 
-- `privacy-guard-core/`：脱敏注解、内置敏感类型、文本清洗、脱敏 SPI。
-- `privacy-guard-spring-boot-starter/`：Spring Boot 自动配置、Jackson 集成、Logback 集成、审计存储、查询、死信、告警与可观测能力。
-- `samples/privacy-demo/`：可直接运行的示例应用，覆盖脱敏、审计、死信、签名 webhook / email 告警，以及 receiver 校验流程。
+- `privacy-guard-core/`
+  - 脱敏注解、内置敏感类型、文本清洗、脱敏 SPI
+- `privacy-guard-spring-boot-starter/`
+  - Spring Boot 自动配置、Jackson 集成、Logback 集成、审计存储、死信处理、告警、receiver 验签
+- `samples/privacy-demo/`
+  - 可运行示例，覆盖 masking、audit、dead-letter、receiver verification、replay-store、native/fallback/custom repository 对照
 
 ## 核心能力
 
 - 基于 `@SensitiveData` 的字段级脱敏
-- 支持按租户配置不同的脱敏字符与文本规则
-- Jackson JSON 输出脱敏
-- 通过 `PrivacyLoggerFactory` 实现自由文本日志清洗
-- 审计事件记录、查询、分页、排序和统计
-- 内置 `IN_MEMORY` / `JDBC` 审计与死信仓储
-- 自定义 `MaskingStrategy` SPI
-- 异步审计发布、批量写入、重试与死信回退
-- 死信查询、清理、重放、JSON/CSV 导入导出
+- 自定义 `MaskingStrategy` 与 `PrivacyTenantAwareMaskingStrategy`
+- 文本日志清洗与 JSON 输出脱敏
+- 审计记录、查询、分页、排序、统计
+- `IN_MEMORY` 与 `JDBC` 审计 / 死信仓储
+- 异步发布、批量写入、重试、死信回退、重放、导入导出
 - Actuator 健康检查与 Micrometer 指标
-- 签名 webhook、email 告警、receiver 验签与 replay 防护
+- webhook / email 告警
+- receiver 验签、replay-store、防重放
+- 多租户策略、tenant-native SPI、native / fallback 可观测性
 
 ## 快速开始
 
@@ -42,17 +58,17 @@
 - Java `17+`
 - Spring Boot `3.3.x`
 
-添加依赖：
+如果你使用当前已发布版本，依赖示例为：
 
 ```xml
 <dependency>
     <groupId>io.github.koyan9</groupId>
     <artifactId>spring-privacy-guard-spring-boot-starter</artifactId>
-    <version>0.2.0</version>
+    <version>0.3.0</version>
 </dependency>
 ```
 
-给需要脱敏的字段添加注解：
+示例模型：
 
 ```java
 public record PatientView(
@@ -64,7 +80,7 @@ public record PatientView(
 }
 ```
 
-最小配置示例：
+最小配置：
 
 ```yaml
 privacy:
@@ -74,63 +90,44 @@ privacy:
       repository-type: IN_MEMORY
 ```
 
+建议阅读路径：
+
+- 基础接入：先完成依赖与最小配置，再阅读下方常用配置
+- 多租户接入：`docs/MULTI_TENANT_GUIDE.md`
+- 租户可观测性与 rollout：`docs/TENANT_OBSERVABILITY_GUIDE.md`
+- 可运行 sample 与多实例演练：`samples/privacy-demo/README.md`
+- 当前进度与下一步计划：`CHANGELOG.md`、`docs/ROADMAP.md`
+
 ## 常用配置
 
 | 配置项 | 默认值 | 说明 |
 | --- | --- | --- |
 | `privacy.guard.enabled` | `true` | Starter 总开关 |
-| `privacy.guard.fallback-mask-char` | `*` | 默认脱敏字符 |
-| `privacy.guard.logging.enabled` | `true` | 启用日志清洗能力 |
-| `privacy.guard.logging.mdc.enabled` | `false` | 启用 Logback MDC 值脱敏 |
-| `privacy.guard.logging.mdc.include-keys` | 空 | 仅脱敏指定 MDC 键 |
-| `privacy.guard.logging.mdc.exclude-keys` | 空 | 跳过指定 MDC 键 |
-| `privacy.guard.logging.structured.enabled` | `false` | 启用结构化日志字段脱敏 |
-| `privacy.guard.logging.structured.include-keys` | 空 | 仅脱敏指定结构化字段 |
-| `privacy.guard.logging.structured.exclude-keys` | 空 | 跳过指定结构化字段 |
-| `privacy.guard.tenant.enabled` | `false` | 启用多租户隐私策略解析与请求头租户透传 |
-| `privacy.guard.tenant.header-name` | `X-Privacy-Tenant` | Servlet 场景下读取当前租户的请求头 |
-| `privacy.guard.tenant.default-tenant` | 空 | 未传租户请求头时使用的默认租户 |
-| `privacy.guard.masking.text.email-pattern` | 空 | 覆盖文本脱敏使用的 email 正则 |
-| `privacy.guard.masking.text.phone-pattern` | 空 | 覆盖文本脱敏使用的手机号正则 |
-| `privacy.guard.masking.text.id-card-pattern` | 空 | 覆盖文本脱敏使用的身份证号正则 |
-| `privacy.guard.masking.text.additional-patterns` | 空 | 追加映射到 `SensitiveType` 的文本脱敏规则 |
+| `privacy.guard.logging.enabled` | `true` | 启用日志清洗 |
+| `privacy.guard.logging.mdc.enabled` | `false` | 启用 MDC 字段脱敏 |
+| `privacy.guard.logging.structured.enabled` | `false` | 启用 structured logging 字段脱敏 |
+| `privacy.guard.tenant.enabled` | `false` | 启用多租户策略 |
+| `privacy.guard.tenant.header-name` | `X-Privacy-Tenant` | 当前租户请求头 |
+| `privacy.guard.tenant.default-tenant` | 空 | 默认租户 |
 | `privacy.guard.audit.enabled` | `true` | 启用审计能力 |
-| `privacy.guard.audit.repository-type` | `NONE` | 审计仓储类型：`NONE`、`IN_MEMORY`、`JDBC` |
-| `privacy.guard.audit.async.thread-pool-size` | `1` | 异步 / 批量审计执行器线程数 |
-| `privacy.guard.audit.dead-letter.repository-type` | `NONE` | 死信仓储类型：`NONE`、`IN_MEMORY`、`JDBC` |
-| `privacy.guard.audit.dead-letter.observability.health.warning-threshold` | `1` | 死信积压预警阈值 |
-| `privacy.guard.audit.dead-letter.observability.health.down-threshold` | `100` | 死信积压降级阈值 |
-| `privacy.guard.audit.dead-letter.observability.alert.enabled` | `false` | 启用死信阈值告警 |
-| `privacy.guard.audit.dead-letter.observability.alert.webhook.url` | 空 | 启用内置 webhook 告警 |
-| `privacy.guard.audit.dead-letter.observability.alert.webhook.backoff-policy` | `FIXED` | webhook 告警重试退避策略 |
-| `privacy.guard.audit.dead-letter.observability.alert.webhook.max-backoff` | `backoff*10 (max 30s)` | webhook 指数退避的最大等待时间 |
-| `privacy.guard.audit.dead-letter.observability.alert.webhook.jitter` | `0` | webhook 重试延迟的抖动系数 (0-1) |
-| `privacy.guard.audit.dead-letter.observability.alert.email.to` | 空 | 启用内置 email 告警 |
-| `privacy.guard.audit.dead-letter.observability.alert.receiver.filter.enabled` | `false` | 启用内置 receiver 验签过滤器 |
-| `privacy.guard.audit.dead-letter.observability.alert.receiver.interceptor.enabled` | `false` | 启用内置 receiver 验签拦截器 |
-| `privacy.guard.audit.dead-letter.observability.alert.receiver.verification.enabled` | `false` | 通过配置创建 receiver 验签设置 |
-| `privacy.guard.audit.dead-letter.observability.alert.receiver.verification.bearer-token` | 空 | 内置验签需要的 bearer token |
-| `privacy.guard.audit.dead-letter.observability.alert.receiver.verification.signature-secret` | 空 | 内置验签需要的签名密钥 |
-| `privacy.guard.audit.dead-letter.observability.alert.receiver.verification.max-skew` | `5m` | 允许的时间戳偏移窗口 |
-| `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.file.enabled` | `false` | 启用文件型 replay-store |
-| `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.file.path` | `privacy-audit-webhook-replay-store.json` | replay-store 文件路径 |
+| `privacy.guard.audit.repository-type` | `NONE` | 审计仓储类型：`NONE` / `IN_MEMORY` / `JDBC` |
+| `privacy.guard.audit.dead-letter.repository-type` | `NONE` | 死信仓储类型 |
+| `privacy.guard.audit.dead-letter.observability.health.warning-threshold` | `1` | backlog warning 阈值 |
+| `privacy.guard.audit.dead-letter.observability.health.down-threshold` | `100` | backlog down 阈值 |
+| `privacy.guard.audit.dead-letter.observability.alert.enabled` | `false` | 启用死信告警 |
+| `privacy.guard.audit.dead-letter.observability.alert.tenant.enabled` | `false` | 启用租户级死信告警 |
+| `privacy.guard.audit.dead-letter.observability.alert.receiver.verification.enabled` | `false` | 启用 receiver 验签配置 |
+| `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.namespace` | 空 | replay-store namespace |
 | `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.redis.enabled` | `false` | 启用 Redis replay-store |
-| `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.redis.key-prefix` | `privacy:audit:webhook:replay:` | Redis replay-store 键前缀 |
-| `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.redis.scan-batch-size` | `500` | replay-store 快照与清理时使用的 Redis SCAN 批大小 |
 | `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.enabled` | `false` | 启用 JDBC replay-store |
-| `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.table-name` | `privacy_audit_webhook_replay_store` | replay-store JDBC 表名 |
-| `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.initialize-schema` | `false` | 初始化 replay-store SQL 表 |
-| `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.jdbc.cleanup-interval` | `5m` | replay-store 清理间隔 |
-| `privacy.guard.audit.jdbc.tenant-column-name` | 空 | 审计 JDBC 仓储可选的专用租户列名，用于原生租户写入与查询。 |
-| `privacy.guard.audit.jdbc.tenant-detail-key` | `tenantId` | 开启专用租户列后，从 audit detail 中读取租户值的键名。 |
-| `privacy.guard.audit.dead-letter.jdbc.tenant-column-name` | 空 | 死信 JDBC 仓储可选的专用租户列名，用于原生租户写入与查询。 |
-| `privacy.guard.audit.dead-letter.jdbc.tenant-detail-key` | `tenantId` | 开启死信专用租户列后，从 detail 中读取租户值的键名。 |
+| `privacy.guard.audit.jdbc.tenant-column-name` | 空 | 审计 JDBC tenant 列 |
+| `privacy.guard.audit.dead-letter.jdbc.tenant-column-name` | 空 | 死信 JDBC tenant 列 |
 
-完整配置说明、全部属性以及详细默认值，请参考 `README.md` 中的英文完整文档。
+完整属性矩阵和详细说明请参考英文 README 与配置元数据。
 
-## 自定义脱敏策略
+## 自定义脱敏
 
-当内置 `SensitiveType` 不满足需求时，可以实现 `MaskingStrategy`：
+当内置 `SensitiveType` 不够用时，可以实现 `MaskingStrategy`：
 
 ```java
 @Bean
@@ -149,13 +146,11 @@ MaskingStrategy customNameMaskingStrategy() {
 }
 ```
 
-示例实现可参考 `samples/privacy-demo/src/main/java/com/example/privacydemo/DemoNameMaskingStrategy.java`。
-
 ## 稳定 SPI
 
-仓库中承诺在当前 minor 版本线内保持兼容的公开扩展点，都会标记 `@StableSpi`。
+当前 minor 版本线内承诺兼容的扩展点使用 `@StableSpi` 标记。
 
-稳定接口包括：
+主要稳定接口包括：
 
 - `MaskingStrategy`
 - `PrivacyTenantProvider`
@@ -164,25 +159,46 @@ MaskingStrategy customNameMaskingStrategy() {
 - `PrivacyTenantPolicyResolver`
 - `PrivacyTenantAwareMaskingStrategy`
 - `PrivacyTenantAuditPolicyResolver`
+- `PrivacyTenantLoggingPolicyResolver`
+- `PrivacyTenantDeadLetterObservabilityPolicyResolver`
 - `PrivacyTenantAuditReadRepository`
 - `PrivacyTenantAuditDeadLetterReadRepository`
 - `PrivacyTenantAuditWriteRepository`
 - `PrivacyTenantAuditDeadLetterWriteRepository`
+- `PrivacyTenantAuditDeadLetterDeleteRepository`
+- `PrivacyTenantAuditDeadLetterReplayRepository`
 - `PrivacyAuditPublisher`
-- `PrivacyAuditRepository`、`PrivacyAuditQueryRepository`、`PrivacyAuditStatsRepository`
-- `PrivacyAuditDeadLetterRepository`、`PrivacyAuditDeadLetterStatsRepository`、`PrivacyAuditDeadLetterHandler`
+- `PrivacyAuditRepository`
+- `PrivacyAuditQueryRepository`
+- `PrivacyAuditStatsRepository`
+- `PrivacyAuditDeadLetterRepository`
+- `PrivacyAuditDeadLetterStatsRepository`
+- `PrivacyAuditDeadLetterHandler`
 - `PrivacyAuditDeadLetterAlertCallback`
 - `PrivacyAuditDeadLetterWebhookReplayStore`
 - `PrivacyAuditDeadLetterWebhookAlertTelemetry`
 - `PrivacyAuditDeadLetterWebhookVerificationTelemetry`
 
-与这些扩展点直接耦合的载荷 / 上下文类型，例如 `MaskingContext`、`TextMaskingRule`、`PrivacyTenantPolicy`、`PrivacyTenantAuditPolicy`、`PrivacyTenantAuditWriteRequest`、`PrivacyTenantAuditDeadLetterWriteRequest`、`PrivacyAuditEvent`、`PrivacyAuditQueryCriteria`、`PrivacyAuditDeadLetterEntry` 以及 replay-store 快照记录，也会同步标记 `@StableSpi`。
+直接耦合的 carrier type 也带有稳定标记，例如：
 
-自动配置、具体仓储实现、Servlet 适配器、指标 binder、schema resolver 等运行时装配类属于内部实现，不在稳定 SPI 承诺范围内。
+- `PrivacyTenantPolicy`
+- `PrivacyTenantAuditPolicy`
+- `PrivacyTenantLoggingPolicy`
+- `PrivacyTenantDeadLetterObservabilityPolicy`
+- `PrivacyAuditEvent`
+- `PrivacyAuditQueryCriteria`
+- `PrivacyAuditDeadLetterEntry`
 
-## 多租户隐私策略
+## 多租户策略
 
-当不同租户需要不同的脱敏字符或文本检测规则时，可以启用多租户策略：
+当前多租户策略覆盖四个面：
+
+- masking / text
+- audit detail filtering
+- logging selection
+- dead-letter observability thresholds / recovery notification
+
+示例：
 
 ```yaml
 privacy:
@@ -198,291 +214,148 @@ privacy:
             additional-patterns:
               - type: GENERIC
                 pattern: EMP\d{4}
-        tenant-b:
-          fallback-mask-char: X
-```
-
-在 Servlet 应用中启用 tenant 模式后，starter 会自动注册一个过滤器，把请求头中的租户写入当前线程上下文，供 JSON 脱敏、日志清洗和审计清洗共享使用。
-如果你需要按租户定制字段脱敏逻辑，可以实现 `PrivacyTenantAwareMaskingStrategy`。
-租户策略也可以进一步约束审计 detail：
-
-```yaml
-privacy:
-  guard:
-    tenant:
-      policies:
-        tenant-a:
           audit:
             include-detail-keys:
               - phone
               - employeeCode
             attach-tenant-id: true
             tenant-detail-key: tenant
-        tenant-b:
-          audit:
-            include-detail-keys:
-              - phone
-            attach-tenant-id: true
-            tenant-detail-key: tenant
+          logging:
+            mdc:
+              enabled: true
+              include-keys:
+                - email
+                - phone
+          observability:
+            dead-letter:
+              warning-threshold: 1
+              down-threshold: 2
+              notify-on-recovery: true
 ```
 
-启用后，`include-detail-keys` 会先筛选 detail，再应用 `exclude-detail-keys`；如果开启 `attach-tenant-id`，租户标识会在清洗完成后附加到审计 detail 中。
-完整的多租户请求头约定、稳定 SPI 扩展点、管理服务与示例端点说明，请参考 `docs/MULTI_TENANT_GUIDE.md`。
+补充说明：
+
+- `include-detail-keys` 先于 `exclude-detail-keys`
+- `attach-tenant-id=true` 时，租户标识会在清洗后附加到 detail 中
+- tenant logging override 会覆盖全局 MDC / structured key 选择
+- tenant dead-letter observability override 只作用于 tenant backlog snapshot、tenant health summary 和 tenant alert monitor
 
 ## 审计与死信
 
-Starter 支持完整的审计与死信处理链路：
+Starter 提供：
 
-- 审计事件异步发布
-- 批量写入与失败重试
-- 死信持久化与重放
-- 死信分页查询与统计
+- 审计写入与查询
+- 死信记录、统计、删除、重放
 - JSON / CSV 导入导出
-- 管理动作自身写入审计轨迹
-- 通过 `PrivacyTenantAuditQueryService` 提供按租户过滤的审计查询与统计
-- 通过 `PrivacyTenantAuditDeadLetterQueryService` 提供按租户过滤的死信查询与统计
-- 通过 `PrivacyTenantAuditDeadLetterOperationsService` 提供按租户的死信批量删除与批量重放
-- 通过 `PrivacyTenantAuditDeadLetterExchangeService` 提供按租户的死信导出、导入和 manifest 校验流程
-- 通过 `PrivacyTenantAuditManagementService` 提供统一的多租户管理入口
+- tenant-scoped query / stats / delete / replay / exchange
+- 统一管理入口：`PrivacyTenantAuditManagementService`
 
-常见死信能力：
+典型接口：
 
+- `GET /audit-events`
+- `GET /audit-events/stats`
 - `GET /audit-dead-letters`
 - `GET /audit-dead-letters/stats`
 - `DELETE /audit-dead-letters/{id}`
 - `POST /audit-dead-letters/{id}/replay`
-- `POST /audit-dead-letters/replay?limit=100`
+- `GET /audit-dead-letters/export.json`
+- `GET /audit-dead-letters/export.manifest`
+- `POST /audit-dead-letters/import.json`
 
-## 可观测与告警
+## 可观测性与告警
 
-### Actuator 与指标
+当前可观测性重点包括：
 
-当应用引入 Actuator 时，可以暴露：
+- 全局 dead-letter health / metrics
+- tenant read/write path counters
+- tenant alert transitions / delivery outcomes
+- receiver route failure counters
+- exchange-path telemetry：
+  - `dead_letter_export`
+  - `dead_letter_manifest`
+  - `dead_letter_import`
 
-- `privacyAuditDeadLetters` 健康检查
-- `privacy.audit.deadletters.total`
-- `privacy.audit.deadletters.state{state=*}`
-- `privacy.audit.deadletters.threshold{level=*}`
-- `privacy.audit.deadletters.alert.webhook.attempts`
-- `privacy.audit.deadletters.alert.webhook.retries`
-- `privacy.audit.deadletters.alert.webhook.deliveries{outcome=*}`
-- `privacy.audit.deadletters.alert.webhook.last_delivery_seconds{outcome=*}`
-- `privacy.audit.deadletters.alert.webhook.failures{type=*,retryable=*,category=*}`
-- `privacy.audit.deadletters.alert.webhook.last_failure_status`
-- `privacy.audit.deadletters.alert.webhook.last_failure_retryable`
-- `privacy.audit.deadletters.alert.webhook.last_failure_type{type=*}`
-- `privacy.audit.deadletters.receiver.replay_store.count`
-- `privacy.audit.deadletters.receiver.replay_store.expiring_soon`
-- `privacy.audit.deadletters.receiver.replay_store.expiry_seconds{kind=*}`
-- `privacy.audit.deadletters.receiver.replay_store.cleanup.last_count`
-- `privacy.audit.deadletters.receiver.replay_store.cleanup.last_duration_ms`
-- `privacy.audit.deadletters.receiver.replay_store.cleanup.last_timestamp`
-- `privacy.audit.deadletters.receiver.verification.failures{reason=*}`
+典型指标：
 
-### 内置 webhook / email 告警
+- `privacy.audit.tenant.read.path{domain=*,path=*}`
+- `privacy.audit.tenant.write.path{domain=*,path=*}`
+- `privacy.audit.deadletters.alert.tenant.transitions{tenant=*,state=*,recovery=*}`
+- `privacy.audit.deadletters.alert.tenant.deliveries{tenant=*,channel=*,outcome=*}`
+- `privacy.audit.deadletters.receiver.route.failures{route=*,reason=*}`
 
-Webhook 告警示例：
-
-```yaml
-privacy:
-  guard:
-    audit:
-      dead-letter:
-        observability:
-          alert:
-            enabled: true
-            webhook:
-              url: https://example.com/privacy-alerts
-              bearer-token: demo-token
-              signature-secret: demo-hmac-secret
-              signature-algorithm: HmacSHA256
-              signature-header: X-Privacy-Alert-Signature
-              timestamp-header: X-Privacy-Alert-Timestamp
-              nonce-header: X-Privacy-Alert-Nonce
-              max-attempts: 3
-              backoff: 200ms
-```
-
-当回调失败时，日志会包含失败类型、状态码、是否可重试以及简短错误信息。
-
-Email 告警示例：
-
-```yaml
-spring:
-  mail:
-    host: smtp.example.com
-    port: 587
-    username: demo-user
-    password: demo-password
-
-privacy:
-  guard:
-    audit:
-      dead-letter:
-        observability:
-          alert:
-            enabled: true
-            email:
-              from: privacy@example.com
-              to: ops@example.com
-              subject-prefix: [privacy-guard]
-```
-
-## Webhook Receiver 验签 SPI
-
-Starter 提供可复用的 webhook receiver 校验能力：
-
-- `PrivacyAuditDeadLetterWebhookRequestVerifier`
-- `PrivacyAuditDeadLetterWebhookReplayStore`
-- `InMemoryPrivacyAuditDeadLetterWebhookReplayStore`
-- `FilePrivacyAuditDeadLetterWebhookReplayStore`
-- `RedisPrivacyAuditDeadLetterWebhookReplayStore`
-- `JdbcPrivacyAuditDeadLetterWebhookReplayStore`
-- `PrivacyAuditDeadLetterWebhookVerificationFilter`
-- `PrivacyAuditDeadLetterWebhookVerificationInterceptor`
-
-你可以选择：
-
-- 使用 `filter` 模式保护接收端路径
-- 使用 `interceptor` 模式保护接收端路径
-- 直接在业务代码中注入 verifier 做手动校验
-
-验签失败时会返回包含原因码的 JSON 响应，例如：
+receiver 验签失败会返回：
 
 ```json
 {"error":"Invalid signature","reason":"INVALID_SIGNATURE"}
 ```
 
-原因码包括 `INVALID_AUTHORIZATION`、`MISSING_SIGNATURE_HEADERS`、`INVALID_TIMESTAMP`、`EXPIRED_TIMESTAMP`、`INVALID_SIGNATURE`、`REPLAY_DETECTED`。
+## Sample 矩阵
 
-也可以直接通过配置创建验签设置：
+`samples/privacy-demo` 当前可以验证以下路径：
 
-```yaml
-privacy:
-  guard:
-    audit:
-      dead-letter:
-        observability:
-          alert:
-            receiver:
-              verification:
-                enabled: true
-                bearer-token: demo-receiver-token
-                signature-secret: demo-receiver-secret
-                max-skew: 5m
-```
+| Profile | 目的 | 期望路径 |
+| --- | --- | --- |
+| 默认 profile | built-in in-memory 基线 | native |
+| `fallback-tenant` | generic-only 对照 | fallback |
+| `custom-tenant-native` | 自定义 tenant SPI 参考 | native |
+| `jdbc-tenant` | built-in JDBC 参考 | native |
+| `custom-jdbc-tenant` | 自定义 JDBC tenant SPI 参考 | native |
+| `custom-jdbc-tenant,custom-jdbc-tenant-node2` | 自定义 JDBC 双节点演练 | native |
+| `postgres-redis-tenant,postgres-redis-tenant-node2` | PostgreSQL + Redis 生产近似双节点 | native |
 
-如果启用 receiver 验签但未配置 bearer token 或 signature secret，验签将变为放行模式。
+`/demo-tenants/observability` 当前会展示：
 
-### 文件型 Replay-Store 示例
-
-```yaml
-privacy:
-  guard:
-    audit:
-      dead-letter:
-        observability:
-          alert:
-            receiver:
-              replay-store:
-                file:
-                  enabled: true
-                  path: /var/lib/privacy-audit/replay-store.json
-```
-
-### Redis Replay-Store 示例
-
-当你需要多实例共享 nonce 状态、但不想维护 JDBC schema 时，可以使用 Redis：
-
-```yaml
-privacy:
-  guard:
-    audit:
-      dead-letter:
-        observability:
-          alert:
-            receiver:
-              replay-store:
-                redis:
-                  enabled: true
-                  key-prefix: privacy:audit:webhook:replay:
-                  scan-batch-size: 500
-```
-
-### JDBC Replay-Store 示例
-
-```yaml
-privacy:
-  guard:
-    audit:
-      dead-letter:
-        observability:
-          alert:
-            receiver:
-              replay-store:
-                jdbc:
-                  enabled: true
-                  initialize-schema: true
-                  table-name: privacy_audit_webhook_replay_store
-```
-
-生产环境中使用 MySQL / PostgreSQL 时，建议同时阅读 `docs/JDBC_PRODUCTION_GUIDE.md`，其中包含 schema 管理、可选租户列、索引建议和迁移步骤。
-如果同时启用了多个 replay-store 后端，starter 会按 `JDBC`、`Redis`、`file`、`InMemory` 的顺序选择。
-
-## 示例应用
-
-`samples/privacy-demo/` 默认展示：
-
-- `GET /patients/demo`
-- `GET /audit-events`
-- `GET /audit-dead-letters`
-- `POST /demo-alert-receiver`
-- `GET /demo-alert-receiver/last`
-- `GET /demo-alert-receiver/replay-store`
-- `GET /demo-alert-receiver/replay-store/stats`
-- `DELETE /demo-alert-receiver/replay-store`
-
-默认使用 receiver filter 模式；切换到拦截器模式可使用：
-
-- Windows：`mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=interceptor`
-- macOS / Linux：`./mvnw spring-boot:run -Dspring-boot.run.profiles=interceptor`
+- `repositoryImplementations`
+- `repositoryCapabilities`
+- tenant path counters
+- tenant alert metrics
+- replay-store backend
+- backlog 视图
 
 ## 本地开发
 
 - 全量校验：`./mvnw -q verify` 或 `mvnw.cmd -q verify`
 - 安装本地构件：`./mvnw -q -DskipTests install`
-- 运行示例：`./mvnw -q -f samples/privacy-demo/pom.xml spring-boot:run`
+- 运行 sample：`./mvnw -q -f samples/privacy-demo/pom.xml spring-boot:run`
 
-如果你只想快速验证签名 receiver，可以直接运行：
+常用 sample profile：
 
-- `powershell.exe -ExecutionPolicy Bypass -File samples/privacy-demo/scripts/verify-alert-receiver.ps1`
+- `jdbc-tenant`
+- `redis-tenant`
+- `postgres-redis-tenant`
+- `fallback-tenant`
+- `custom-tenant-native`
+- `custom-jdbc-tenant`
 
 ## 维护者快速入口
 
-- 排障与分诊参考 `SUPPORT.md`、`SECURITY.md`、`docs/GITHUB_LABELS.md`
-- 发布前执行 `python scripts/check_repo_hygiene.py`
-- 发布流程参考 `docs/MAINTAINER_GUIDE.md` 与 `docs/RELEASE_EXECUTION_v0.3.0.md`
-
-## 说明
-
-中文文档会优先覆盖常用能力与配置示例；当中文和英文内容存在差异时，请以 `README.md` 的完整说明为准。
+- 支持与分流：`SUPPORT.md`
+- 安全策略：`SECURITY.md`
+- 文档索引：`docs/INDEX.md`
+- 发布检查清单：`docs/RELEASE_CHECKLIST.md`
+- 当前已发布版本发布资料：`docs/releases/RELEASE_NOTES_v0.3.0.md`
+- 下一版草案发布资料：`docs/releases/RELEASE_NOTES_v0.4.0.md`
 
 ## 项目文档
 
 - 文档索引：`docs/INDEX.md`
-- JDBC 生产指引：`docs/JDBC_PRODUCTION_GUIDE.md`
-- 多租户接入指南：`docs/MULTI_TENANT_GUIDE.md`
-- 多租户采用手册：`docs/TENANT_ADOPTION_PLAYBOOK.md`
+- 多租户指南：`docs/MULTI_TENANT_GUIDE.md`
+- 租户可观测性指南：`docs/TENANT_OBSERVABILITY_GUIDE.md`
+- 租户采纳手册：`docs/TENANT_ADOPTION_PLAYBOOK.md`
+- JDBC 生产指南：`docs/JDBC_PRODUCTION_GUIDE.md`
+- Receiver 运维指南：`docs/RECEIVER_OPERATIONS.md`
 - 维护者指南：`docs/MAINTAINER_GUIDE.md`
-- 接收端运维指引：`docs/RECEIVER_OPERATIONS.md`
 - 路线图：`docs/ROADMAP.md`
 - 发布检查清单：`docs/RELEASE_CHECKLIST.md`
-- 当前已发布版本说明：`docs/releases/RELEASE_NOTES_v0.2.0.md`
-- `v0.3.0` 发布执行指引草稿：`docs/RELEASE_EXECUTION_v0.3.0.md`
-- `v0.3.0` 发布运行手册草稿：`docs/RELEASE_RUNBOOK_v0.3.0.md`
-- `v0.3.0` 发布说明草稿：`docs/releases/RELEASE_NOTES_v0.3.0.md`
-- `v0.3.0` 发布演练记录：`docs/RELEASE_DRY_RUN_v0.3.0.md`
-- `v0.3.0` 英文发布公告：`docs/RELEASE_ANNOUNCEMENT_v0.3.0.md`
-- `v0.3.0` 中文发布公告：`docs/RELEASE_ANNOUNCEMENT_v0.3.0.zh-CN.md`
-- GitHub Release 可直接复制文案草稿：`docs/GITHUB_RELEASE_COPY_v0.3.0.md`
-- GitHub 仓库元数据建议：`docs/GITHUB_METADATA.md`
+- 当前已发布 release notes：`docs/releases/RELEASE_NOTES_v0.3.0.md`
+- 下一版草案 release notes：`docs/releases/RELEASE_NOTES_v0.4.0.md`
+
+## 发布说明
+
+发布工作流优先读取：
+
+- `docs/releases/RELEASE_NOTES_<tag>.md`
+
+如果不存在，则回退到：
+
+- `docs/releases/RELEASE_NOTES_TEMPLATE.md`

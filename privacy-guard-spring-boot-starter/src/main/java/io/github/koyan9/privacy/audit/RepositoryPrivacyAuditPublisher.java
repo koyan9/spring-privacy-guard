@@ -7,19 +7,21 @@ package io.github.koyan9.privacy.audit;
 
 import io.github.koyan9.privacy.core.PrivacyTenantProvider;
 
+import java.util.function.Supplier;
+
 public class RepositoryPrivacyAuditPublisher implements PrivacyAuditPublisher {
 
     private final PrivacyAuditRepository privacyAuditRepository;
     private final PrivacyTenantProvider tenantProvider;
     private final PrivacyTenantAuditPolicyResolver tenantAuditPolicyResolver;
-    private final PrivacyTenantAuditTelemetry telemetry;
+    private final Supplier<PrivacyTenantAuditTelemetry> telemetrySupplier;
 
     public RepositoryPrivacyAuditPublisher(PrivacyAuditRepository privacyAuditRepository) {
         this(
                 privacyAuditRepository,
                 PrivacyTenantProvider.noop(),
                 PrivacyTenantAuditPolicyResolver.noop(),
-                PrivacyTenantAuditTelemetry.noop()
+                (Supplier<PrivacyTenantAuditTelemetry>) null
         );
     }
 
@@ -32,7 +34,7 @@ public class RepositoryPrivacyAuditPublisher implements PrivacyAuditPublisher {
                 privacyAuditRepository,
                 tenantProvider,
                 tenantAuditPolicyResolver,
-                PrivacyTenantAuditTelemetry.noop()
+                (Supplier<PrivacyTenantAuditTelemetry>) null
         );
     }
 
@@ -42,19 +44,35 @@ public class RepositoryPrivacyAuditPublisher implements PrivacyAuditPublisher {
             PrivacyTenantAuditPolicyResolver tenantAuditPolicyResolver,
             PrivacyTenantAuditTelemetry telemetry
     ) {
+        this(
+                privacyAuditRepository,
+                tenantProvider,
+                tenantAuditPolicyResolver,
+                () -> telemetry == null ? PrivacyTenantAuditTelemetry.noop() : telemetry
+        );
+    }
+
+    public RepositoryPrivacyAuditPublisher(
+            PrivacyAuditRepository privacyAuditRepository,
+            PrivacyTenantProvider tenantProvider,
+            PrivacyTenantAuditPolicyResolver tenantAuditPolicyResolver,
+            Supplier<PrivacyTenantAuditTelemetry> telemetrySupplier
+    ) {
         this.privacyAuditRepository = privacyAuditRepository;
         this.tenantProvider = tenantProvider == null ? PrivacyTenantProvider.noop() : tenantProvider;
         this.tenantAuditPolicyResolver = tenantAuditPolicyResolver == null
                 ? PrivacyTenantAuditPolicyResolver.noop()
                 : tenantAuditPolicyResolver;
-        this.telemetry = telemetry == null ? PrivacyTenantAuditTelemetry.noop() : telemetry;
+        this.telemetrySupplier = telemetrySupplier == null
+                ? PrivacyTenantAuditTelemetry::noop
+                : telemetrySupplier;
     }
 
     @Override
     public void publish(PrivacyAuditEvent event) {
         if (privacyAuditRepository instanceof PrivacyTenantAuditWriteRepository tenantAwareRepository) {
             String tenantId = currentTenantId();
-            telemetry.recordWritePath("audit_write", "native");
+            telemetry().recordWritePath("audit_write", "native");
             tenantAwareRepository.save(new PrivacyTenantAuditWriteRequest(
                     event,
                     tenantId,
@@ -62,7 +80,7 @@ public class RepositoryPrivacyAuditPublisher implements PrivacyAuditPublisher {
             ));
             return;
         }
-        telemetry.recordWritePath("audit_write", "fallback");
+        telemetry().recordWritePath("audit_write", "fallback");
         privacyAuditRepository.save(event);
     }
 
@@ -74,5 +92,10 @@ public class RepositoryPrivacyAuditPublisher implements PrivacyAuditPublisher {
     private String tenantDetailKey(String tenantId) {
         PrivacyTenantAuditPolicy policy = tenantAuditPolicyResolver.resolve(tenantId);
         return policy == null ? "tenantId" : policy.tenantDetailKey();
+    }
+
+    private PrivacyTenantAuditTelemetry telemetry() {
+        PrivacyTenantAuditTelemetry telemetry = telemetrySupplier.get();
+        return telemetry == null ? PrivacyTenantAuditTelemetry.noop() : telemetry;
     }
 }

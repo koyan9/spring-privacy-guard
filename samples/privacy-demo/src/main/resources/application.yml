@@ -9,9 +9,13 @@ management:
     web:
       exposure:
         include: health,metrics
+  health:
+    redis:
+      enabled: false
   endpoint:
     health:
       show-details: always
+      show-components: always
 
 demo:
   admin:
@@ -31,36 +35,77 @@ privacy:
           audit:
             attach-tenant-id: true
             tenant-detail-key: tenant
+          observability:
+            dead-letter:
+              warning-threshold: 2
+              down-threshold: 4
         tenant-a:
           fallback-mask-char: "#"
           text:
             additional-patterns:
               - type: GENERIC
                 pattern: EMP\d{4}
+          logging:
+            mdc:
+              enabled: true
+              include-keys:
+                - email
+                - phone
           audit:
             include-detail-keys:
               - phone
               - employeeCode
             attach-tenant-id: true
             tenant-detail-key: tenant
+          observability:
+            dead-letter:
+              warning-threshold: 1
+              down-threshold: 2
+              notify-on-recovery: true
         tenant-b:
           fallback-mask-char: X
+          logging:
+            structured:
+              enabled: true
+              include-keys:
+                - phone
           audit:
             include-detail-keys:
               - phone
             attach-tenant-id: true
             tenant-detail-key: tenant
+          observability:
+            dead-letter:
+              warning-threshold: 2
+              down-threshold: 4
+              notify-on-recovery: false
     audit:
       repository-type: IN_MEMORY
       dead-letter:
         repository-type: IN_MEMORY
         observability:
           health:
+            tenant-enabled: true
+            tenant-ids:
+              - public
+              - tenant-a
+              - tenant-b
             warning-threshold: 1
             down-threshold: 5
+          metrics:
+            tenant-enabled: true
+            tenant-ids:
+              - public
+              - tenant-a
+              - tenant-b
           alert:
             enabled: true
             check-interval: 50ms
+            tenant:
+              enabled: true
+              tenant-ids:
+                - tenant-a
+                - tenant-b
             logging:
               enabled: true
             receiver:
@@ -77,6 +122,7 @@ privacy:
                 enabled: true
                 path-pattern: /demo-alert-receiver
               replay-store:
+                namespace: demo-default
                 file:
                   enabled: false
                   path: ./target/demo-alert-replay-store.json

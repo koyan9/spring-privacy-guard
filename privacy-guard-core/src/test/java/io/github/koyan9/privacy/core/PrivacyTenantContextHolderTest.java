@@ -10,10 +10,15 @@ import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -86,6 +91,50 @@ class PrivacyTenantContextHolderTest {
                     .get(5, TimeUnit.SECONDS);
 
             assertEquals("tenant-b", tenantId);
+            assertNull(executor.submit(PrivacyTenantContextHolder::getTenantId).get(5, TimeUnit.SECONDS));
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void snapshotWrapsExecutorAndCallbackTypesForCompletableFutureStages() throws Exception {
+        PrivacyTenantContextHolder.setTenantId("tenant-c");
+        PrivacyTenantContextSnapshot snapshot = PrivacyTenantContextHolder.snapshot();
+        PrivacyTenantContextHolder.clear();
+
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            Executor tenantAwareExecutor = snapshot.wrap((Executor) executor);
+            AtomicReference<String> acceptedValue = new AtomicReference<>();
+            AtomicReference<String> completionValue = new AtomicReference<>();
+
+            String result = CompletableFuture
+                    .completedFuture("alpha")
+                    .thenApplyAsync(snapshot.wrap((Function<String, String>) value ->
+                            PrivacyTenantContextHolder.getTenantId() + ":" + value), tenantAwareExecutor)
+                    .thenCombineAsync(
+                            CompletableFuture.completedFuture("beta"),
+                            snapshot.wrap((BiFunction<String, String, String>) (left, right) ->
+                                    PrivacyTenantContextHolder.getTenantId() + ":" + left + ":" + right),
+                            tenantAwareExecutor
+                    )
+                    .thenApplyAsync(snapshot.wrap((Function<String, String>) value -> value + ":done"), tenantAwareExecutor)
+                    .get(5, TimeUnit.SECONDS);
+
+            CompletableFuture.completedFuture("accepted")
+                    .thenAcceptAsync(snapshot.wrap((Consumer<String>) value ->
+                            acceptedValue.set(PrivacyTenantContextHolder.getTenantId() + ":" + value)), tenantAwareExecutor)
+                    .get(5, TimeUnit.SECONDS);
+
+            CompletableFuture.completedFuture("complete")
+                    .whenCompleteAsync(snapshot.wrap((BiConsumer<String, Throwable>) (value, error) ->
+                            completionValue.set(PrivacyTenantContextHolder.getTenantId() + ":" + value + ":" + error)), tenantAwareExecutor)
+                    .get(5, TimeUnit.SECONDS);
+
+            assertEquals("tenant-c:tenant-c:alpha:beta:done", result);
+            assertEquals("tenant-c:accepted", acceptedValue.get());
+            assertEquals("tenant-c:complete:null", completionValue.get());
             assertNull(executor.submit(PrivacyTenantContextHolder::getTenantId).get(5, TimeUnit.SECONDS));
         } finally {
             executor.shutdownNow();

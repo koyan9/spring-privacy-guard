@@ -22,6 +22,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 public class BufferedPrivacyAuditPublisher implements PrivacyAuditPublisher, DisposableBean {
 
@@ -35,7 +36,7 @@ public class BufferedPrivacyAuditPublisher implements PrivacyAuditPublisher, Dis
     private final PrivacyAuditDeadLetterHandler deadLetterHandler;
     private final PrivacyTenantProvider tenantProvider;
     private final PrivacyTenantAuditPolicyResolver tenantAuditPolicyResolver;
-    private final PrivacyTenantAuditTelemetry telemetry;
+    private final Supplier<PrivacyTenantAuditTelemetry> telemetrySupplier;
     private final Queue<BufferedEvent> queue = new ConcurrentLinkedQueue<>();
     private final AtomicInteger queuedCount = new AtomicInteger();
     private final AtomicBoolean flushing = new AtomicBoolean();
@@ -59,7 +60,7 @@ public class BufferedPrivacyAuditPublisher implements PrivacyAuditPublisher, Dis
                 deadLetterHandler,
                 PrivacyTenantProvider.noop(),
                 PrivacyTenantAuditPolicyResolver.noop(),
-                PrivacyTenantAuditTelemetry.noop()
+                (Supplier<PrivacyTenantAuditTelemetry>) null
         );
     }
 
@@ -84,7 +85,7 @@ public class BufferedPrivacyAuditPublisher implements PrivacyAuditPublisher, Dis
                 deadLetterHandler,
                 tenantProvider,
                 tenantAuditPolicyResolver,
-                PrivacyTenantAuditTelemetry.noop()
+                (Supplier<PrivacyTenantAuditTelemetry>) null
         );
     }
 
@@ -100,6 +101,32 @@ public class BufferedPrivacyAuditPublisher implements PrivacyAuditPublisher, Dis
             PrivacyTenantAuditPolicyResolver tenantAuditPolicyResolver,
             PrivacyTenantAuditTelemetry telemetry
     ) {
+        this(
+                repository,
+                executor,
+                batchSize,
+                flushInterval,
+                maxAttempts,
+                retryBackoff,
+                deadLetterHandler,
+                tenantProvider,
+                tenantAuditPolicyResolver,
+                () -> telemetry == null ? PrivacyTenantAuditTelemetry.noop() : telemetry
+        );
+    }
+
+    public BufferedPrivacyAuditPublisher(
+            PrivacyAuditRepository repository,
+            ScheduledExecutorService executor,
+            int batchSize,
+            Duration flushInterval,
+            int maxAttempts,
+            Duration retryBackoff,
+            PrivacyAuditDeadLetterHandler deadLetterHandler,
+            PrivacyTenantProvider tenantProvider,
+            PrivacyTenantAuditPolicyResolver tenantAuditPolicyResolver,
+            Supplier<PrivacyTenantAuditTelemetry> telemetrySupplier
+    ) {
         this.repository = Objects.requireNonNull(repository, "repository must not be null");
         this.executor = Objects.requireNonNull(executor, "executor must not be null");
         this.batchSize = Math.max(1, batchSize);
@@ -110,7 +137,9 @@ public class BufferedPrivacyAuditPublisher implements PrivacyAuditPublisher, Dis
         this.tenantAuditPolicyResolver = tenantAuditPolicyResolver == null
                 ? PrivacyTenantAuditPolicyResolver.noop()
                 : tenantAuditPolicyResolver;
-        this.telemetry = telemetry == null ? PrivacyTenantAuditTelemetry.noop() : telemetry;
+        this.telemetrySupplier = telemetrySupplier == null
+                ? PrivacyTenantAuditTelemetry::noop
+                : telemetrySupplier;
         long intervalMillis = Math.max(1L, flushInterval == null ? 500L : flushInterval.toMillis());
         this.executor.scheduleWithFixedDelay(this::flushSafely, intervalMillis, intervalMillis, TimeUnit.MILLISECONDS);
     }
@@ -221,13 +250,13 @@ public class BufferedPrivacyAuditPublisher implements PrivacyAuditPublisher, Dis
 
     private void saveBatch(List<BufferedEvent> batch) {
         if (repository instanceof PrivacyTenantAuditWriteRepository tenantAwareRepository) {
-            telemetry.recordWritePath("audit_batch_write", "native");
+            telemetry().recordWritePath("audit_batch_write", "native");
             tenantAwareRepository.saveAllTenantAware(batch.stream()
                     .map(BufferedEvent::toWriteRequest)
                     .toList());
             return;
         }
-        telemetry.recordWritePath("audit_batch_write", "fallback");
+        telemetry().recordWritePath("audit_batch_write", "fallback");
         repository.saveAll(batch.stream().map(BufferedEvent::event).toList());
     }
 
@@ -251,6 +280,11 @@ public class BufferedPrivacyAuditPublisher implements PrivacyAuditPublisher, Dis
     private String tenantDetailKey(String tenantId) {
         PrivacyTenantAuditPolicy policy = tenantAuditPolicyResolver.resolve(tenantId);
         return policy == null ? "tenantId" : policy.tenantDetailKey();
+    }
+
+    private PrivacyTenantAuditTelemetry telemetry() {
+        PrivacyTenantAuditTelemetry telemetry = telemetrySupplier.get();
+        return telemetry == null ? PrivacyTenantAuditTelemetry.noop() : telemetry;
     }
 
     private record BufferedEvent(PrivacyAuditEvent event, String tenantId, String tenantDetailKey) {

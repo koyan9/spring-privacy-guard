@@ -14,6 +14,7 @@ public record PrivacyAuditDeadLetterWebhookVerificationSettings(
         String signatureHeader,
         String timestampHeader,
         String nonceHeader,
-        Duration maxSkew
+        Duration maxSkew,
+        String replayNamespace
 ) {
 }

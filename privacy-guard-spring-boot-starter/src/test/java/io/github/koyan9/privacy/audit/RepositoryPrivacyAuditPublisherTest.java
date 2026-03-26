@@ -61,4 +61,21 @@ class RepositoryPrivacyAuditPublisherTest {
 
         assertEquals(1.0d, meterRegistry.get("privacy.audit.tenant.write.path").tag("domain", "audit_write").tag("path", "fallback").counter().count());
     }
+
+    @Test
+    void resolvesTelemetryLazilyFromSupplier() {
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        AtomicReference<PrivacyTenantAuditTelemetry> telemetryRef = new AtomicReference<>(new MicrometerPrivacyTenantAuditTelemetry(meterRegistry));
+        RepositoryPrivacyAuditPublisher publisher = new RepositoryPrivacyAuditPublisher(
+                event -> {
+                },
+                () -> "tenant-a",
+                tenantId -> new PrivacyTenantAuditPolicy(java.util.Set.of(), java.util.Set.of(), true, "tenant"),
+                telemetryRef::get
+        );
+
+        publisher.publish(new PrivacyAuditEvent(Instant.now(), "READ", "Patient", "demo", "actor", "OK", Map.of()));
+
+        assertEquals(1.0d, meterRegistry.get("privacy.audit.tenant.write.path").tag("domain", "audit_write").tag("path", "fallback").counter().count());
+    }
 }

@@ -132,6 +132,51 @@
       "defaultValue": "tenantId"
     },
     {
+      "name": "privacy.guard.tenant.policies.*.logging.mdc.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Tenant-specific override that enables or disables MDC sanitization for the matching tenant."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.logging.mdc.include-keys",
+      "type": "java.util.List",
+      "description": "Tenant-specific MDC allowlist that replaces the global MDC include-keys selection when configured."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.logging.mdc.exclude-keys",
+      "type": "java.util.List",
+      "description": "Tenant-specific MDC denylist that replaces the global MDC exclude-keys selection when configured."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.logging.structured.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Tenant-specific override that enables or disables structured logging sanitization for the matching tenant."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.logging.structured.include-keys",
+      "type": "java.util.List",
+      "description": "Tenant-specific structured logging allowlist that replaces the global structured include-keys selection when configured."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.logging.structured.exclude-keys",
+      "type": "java.util.List",
+      "description": "Tenant-specific structured logging denylist that replaces the global structured exclude-keys selection when configured."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.observability.dead-letter.warning-threshold",
+      "type": "java.lang.Long",
+      "description": "Tenant-specific warning threshold override used by tenant dead-letter backlog observation and health summaries."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.observability.dead-letter.down-threshold",
+      "type": "java.lang.Long",
+      "description": "Tenant-specific down threshold override used by tenant dead-letter backlog observation and health summaries."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.observability.dead-letter.notify-on-recovery",
+      "type": "java.lang.Boolean",
+      "description": "Tenant-specific override controlling whether tenant dead-letter recovery callbacks are emitted when the backlog returns to CLEAR."
+    },
+    {
       "name": "privacy.guard.masking.text.email-pattern",
       "type": "java.lang.String",
       "description": "Overrides the default email detection regex used by TextMaskingService."
@@ -241,6 +286,17 @@
       "defaultValue": true
     },
     {
+      "name": "privacy.guard.audit.dead-letter.observability.health.tenant-enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enables the tenant-aware dead-letter Actuator health indicator that summarizes backlog state across the configured tenant list.",
+      "defaultValue": false
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.health.tenant-ids",
+      "type": "java.util.List<java.lang.String>",
+      "description": "Optional tenant IDs to include in the tenant-aware dead-letter health indicator. When empty, the starter falls back to metric tenant IDs, the default tenant, and configured tenant policies."
+    },
+    {
       "name": "privacy.guard.audit.dead-letter.observability.health.warning-threshold",
       "type": "java.lang.Long",
       "description": "Marks the dead-letter health state as WARNING once the backlog reaches this threshold.",
@@ -259,10 +315,72 @@
       "defaultValue": true
     },
     {
+      "name": "privacy.guard.audit.dead-letter.observability.metrics.tenant-enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enables tenant-scoped dead-letter backlog gauges for the configured tenant list.",
+      "defaultValue": false
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.metrics.tenant-ids",
+      "type": "java.util.List",
+      "description": "Optional allowlist of tenant identifiers to expose as dead-letter backlog metrics. When empty and tenant-enabled is true, the starter derives the list from the configured tenant policies plus the default tenant."
+    },
+    {
       "name": "privacy.guard.audit.dead-letter.observability.alert.enabled",
       "type": "java.lang.Boolean",
       "description": "Enables scheduled dead-letter threshold monitoring and callback delivery when alert callback beans are present.",
       "defaultValue": false
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.tenant.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enables tenant-scoped dead-letter alert monitoring using the configured tenant list and the existing warning/down thresholds.",
+      "defaultValue": false
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.tenant.tenant-ids",
+      "type": "java.util.List",
+      "description": "Optional allowlist of tenant identifiers monitored by the tenant dead-letter alert monitor. When empty, the starter falls back to the configured tenant policy keys plus the default tenant."
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.tenant.routes",
+      "type": "java.util.Map",
+      "description": "Optional tenant-to-target route map used to override webhook or email delivery targets for tenant-scoped dead-letter alerts."
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.tenant.routes.*.webhook.url",
+      "type": "java.lang.String",
+      "description": "Tenant-specific webhook URL override for dead-letter alerts."
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.tenant.routes.*.receiver.path-pattern",
+      "type": "java.lang.String",
+      "description": "Tenant-specific receiver path pattern used to select verification secrets for incoming webhook alerts."
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.tenant.routes.*.receiver.bearer-token",
+      "type": "java.lang.String",
+      "description": "Tenant-specific bearer token override used by the built-in receiver verifier for the matching path."
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.tenant.routes.*.receiver.signature-secret",
+      "type": "java.lang.String",
+      "description": "Tenant-specific HMAC secret override used by the built-in receiver verifier for the matching path."
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.tenant.routes.*.receiver.replay-namespace",
+      "type": "java.lang.String",
+      "description": "Tenant-specific replay-store namespace override used when the matching receiver route is selected."
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.tenant.routes.*.email.to",
+      "type": "java.lang.String",
+      "description": "Tenant-specific email recipient override for dead-letter alerts."
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.tenant.routes.*.email.subject-prefix",
+      "type": "java.lang.String",
+      "description": "Tenant-specific email subject prefix override for dead-letter alerts."
     },
     {
       "name": "privacy.guard.audit.dead-letter.observability.alert.check-interval",
@@ -459,6 +577,11 @@
       "type": "java.time.Duration",
       "description": "Window used to count replay-store entries that are about to expire.",
       "defaultValue": "5m"
+    },
+    {
+      "name": "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.namespace",
+      "type": "java.lang.String",
+      "description": "Optional logical namespace prefixed to replay-store nonces so multiple receiver deployments or tenant-scoped receivers can share one backend without nonce collisions."
     },
     {
       "name": "privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.file.enabled",

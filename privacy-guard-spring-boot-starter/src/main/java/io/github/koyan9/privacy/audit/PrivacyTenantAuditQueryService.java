@@ -11,6 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 public class PrivacyTenantAuditQueryService {
@@ -22,7 +23,7 @@ public class PrivacyTenantAuditQueryService {
     private final PrivacyTenantProvider tenantProvider;
     private final PrivacyTenantAuditPolicyResolver tenantAuditPolicyResolver;
     private final PrivacyTenantAuditReadRepository tenantAuditReadRepository;
-    private final PrivacyTenantAuditTelemetry telemetry;
+    private final Supplier<PrivacyTenantAuditTelemetry> telemetrySupplier;
 
     public PrivacyTenantAuditQueryService(
             PrivacyAuditQueryService privacyAuditQueryService,
@@ -36,7 +37,7 @@ public class PrivacyTenantAuditQueryService {
                 tenantProvider,
                 tenantAuditPolicyResolver,
                 null,
-                null
+                (Supplier<PrivacyTenantAuditTelemetry>) null
         );
     }
 
@@ -53,7 +54,7 @@ public class PrivacyTenantAuditQueryService {
                 tenantProvider,
                 tenantAuditPolicyResolver,
                 tenantAuditReadRepository,
-                null
+                (Supplier<PrivacyTenantAuditTelemetry>) null
         );
     }
 
@@ -65,6 +66,24 @@ public class PrivacyTenantAuditQueryService {
             PrivacyTenantAuditReadRepository tenantAuditReadRepository,
             PrivacyTenantAuditTelemetry telemetry
     ) {
+        this(
+                privacyAuditQueryService,
+                privacyAuditStatsService,
+                tenantProvider,
+                tenantAuditPolicyResolver,
+                tenantAuditReadRepository,
+                () -> telemetry == null ? PrivacyTenantAuditTelemetry.noop() : telemetry
+        );
+    }
+
+    public PrivacyTenantAuditQueryService(
+            PrivacyAuditQueryService privacyAuditQueryService,
+            PrivacyAuditStatsService privacyAuditStatsService,
+            PrivacyTenantProvider tenantProvider,
+            PrivacyTenantAuditPolicyResolver tenantAuditPolicyResolver,
+            PrivacyTenantAuditReadRepository tenantAuditReadRepository,
+            Supplier<PrivacyTenantAuditTelemetry> telemetrySupplier
+    ) {
         this.privacyAuditQueryService = privacyAuditQueryService;
         this.privacyAuditStatsService = privacyAuditStatsService;
         this.tenantProvider = tenantProvider == null ? PrivacyTenantProvider.noop() : tenantProvider;
@@ -72,7 +91,9 @@ public class PrivacyTenantAuditQueryService {
                 ? PrivacyTenantAuditPolicyResolver.noop()
                 : tenantAuditPolicyResolver;
         this.tenantAuditReadRepository = tenantAuditReadRepository;
-        this.telemetry = telemetry == null ? PrivacyTenantAuditTelemetry.noop() : telemetry;
+        this.telemetrySupplier = telemetrySupplier == null
+                ? PrivacyTenantAuditTelemetry::noop
+                : telemetrySupplier;
     }
 
     public List<PrivacyAuditEvent> findByCriteria(String tenantId, PrivacyAuditQueryCriteria criteria) {
@@ -85,10 +106,10 @@ public class PrivacyTenantAuditQueryService {
                 : criteria.normalize();
         String detailKey = tenantDetailKey(normalizedTenant);
         if (tenantAuditReadRepository != null) {
-            telemetry.recordQueryReadPath("audit", "native");
+            telemetry().recordQueryReadPath("audit", "native");
             return tenantAuditReadRepository.findByCriteria(normalizedTenant, detailKey, normalized);
         }
-        telemetry.recordQueryReadPath("audit", "fallback");
+        telemetry().recordQueryReadPath("audit", "fallback");
         List<PrivacyAuditEvent> filtered = collectFilteredEvents(normalized, normalizedTenant);
         return filtered.stream()
                 .skip(normalized.offset())
@@ -110,10 +131,10 @@ public class PrivacyTenantAuditQueryService {
                 : criteria.normalize();
         String detailKey = tenantDetailKey(normalizedTenant);
         if (tenantAuditReadRepository != null) {
-            telemetry.recordQueryReadPath("audit_stats", "native");
+            telemetry().recordQueryReadPath("audit_stats", "native");
             return tenantAuditReadRepository.computeStats(normalizedTenant, detailKey, normalized);
         }
-        telemetry.recordQueryReadPath("audit_stats", "fallback");
+        telemetry().recordQueryReadPath("audit_stats", "fallback");
         List<PrivacyAuditEvent> filtered = collectFilteredEvents(normalized, normalizedTenant);
         return new PrivacyAuditQueryStats(
                 filtered.size(),
@@ -185,5 +206,10 @@ public class PrivacyTenantAuditQueryService {
                 .map(classifier)
                 .filter(value -> value != null && !value.isBlank())
                 .collect(Collectors.groupingBy(Function.identity(), LinkedHashMap::new, Collectors.counting()));
+    }
+
+    private PrivacyTenantAuditTelemetry telemetry() {
+        PrivacyTenantAuditTelemetry telemetry = telemetrySupplier.get();
+        return telemetry == null ? PrivacyTenantAuditTelemetry.noop() : telemetry;
     }
 }

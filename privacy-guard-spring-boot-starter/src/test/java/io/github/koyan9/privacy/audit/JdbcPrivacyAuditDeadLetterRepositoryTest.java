@@ -417,4 +417,139 @@ class JdbcPrivacyAuditDeadLetterRepositoryTest {
         assertEquals(1, entries.size());
         assertEquals("tenant-column-demo", entries.get(0).resourceId());
     }
+
+    @Test
+    void deletesTenantNativeFilteredDeadLettersThroughJdbcOperations() {
+        JdbcOperations jdbcOperations = mock(JdbcOperations.class);
+        JdbcPrivacyAuditDeadLetterRepository repository = new JdbcPrivacyAuditDeadLetterRepository(
+                jdbcOperations,
+                new ObjectMapper(),
+                "privacy_audit_dead_letter"
+        );
+        when(jdbcOperations.update(
+                eq("delete from privacy_audit_dead_letter where id in (select id from (select id from privacy_audit_dead_letter where 1=1 and action = ? and details_json like ? escape '\\' order by failed_at DESC, id DESC limit ? offset ?) tenant_scope)"),
+                eq("READ"), eq("%\"tenant\":\"tenant-a\"%"), eq(10), eq(5)
+        )).thenReturn(2);
+
+        int deleted = repository.deleteByCriteria(
+                "tenant-a",
+                "tenant",
+                new PrivacyAuditDeadLetterQueryCriteria(
+                        "READ", null,
+                        null, null,
+                        null, null,
+                        null, null,
+                        null, null,
+                        null, null,
+                        null, null,
+                        null, null,
+                        PrivacyAuditSortDirection.DESC,
+                        10,
+                        5
+                )
+        );
+
+        assertEquals(2, deleted);
+    }
+
+    @Test
+    void deletesTenantNativeFilteredDeadLettersThroughConfiguredTenantColumn() {
+        JdbcOperations jdbcOperations = mock(JdbcOperations.class);
+        JdbcPrivacyAuditDeadLetterRepository repository = new JdbcPrivacyAuditDeadLetterRepository(
+                jdbcOperations,
+                new ObjectMapper(),
+                "privacy_audit_dead_letter",
+                "tenant_id",
+                "tenant"
+        );
+        when(jdbcOperations.update(
+                eq("delete from privacy_audit_dead_letter where id in (select id from (select id from privacy_audit_dead_letter where 1=1 and action = ? and tenant_id = ? order by failed_at DESC, id DESC limit ? offset ?) tenant_scope)"),
+                eq("READ"), eq("tenant-a"), eq(10), eq(0)
+        )).thenReturn(1);
+
+        int deleted = repository.deleteByCriteria(
+                "tenant-a",
+                "tenant",
+                new PrivacyAuditDeadLetterQueryCriteria(
+                        "READ", null,
+                        null, null,
+                        null, null,
+                        null, null,
+                        null, null,
+                        null, null,
+                        null, null,
+                        null, null,
+                        PrivacyAuditSortDirection.DESC,
+                        10,
+                        0
+                )
+        );
+
+        assertEquals(1, deleted);
+    }
+
+    @Test
+    void replaysTenantNativeFilteredDeadLettersThroughJdbcOperations() throws Exception {
+        JdbcOperations jdbcOperations = mock(JdbcOperations.class);
+        JdbcPrivacyAuditDeadLetterRepository repository = new JdbcPrivacyAuditDeadLetterRepository(
+                jdbcOperations,
+                new ObjectMapper(),
+                "privacy_audit_dead_letter",
+                "tenant_id",
+                "tenant"
+        );
+
+        doAnswer(invocation -> {
+            RowMapper<?> rowMapper = invocation.getArgument(1);
+            ResultSet first = mock(ResultSet.class);
+            when(first.getLong("id")).thenReturn(7L);
+            when(first.wasNull()).thenReturn(false);
+            when(first.getTimestamp("failed_at")).thenReturn(Timestamp.from(Instant.parse("2026-03-06T01:00:00Z")));
+            when(first.getInt("attempts")).thenReturn(3);
+            when(first.getString("error_type")).thenReturn("java.lang.IllegalStateException");
+            when(first.getString("error_message")).thenReturn("failure");
+            when(first.getTimestamp("occurred_at")).thenReturn(Timestamp.from(Instant.parse("2026-03-05T23:00:00Z")));
+            when(first.getString("action")).thenReturn("READ");
+            when(first.getString("resource_type")).thenReturn("Patient");
+            when(first.getString("resource_id")).thenReturn("tenant-column-a1");
+            when(first.getString("actor")).thenReturn("actor");
+            when(first.getString("outcome")).thenReturn("OK");
+            when(first.getString("details_json")).thenReturn("{\"tenant\":\"tenant-a\"}");
+
+            ResultSet second = mock(ResultSet.class);
+            when(second.getLong("id")).thenReturn(8L);
+            when(second.wasNull()).thenReturn(false);
+            when(second.getTimestamp("failed_at")).thenReturn(Timestamp.from(Instant.parse("2026-03-06T00:00:00Z")));
+            when(second.getInt("attempts")).thenReturn(3);
+            when(second.getString("error_type")).thenReturn("java.lang.IllegalStateException");
+            when(second.getString("error_message")).thenReturn("failure");
+            when(second.getTimestamp("occurred_at")).thenReturn(Timestamp.from(Instant.parse("2026-03-05T22:00:00Z")));
+            when(second.getString("action")).thenReturn("READ");
+            when(second.getString("resource_type")).thenReturn("Patient");
+            when(second.getString("resource_id")).thenReturn("tenant-column-a2");
+            when(second.getString("actor")).thenReturn("actor");
+            when(second.getString("outcome")).thenReturn("OK");
+            when(second.getString("details_json")).thenReturn("{\"tenant\":\"tenant-a\"}");
+            return List.of(rowMapper.mapRow(first, 0), rowMapper.mapRow(second, 1));
+        }).when(jdbcOperations).query(
+                eq("select id, failed_at, attempts, error_type, error_message, occurred_at, action, resource_type, resource_id, actor, outcome, details_json from privacy_audit_dead_letter where 1=1 and tenant_id = ? order by failed_at DESC, id DESC limit ? offset ?"),
+                any(RowMapper.class),
+                eq("tenant-a"), eq(10), eq(0)
+        );
+        when(jdbcOperations.update(eq("delete from privacy_audit_dead_letter where id = ?"), eq(7L))).thenReturn(1);
+        when(jdbcOperations.update(eq("delete from privacy_audit_dead_letter where id = ?"), eq(8L))).thenReturn(1);
+
+        PrivacyAuditDeadLetterReplayResult result = repository.replayByCriteria(
+                "tenant-a",
+                "tenant",
+                PrivacyAuditDeadLetterQueryCriteria.recent(10),
+                entry -> !"tenant-column-a2".equals(entry.resourceId())
+        );
+
+        assertEquals(2, result.requested());
+        assertEquals(1, result.replayed());
+        assertEquals(1, result.failed());
+        assertEquals(List.of(7L), result.replayedIds());
+        assertEquals(List.of(8L), result.failedIds());
+    }
 }

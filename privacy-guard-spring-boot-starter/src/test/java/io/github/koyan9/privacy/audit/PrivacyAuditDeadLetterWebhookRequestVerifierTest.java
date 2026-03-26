@@ -79,7 +79,43 @@ class PrivacyAuditDeadLetterWebhookRequestVerifierTest {
                 .isEqualTo(PrivacyAuditDeadLetterWebhookVerificationException.Reason.INVALID_SIGNATURE);
     }
 
+    @Test
+    void namespacesReplayStoreKeysWhenConfigured() {
+        InMemoryPrivacyAuditDeadLetterWebhookReplayStore replayStore = new InMemoryPrivacyAuditDeadLetterWebhookReplayStore();
+        PrivacyAuditDeadLetterWebhookVerificationSettings settings = settings(Duration.ofMinutes(5), "tenant-a-receiver");
+        PrivacyAuditDeadLetterWebhookRequestVerifier verifier = new PrivacyAuditDeadLetterWebhookRequestVerifier(settings, replayStore);
+        String body = "{\"state\":\"WARNING\"}";
+        String timestamp = String.valueOf(Instant.now().getEpochSecond());
+        String nonce = "nonce-1";
+        String signature = PrivacyAuditDeadLetterWebhookSignatureSupport.sign(timestamp + "." + nonce + "." + body, settings.signatureSecret(), settings.signatureAlgorithm());
+
+        verifier.verify(headers(timestamp, nonce, signature), body);
+
+        assertThat(replayStore.snapshot()).containsKey("tenant-a-receiver:nonce-1");
+    }
+
+    @Test
+    void allowsSameNonceAcrossDifferentNamespaces() {
+        InMemoryPrivacyAuditDeadLetterWebhookReplayStore replayStore = new InMemoryPrivacyAuditDeadLetterWebhookReplayStore();
+        String body = "{\"state\":\"WARNING\"}";
+        String timestamp = String.valueOf(Instant.now().getEpochSecond());
+        String nonce = "nonce-shared";
+        String signature = PrivacyAuditDeadLetterWebhookSignatureSupport.sign(timestamp + "." + nonce + "." + body, "demo-receiver-secret", "HmacSHA256");
+
+        new PrivacyAuditDeadLetterWebhookRequestVerifier(settings(Duration.ofMinutes(5), "tenant-a"), replayStore)
+                .verify(headers(timestamp, nonce, signature), body);
+
+        new PrivacyAuditDeadLetterWebhookRequestVerifier(settings(Duration.ofMinutes(5), "tenant-b"), replayStore)
+                .verify(headers(timestamp, nonce, signature), body);
+
+        assertThat(replayStore.snapshot()).containsKeys("tenant-a:nonce-shared", "tenant-b:nonce-shared");
+    }
+
     private PrivacyAuditDeadLetterWebhookVerificationSettings settings(Duration maxSkew) {
+        return settings(maxSkew, null);
+    }
+
+    private PrivacyAuditDeadLetterWebhookVerificationSettings settings(Duration maxSkew, String replayNamespace) {
         return new PrivacyAuditDeadLetterWebhookVerificationSettings(
                 "demo-receiver-token",
                 "demo-receiver-secret",
@@ -87,7 +123,8 @@ class PrivacyAuditDeadLetterWebhookRequestVerifierTest {
                 "X-Privacy-Alert-Signature",
                 "X-Privacy-Alert-Timestamp",
                 "X-Privacy-Alert-Nonce",
-                maxSkew
+                maxSkew,
+                replayNamespace
         );
     }
 

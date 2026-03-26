@@ -7,12 +7,16 @@ package io.github.koyan9.privacy.autoconfigure;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.koyan9.privacy.audit.InMemoryPrivacyAuditDeadLetterRepository;
+import io.github.koyan9.privacy.audit.JdbcPrivacyAuditDeadLetterRepository;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterCsvCodec;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterExchangeService;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterHandler;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterRepository;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterService;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterStatsService;
+import io.github.koyan9.privacy.audit.PrivacyTenantAuditDeadLetterReadRepository;
+import io.github.koyan9.privacy.audit.PrivacyTenantAuditDeadLetterReplayRepository;
+import io.github.koyan9.privacy.audit.PrivacyTenantAuditDeadLetterWriteRepository;
 import io.github.koyan9.privacy.audit.PrivacyTenantAuditManagementService;
 import io.github.koyan9.privacy.audit.PrivacyTenantAuditDeadLetterExchangeService;
 import io.github.koyan9.privacy.audit.PrivacyAuditSchemaInitializer;
@@ -54,6 +58,7 @@ class PrivacyGuardDeadLetterAutoConfigurationTest {
                     assertThat(context).hasSingleBean(PrivacyAuditDeadLetterHandler.class);
                     assertThat(context).hasSingleBean(PrivacyAuditDeadLetterService.class);
                     assertThat(context).hasSingleBean(PrivacyAuditDeadLetterStatsService.class);
+                    assertThat(context).hasSingleBean(PrivacyTenantAuditDeadLetterReplayRepository.class);
                 });
     }
 
@@ -82,7 +87,11 @@ class PrivacyGuardDeadLetterAutoConfigurationTest {
                 .withUserConfiguration(JdbcConfig.class)
                 .run(context -> {
                     JdbcOperations jdbcOperations = context.getBean(JdbcOperations.class);
+                    assertThat(context).hasSingleBean(JdbcPrivacyAuditDeadLetterRepository.class);
                     assertThat(context).hasSingleBean(PrivacyAuditDeadLetterRepository.class);
+                    assertThat(context).hasSingleBean(PrivacyTenantAuditDeadLetterReadRepository.class);
+                    assertThat(context).hasSingleBean(PrivacyTenantAuditDeadLetterWriteRepository.class);
+                    assertThat(context).hasSingleBean(PrivacyTenantAuditDeadLetterReplayRepository.class);
                     assertThat(context).hasSingleBean(PrivacyAuditDeadLetterHandler.class);
                     assertThat(context).hasSingleBean(PrivacyAuditDeadLetterService.class);
                     assertThat(context).hasSingleBean(PrivacyAuditDeadLetterStatsService.class);

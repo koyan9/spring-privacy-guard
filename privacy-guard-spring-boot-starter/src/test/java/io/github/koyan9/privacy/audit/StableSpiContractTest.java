@@ -6,6 +6,8 @@
 package io.github.koyan9.privacy.audit;
 
 import io.github.koyan9.privacy.core.StableSpi;
+import io.github.koyan9.privacy.logging.PrivacyTenantLoggingPolicy;
+import io.github.koyan9.privacy.logging.PrivacyTenantLoggingPolicyResolver;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -24,12 +26,19 @@ class StableSpiContractTest {
         assertStable(PrivacyAuditDeadLetterStatsRepository.class);
         assertStable(PrivacyTenantAuditDeadLetterReadRepository.class);
         assertStable(PrivacyTenantAuditDeadLetterWriteRepository.class);
+        assertStable(PrivacyTenantAuditDeadLetterDeleteRepository.class);
+        assertStable(PrivacyTenantAuditDeadLetterReplayRepository.class);
         assertStable(PrivacyAuditDeadLetterHandler.class);
         assertStable(PrivacyAuditDeadLetterAlertCallback.class);
+        assertStable(PrivacyTenantAuditDeadLetterAlertCallback.class);
         assertStable(PrivacyAuditDeadLetterWebhookReplayStore.class);
         assertStable(PrivacyAuditDeadLetterWebhookAlertTelemetry.class);
         assertStable(PrivacyAuditDeadLetterWebhookVerificationTelemetry.class);
         assertStable(PrivacyTenantAuditPolicyResolver.class);
+        assertStable(PrivacyTenantDeadLetterObservabilityPolicy.class);
+        assertStable(PrivacyTenantDeadLetterObservabilityPolicyResolver.class);
+        assertStable(PrivacyTenantLoggingPolicy.class);
+        assertStable(PrivacyTenantLoggingPolicyResolver.class);
         assertStable(PrivacyAuditEvent.class);
         assertStable(PrivacyAuditQueryCriteria.class);
         assertStable(PrivacyAuditQueryStats.class);

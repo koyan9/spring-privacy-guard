@@ -73,6 +73,28 @@ class PrivacyAuditDeadLetterWebhookAlertCallbackTest {
     }
 
     @Test
+    void includesTenantIdInTenantScopedWebhookPayload() throws Exception {
+        LinkedBlockingQueue<CapturedRequest> requests = new LinkedBlockingQueue<>();
+        server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/alerts", exchange -> handleRequest(exchange, requests, 204));
+        server.start();
+
+        PrivacyGuardProperties.AlertWebhook properties = webhookProperties(server, 1, Duration.ofMillis(5));
+        PrivacyAuditDeadLetterWebhookAlertCallback callback = new PrivacyAuditDeadLetterWebhookAlertCallback(
+                HttpClient.newHttpClient(),
+                new ObjectMapper(),
+                properties,
+                PrivacyAuditDeadLetterWebhookAlertTelemetry.noop()
+        );
+
+        callback.handle("tenant-a", event(PrivacyAuditDeadLetterBacklogState.WARNING, null, 2));
+
+        CapturedRequest request = requests.poll(2, TimeUnit.SECONDS);
+        assertThat(request).isNotNull();
+        assertThat(request.body()).contains("\"tenantId\":\"tenant-a\"");
+    }
+
+    @Test
     void retriesBeforeSucceeding() throws Exception {
         LinkedBlockingQueue<CapturedRequest> requests = new LinkedBlockingQueue<>();
         AtomicInteger requestCount = new AtomicInteger();

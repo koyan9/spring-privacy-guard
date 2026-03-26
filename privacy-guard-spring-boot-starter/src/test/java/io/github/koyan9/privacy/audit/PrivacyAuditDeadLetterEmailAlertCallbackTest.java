@@ -50,6 +50,22 @@ class PrivacyAuditDeadLetterEmailAlertCallbackTest {
         assertThat(mailSender.lastMessage.getText()).contains("recovery: true").contains("previousState: WARNING");
     }
 
+    @Test
+    void includesTenantIdInTenantScopedEmail() {
+        CapturingMailSender mailSender = new CapturingMailSender();
+        PrivacyGuardProperties.AlertEmail properties = new PrivacyGuardProperties.AlertEmail();
+        properties.setFrom("privacy@example.com");
+        properties.setTo("ops@example.com");
+        properties.setSubjectPrefix("[guard]");
+
+        PrivacyAuditDeadLetterEmailAlertCallback callback = new PrivacyAuditDeadLetterEmailAlertCallback(mailSender, properties);
+        callback.handle("tenant-a", event(PrivacyAuditDeadLetterBacklogState.WARNING, null, 2));
+
+        assertThat(mailSender.lastMessage).isNotNull();
+        assertThat(mailSender.lastMessage.getSubject()).isEqualTo("[guard] Dead-letter backlog WARNING [tenant=tenant-a]");
+        assertThat(mailSender.lastMessage.getText()).contains("tenantId: tenant-a").contains("state: WARNING");
+    }
+
     private PrivacyAuditDeadLetterAlertEvent event(
             PrivacyAuditDeadLetterBacklogState state,
             PrivacyAuditDeadLetterBacklogState previousState,

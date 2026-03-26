@@ -48,7 +48,11 @@ public class PrivacyAuditDeadLetterWebhookAlertCallback implements PrivacyAuditD
 
     @Override
     public void handle(PrivacyAuditDeadLetterAlertEvent event) {
-        String payload = toPayload(event);
+        handle(null, event);
+    }
+
+    public void handle(String tenantId, PrivacyAuditDeadLetterAlertEvent event) {
+        String payload = toPayload(tenantId, event);
         RuntimeException lastFailure = null;
         int maxAttempts = Math.max(1, properties.getMaxAttempts());
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -126,9 +130,9 @@ public class PrivacyAuditDeadLetterWebhookAlertCallback implements PrivacyAuditD
         }
     }
 
-    private String toPayload(PrivacyAuditDeadLetterAlertEvent event) {
+    private String toPayload(String tenantId, PrivacyAuditDeadLetterAlertEvent event) {
         try {
-            return objectMapper.writeValueAsString(PrivacyAuditDeadLetterAlertPayloadFactory.createPayload(event));
+            return objectMapper.writeValueAsString(PrivacyAuditDeadLetterAlertPayloadFactory.createPayload(event, tenantId));
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
         }

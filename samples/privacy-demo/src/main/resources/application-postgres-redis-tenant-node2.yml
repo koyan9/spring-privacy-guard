@@ -1,0 +1,8 @@
+# Copyright 2026 koyan9
+# SPDX-License-Identifier: Apache-2.0
+
+server:
+  port: 8091
+
+demo:
+  instance-id: postgres-redis-node-2

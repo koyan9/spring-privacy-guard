@@ -124,4 +124,55 @@ class InMemoryPrivacyAuditDeadLetterRepositoryTest {
         assertEquals(2L, stats.byAction().get("READ"));
         assertEquals(2L, stats.byErrorType().get("TypeA"));
     }
+
+    @Test
+    void deletesTenantNativeFilteredDeadLetters() {
+        InMemoryPrivacyAuditDeadLetterRepository repository = new InMemoryPrivacyAuditDeadLetterRepository();
+        repository.save(new PrivacyAuditDeadLetterEntry(null, Instant.parse("2026-03-06T00:00:00Z"), 3, "TypeA", "one", Instant.parse("2026-03-05T23:00:00Z"), "READ", "Patient", "a1", "alice", "OK", Map.of("tenant", "tenant-a")));
+        repository.save(new PrivacyAuditDeadLetterEntry(null, Instant.parse("2026-03-06T01:00:00Z"), 3, "TypeA", "two", Instant.parse("2026-03-06T00:30:00Z"), "READ", "Patient", "a2", "alice", "OK", Map.of("tenant", "tenant-a")));
+        repository.save(new PrivacyAuditDeadLetterEntry(null, Instant.parse("2026-03-06T02:00:00Z"), 4, "TypeB", "three", Instant.parse("2026-03-06T01:30:00Z"), "WRITE", "Order", "b1", "bob", "DENIED", Map.of("tenant", "tenant-b")));
+
+        int deleted = repository.deleteByCriteria(
+                "tenant-a",
+                "tenant",
+                new PrivacyAuditDeadLetterQueryCriteria(
+                        "READ", null,
+                        null, null,
+                        null, null,
+                        null, null,
+                        null, null,
+                        null, null,
+                        null, null,
+                        null, null,
+                        PrivacyAuditSortDirection.DESC,
+                        1,
+                        0
+                )
+        );
+
+        assertEquals(1, deleted);
+        assertThat(repository.findAll()).extracting(PrivacyAuditDeadLetterEntry::resourceId).containsExactly("b1", "a1");
+    }
+
+    @Test
+    void replaysTenantNativeFilteredDeadLetters() {
+        InMemoryPrivacyAuditDeadLetterRepository repository = new InMemoryPrivacyAuditDeadLetterRepository();
+        repository.save(new PrivacyAuditDeadLetterEntry(null, Instant.parse("2026-03-06T00:00:00Z"), 3, "TypeA", "one", Instant.parse("2026-03-05T23:00:00Z"), "READ", "Patient", "a1", "alice", "OK", Map.of("tenant", "tenant-a")));
+        repository.save(new PrivacyAuditDeadLetterEntry(null, Instant.parse("2026-03-06T01:00:00Z"), 3, "TypeA", "two", Instant.parse("2026-03-06T00:30:00Z"), "READ", "Patient", "a2", "alice", "OK", Map.of("tenant", "tenant-a")));
+        repository.save(new PrivacyAuditDeadLetterEntry(null, Instant.parse("2026-03-06T02:00:00Z"), 4, "TypeB", "three", Instant.parse("2026-03-06T01:30:00Z"), "WRITE", "Order", "b1", "bob", "DENIED", Map.of("tenant", "tenant-b")));
+
+        PrivacyAuditDeadLetterReplayResult result = repository.replayByCriteria(
+                "tenant-a",
+                "tenant",
+                PrivacyAuditDeadLetterQueryCriteria.recent(10),
+                entry -> !"a1".equals(entry.resourceId())
+        );
+
+        assertEquals(2, result.requested());
+        assertEquals(1, result.replayed());
+        assertEquals(1, result.failed());
+        assertThat(result.replayedIds()).hasSize(1);
+        assertThat(result.failedIds()).hasSize(1);
+        assertThat(repository.findAll()).extracting(PrivacyAuditDeadLetterEntry::resourceId).containsExactly("b1", "a1");
+    }
 }

@@ -12,8 +12,14 @@ public interface PrivacyAuditDeadLetterWebhookVerificationTelemetry {
 
     void recordFailure(PrivacyAuditDeadLetterWebhookVerificationException.Reason reason);
 
+    default void recordRouteFailure(String route, PrivacyAuditDeadLetterWebhookVerificationException.Reason reason) {
+    }
+
     static PrivacyAuditDeadLetterWebhookVerificationTelemetry noop() {
-        return reason -> {
+        return new PrivacyAuditDeadLetterWebhookVerificationTelemetry() {
+            @Override
+            public void recordFailure(PrivacyAuditDeadLetterWebhookVerificationException.Reason reason) {
+            }
         };
     }
 }

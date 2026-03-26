@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -121,6 +122,31 @@ class PrivacyTenantAuditQueryServiceTest {
 
         assertThat(meterRegistry.get("privacy.audit.tenant.read.path").tag("domain", "audit").tag("path", "fallback").counter().count()).isEqualTo(1.0d);
         assertThat(meterRegistry.get("privacy.audit.tenant.read.path").tag("domain", "audit_stats").tag("path", "fallback").counter().count()).isEqualTo(1.0d);
+    }
+
+    @Test
+    void resolvesTelemetryLazilyFromSupplier() {
+        PrivacyAuditQueryRepository repository = criteria -> List.of(event("A1", "tenant-a"));
+        PrivacyAuditQueryService queryService = new PrivacyAuditQueryService(repository);
+        PrivacyAuditStatsService statsService = new PrivacyAuditStatsService(
+                criteria -> new PrivacyAuditQueryStats(1, Map.of("READ", 1L), Map.of("SUCCESS", 1L), Map.of("Patient", 1L))
+        );
+        AtomicReference<PrivacyTenantAuditTelemetry> telemetryRef = new AtomicReference<>();
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        telemetryRef.set(new MicrometerPrivacyTenantAuditTelemetry(meterRegistry));
+
+        PrivacyTenantAuditQueryService service = new PrivacyTenantAuditQueryService(
+                queryService,
+                statsService,
+                () -> "tenant-a",
+                tenantId -> new PrivacyTenantAuditPolicy(java.util.Set.of(), java.util.Set.of(), true, "tenant"),
+                null,
+                telemetryRef::get
+        );
+
+        service.findByCriteria("tenant-a", PrivacyAuditQueryCriteria.recent(10));
+
+        assertThat(meterRegistry.get("privacy.audit.tenant.read.path").tag("domain", "audit").tag("path", "fallback").counter().count()).isEqualTo(1.0d);
     }
 
     private PrivacyAuditEvent event(String resourceId, String tenant) {

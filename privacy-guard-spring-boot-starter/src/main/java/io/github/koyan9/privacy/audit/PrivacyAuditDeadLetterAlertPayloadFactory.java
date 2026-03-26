@@ -14,7 +14,14 @@ public final class PrivacyAuditDeadLetterAlertPayloadFactory {
     }
 
     public static Map<String, Object> createPayload(PrivacyAuditDeadLetterAlertEvent event) {
+        return createPayload(event, null);
+    }
+
+    public static Map<String, Object> createPayload(PrivacyAuditDeadLetterAlertEvent event, String tenantId) {
         Map<String, Object> body = new LinkedHashMap<>();
+        if (tenantId != null && !tenantId.isBlank()) {
+            body.put("tenantId", tenantId.trim());
+        }
         body.put("occurredAt", event.occurredAt().toString());
         body.put("recovery", event.recovery());
         body.put("state", event.currentSnapshot().state().name());

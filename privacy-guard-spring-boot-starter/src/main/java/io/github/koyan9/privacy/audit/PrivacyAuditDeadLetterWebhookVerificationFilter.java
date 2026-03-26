@@ -24,6 +24,7 @@ public class PrivacyAuditDeadLetterWebhookVerificationFilter extends OncePerRequ
 
     private final PrivacyAuditDeadLetterWebhookRequestVerifier verifier;
     private final String pathPattern;
+    private final PrivacyAuditDeadLetterWebhookVerificationRouteRegistry routeRegistry;
     private final PrivacyAuditDeadLetterWebhookVerificationTelemetry telemetry;
     private final AntPathMatcher pathMatcher = new AntPathMatcher();
 
@@ -39,15 +40,28 @@ public class PrivacyAuditDeadLetterWebhookVerificationFilter extends OncePerRequ
             String pathPattern,
             PrivacyAuditDeadLetterWebhookVerificationTelemetry telemetry
     ) {
+        this(verifier, pathPattern, null, telemetry);
+    }
+
+    public PrivacyAuditDeadLetterWebhookVerificationFilter(
+            PrivacyAuditDeadLetterWebhookRequestVerifier verifier,
+            String pathPattern,
+            PrivacyAuditDeadLetterWebhookVerificationRouteRegistry routeRegistry,
+            PrivacyAuditDeadLetterWebhookVerificationTelemetry telemetry
+    ) {
         this.verifier = verifier;
         this.pathPattern = pathPattern;
+        this.routeRegistry = routeRegistry;
         this.telemetry = telemetry == null ? PrivacyAuditDeadLetterWebhookVerificationTelemetry.noop() : telemetry;
     }
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !"POST".equalsIgnoreCase(request.getMethod())
-                || !pathMatcher.match(pathPattern, request.getRequestURI());
+        if (!"POST".equalsIgnoreCase(request.getMethod())) {
+            return true;
+        }
+        String requestUri = request.getRequestURI();
+        return !matchesConfiguredRoute(requestUri);
     }
 
     @Override
@@ -59,15 +73,45 @@ public class PrivacyAuditDeadLetterWebhookVerificationFilter extends OncePerRequ
         byte[] body = StreamUtils.copyToByteArray(request.getInputStream());
         CachedBodyHttpServletRequest wrappedRequest = new CachedBodyHttpServletRequest(request, body);
         try {
-            verifier.verify(headers(request), new String(body, StandardCharsets.UTF_8));
+            ResolvedVerifier resolvedVerifier = resolveVerifier(request.getRequestURI());
+            PrivacyAuditDeadLetterWebhookRequestVerifier selectedVerifier = resolvedVerifier.verifier();
+            if (selectedVerifier == null) {
+                filterChain.doFilter(wrappedRequest, response);
+                return;
+            }
+            selectedVerifier.verify(headers(request), new String(body, StandardCharsets.UTF_8));
         } catch (PrivacyAuditDeadLetterWebhookVerificationException ex) {
             telemetry.recordFailure(ex.reason());
+            telemetry.recordRouteFailure(resolveRouteTag(request.getRequestURI()), ex.reason());
             response.setStatus(status(ex.reason()));
             response.setContentType("application/json");
             response.getWriter().write("{\"error\":\"" + ex.getMessage() + "\",\"reason\":\"" + ex.reasonCode() + "\"}");
             return;
         }
         filterChain.doFilter(wrappedRequest, response);
+    }
+
+    private boolean matchesConfiguredRoute(String requestUri) {
+        boolean matchesDefault = pathPattern != null && pathMatcher.match(pathPattern, requestUri);
+        boolean matchesTenantRoute = routeRegistry != null && routeRegistry.matches(requestUri);
+        return matchesDefault || matchesTenantRoute;
+    }
+
+    private ResolvedVerifier resolveVerifier(String requestUri) {
+        if (routeRegistry != null) {
+            PrivacyAuditDeadLetterWebhookVerificationRouteRegistry.Route route = routeRegistry.find(requestUri);
+            if (route != null) {
+                return new ResolvedVerifier(route.verifier(), route.pathPattern());
+            }
+        }
+        if (pathPattern != null && pathMatcher.match(pathPattern, requestUri)) {
+            return new ResolvedVerifier(verifier, pathPattern);
+        }
+        return new ResolvedVerifier(null, null);
+    }
+
+    private String resolveRouteTag(String requestUri) {
+        return resolveVerifier(requestUri).routeTag();
     }
 
     private Map<String, String> headers(HttpServletRequest request) {
@@ -89,5 +133,8 @@ public class PrivacyAuditDeadLetterWebhookVerificationFilter extends OncePerRequ
             case REPLAY_DETECTED -> HttpServletResponse.SC_CONFLICT;
             case INVALID_AUTHORIZATION, MISSING_SIGNATURE_HEADERS, EXPIRED_TIMESTAMP, INVALID_SIGNATURE -> HttpServletResponse.SC_UNAUTHORIZED;
         };
+    }
+
+    private record ResolvedVerifier(PrivacyAuditDeadLetterWebhookRequestVerifier verifier, String routeTag) {
     }
 }

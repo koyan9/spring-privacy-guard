@@ -3,10 +3,13 @@
 
 spring:
   datasource:
-    url: jdbc:h2:mem:privacy-demo-jdbc-tenant;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    url: jdbc:h2:file:./target/privacy-demo-jdbc-tenant-shared;MODE=PostgreSQL;AUTO_SERVER=TRUE
     driver-class-name: org.h2.Driver
     username: sa
     password:
+
+demo:
+  instance-id: node-1
 
 privacy:
   guard:

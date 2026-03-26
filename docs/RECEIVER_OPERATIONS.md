@@ -14,6 +14,55 @@ The starter ships with three implementations:
 If you run multiple receiver instances, use a shared store implementation to avoid replay gaps.
 Implement `PrivacyAuditDeadLetterWebhookReplayStore` and wire it as a bean to override the default.
 
+### Replay Namespace Boundary
+
+Receiver replay protection is deployment-scoped by default.
+If multiple logical receiver domains share one replay-store backend, configure:
+
+- `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.namespace`
+
+The verifier prefixes stored nonces with that namespace before writing to the backend.
+This keeps nonce spaces distinct across environments, per-tenant receiver deployments, or separate webhook consumers that intentionally share one JDBC / Redis / file replay store.
+
+This namespace is static configuration, not per-request tenant resolution.
+Do not rely on request headers to create replay boundaries unless your own receiver contract signs and validates that routing information separately.
+
+### Tenant-Specific Receiver Routes
+
+If one application hosts multiple tenant-specific receiver endpoints, configure explicit path routes instead of trying to select secrets from unverified request headers.
+
+Example:
+
+```yaml
+privacy:
+  guard:
+    audit:
+      dead-letter:
+        observability:
+          alert:
+            receiver:
+              filter:
+                enabled: true
+            tenant:
+              enabled: true
+              tenant-ids:
+                - tenant-a
+              routes:
+                tenant-a:
+                  receiver:
+                    path-pattern: /tenant-a/privacy-alerts
+                    bearer-token: tenant-a-token
+                    signature-secret: tenant-a-secret
+                    replay-namespace: tenant-a-receiver
+```
+
+Route behavior:
+
+- the route `path-pattern` is matched before the global receiver path pattern
+- route-specific bearer/signature settings override the global receiver verification settings for that path
+- route-specific `replay-namespace` overrides the global replay namespace for that path
+- if a route omits a verification field, the starter falls back to the global receiver verification settings
+
 ### Choosing a Replay Store
 
 - Use `InMemoryPrivacyAuditDeadLetterWebhookReplayStore` for local runs and tests only.
@@ -71,6 +120,7 @@ privacy:
           alert:
             receiver:
               replay-store:
+                namespace: tenant-a-receiver
                 file:
                   enabled: true
                   path: /var/lib/privacy-audit/replay-store.json
@@ -89,6 +139,7 @@ privacy:
           alert:
             receiver:
               replay-store:
+                namespace: tenant-a-receiver
                 jdbc:
                   enabled: true
                   initialize-schema: true
@@ -117,6 +168,7 @@ privacy:
           alert:
             receiver:
               replay-store:
+                namespace: tenant-a-receiver
                 redis:
                   enabled: true
                   key-prefix: privacy:audit:webhook:replay:
@@ -124,6 +176,28 @@ privacy:
 ```
 
 Redis mode stores one key per nonce and relies on Redis TTL for expiry. Snapshot and clear operations iterate keys by prefix, so use a dedicated prefix for this library.
+
+### Sample Redis Multi-Instance Reference
+
+The sample app now includes:
+
+- `samples/privacy-demo/src/main/resources/application-redis-tenant.yml`
+- `samples/privacy-demo/src/main/resources/application-redis-tenant-node2.yml`
+- `samples/privacy-demo/docker-compose.redis.yml`
+- `samples/privacy-demo/scripts/manage-redis-local.ps1`
+- `samples/privacy-demo/scripts/manage-redis-local.sh`
+- `samples/privacy-demo/scripts/verify-redis-tenant-multi-instance.ps1`
+
+Use these when you want a local two-node receiver verification rehearsal backed by Redis instead of JDBC replay-store tables.
+
+Recommended local flow:
+
+1. Start Redis on `localhost:6379`.
+   Use `manage-redis-local.ps1 -Action up` on Windows or `manage-redis-local.sh up` on macOS / Linux if you want the sample to launch Redis through the bundled Docker Compose file.
+2. Start node 1 with profile `redis-tenant`.
+3. Start node 2 with profiles `redis-tenant,redis-tenant-node2`.
+4. Run `verify-redis-tenant-multi-instance.ps1`.
+5. Confirm the second node rejects the replayed nonce and both nodes report `receiverReplayStore.backend=REDIS` in `/demo-tenants/observability`.
 
 ### Schema Notes
 
@@ -193,6 +267,8 @@ Multiple instances:
 
 - Prefer a shared replay store to prevent nonce reuse across instances.
 - If you cannot share a store, use sticky sessions and document the limitation.
+- If multiple tenant-specific receiver deployments share the same store, give each deployment its own `replay-store.namespace`.
+- For a runnable local two-node example, reuse `samples/privacy-demo` with the `redis-tenant` and `redis-tenant-node2` profiles when you already have Redis available.
 
 ## Sample Operations
 

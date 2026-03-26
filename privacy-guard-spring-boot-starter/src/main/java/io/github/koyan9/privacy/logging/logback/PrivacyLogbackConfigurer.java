@@ -10,6 +10,8 @@ import io.github.koyan9.privacy.logging.PrivacyLogSanitizer;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;
 
+import java.util.function.Supplier;
+
 public class PrivacyLogbackConfigurer implements DisposableBean {
 
     private final PrivacyBlockingTurboFilter privacyBlockingTurboFilter;
@@ -25,7 +27,21 @@ public class PrivacyLogbackConfigurer implements DisposableBean {
             boolean blockUnsafeMessages,
             PrivacyLogbackSanitizerSettings sanitizerSettings
     ) {
-        PrivacyLogbackRuntime.set(privacyLogSanitizer, sanitizerSettings);
+        this(
+                privacyLogSanitizer,
+                installTurboFilter,
+                blockUnsafeMessages,
+                () -> sanitizerSettings == null ? PrivacyLogbackSanitizerSettings.disabled() : sanitizerSettings
+        );
+    }
+
+    public PrivacyLogbackConfigurer(
+            PrivacyLogSanitizer privacyLogSanitizer,
+            boolean installTurboFilter,
+            boolean blockUnsafeMessages,
+            Supplier<PrivacyLogbackSanitizerSettings> sanitizerSettingsSupplier
+    ) {
+        PrivacyLogbackRuntime.set(privacyLogSanitizer, sanitizerSettingsSupplier);
         if (installTurboFilter && LoggerFactory.getILoggerFactory() instanceof LoggerContext loggerContext) {
             PrivacyBlockingTurboFilter turboFilter = new PrivacyBlockingTurboFilter();
             turboFilter.setBlockUnsafeMessages(blockUnsafeMessages);

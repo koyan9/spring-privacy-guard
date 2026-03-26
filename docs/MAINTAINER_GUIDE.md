@@ -12,6 +12,21 @@ This guide is for maintainers responsible for releases, triage, and repository h
 - `docs/RELEASE_EXECUTION_v0.3.0.md`
 - `docs/RELEASE_RUNBOOK_v0.3.0.md`
 - `docs/releases/RELEASE_NOTES_v0.3.0.md`
+- `docs/RELEASE_EXECUTION_v0.4.0.md`
+- `docs/RELEASE_RUNBOOK_v0.4.0.md`
+- `docs/releases/RELEASE_NOTES_v0.4.0.md`
+- `docs/RELEASE_ANNOUNCEMENT_v0.4.0.md`
+- `docs/RELEASE_ANNOUNCEMENT_v0.4.0.zh-CN.md`
+- `CHANGELOG.md`
+- `docs/ROADMAP.md`
+
+## Current Status
+
+- Latest published release: `v0.3.0`
+- Next draft release target: `v0.4.0`
+- Current unreleased implementation progress is tracked in `CHANGELOG.md`
+- Current next-work priorities are tracked in `docs/ROADMAP.md`
+- When maintainers change that status, update `README.md`, `README.zh-CN.md`, `docs/INDEX.md`, and sample docs together
 
 ## Triage Checklist
 
@@ -23,7 +38,8 @@ This guide is for maintainers responsible for releases, triage, and repository h
 ## Release Workflow
 
 - Follow `docs/RELEASE_CHECKLIST.md` before tagging.
-- Use the current versioned execution guide, `docs/RELEASE_EXECUTION_v0.3.0.md`, as the step-by-step release guide.
+- Use the latest published versioned execution guide, currently `docs/RELEASE_EXECUTION_v0.3.0.md`, as the step-by-step template until a newer guide is added.
+- Use the draft `v0.4.0` release docs as the working set for the next candidate release.
 - Validate `docs/releases/RELEASE_NOTES_<tag>.md` before triggering the release workflow.
 - Run `python scripts/check_repo_hygiene.py` before publishing.
 
@@ -36,7 +52,7 @@ This guide is for maintainers responsible for releases, triage, and repository h
 
 ## Release FAQ
 
-- **How do I create a release tag?** Follow the current versioned execution guide, now `docs/RELEASE_EXECUTION_v0.3.0.md`, and tag `vX.Y.Z`.
+- **How do I create a release tag?** Follow the latest published execution guide for reference and update the draft next-version guide, currently `docs/RELEASE_EXECUTION_v0.4.0.md`, before tagging `vX.Y.Z`.
 - **Which workflow inputs do I use?** Use `tag`, `release_name`, and `prerelease` as documented in `.github/workflows/release.yml`.
 - **Where should release notes live?** Put them in `docs/releases/RELEASE_NOTES_<tag>.md` and update `CHANGELOG.md`.
 - **How do I roll back a bad release?** Remove the GitHub release, delete the tag, and re-run the release process after the fix.

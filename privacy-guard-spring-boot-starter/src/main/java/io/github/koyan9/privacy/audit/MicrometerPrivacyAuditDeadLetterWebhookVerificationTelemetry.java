@@ -24,4 +24,17 @@ public class MicrometerPrivacyAuditDeadLetterWebhookVerificationTelemetry implem
                 tag
         ).increment();
     }
+
+    @Override
+    public void recordRouteFailure(String route, PrivacyAuditDeadLetterWebhookVerificationException.Reason reason) {
+        String normalizedRoute = route == null || route.isBlank() ? "default" : route.trim();
+        String normalizedReason = reason == null ? "unknown" : reason.name().toLowerCase();
+        meterRegistry.counter(
+                "privacy.audit.deadletters.receiver.route.failures",
+                "route",
+                normalizedRoute,
+                "reason",
+                normalizedReason
+        ).increment();
+    }
 }

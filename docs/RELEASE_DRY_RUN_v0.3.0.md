@@ -1,6 +1,6 @@
 # Release Dry Run: v0.3.0
 
-This document records a release-preparation dry run for the planned `v0.3.0` release.
+This document records the release-preparation dry run that preceded the published `v0.3.0` release.
 
 ## Scope Reviewed
 
@@ -37,11 +37,11 @@ This document records a release-preparation dry run for the planned `v0.3.0` rel
 
 - [x] Re-run `mvnw.cmd -q verify` after the `0.3.0` version alignment
 - [x] Re-install local artifacts and validate `samples/privacy-demo`
-- [ ] Push tag `v0.3.0`
-- [ ] Monitor `.github/workflows/release.yml`
+- [x] Push tag `v0.3.0`
+- [x] Monitor `.github/workflows/release.yml`
 
 ## Notes
 
 - `v0.3.0` packages the current Redis replay-store and baseline multi-tenant work without changing the stable event and query contracts.
 - Local dry-run validation was completed on 2026-03-19 with `mvnw.cmd -q verify`, `mvnw.cmd -q -DskipTests install`, `mvnw.cmd -q -f samples/privacy-demo/pom.xml test`, and `python scripts/check_repo_hygiene.py`.
-- The remaining release-cut blocker is operational rather than technical: commit the intended release state on a clean worktree, then create and push tag `v0.3.0`.
+- The actual `v0.3.0` release was completed on 2026-03-20 after the validated release state was tagged and the GitHub Release workflow finished successfully.

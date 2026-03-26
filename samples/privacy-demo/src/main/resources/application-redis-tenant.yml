@@ -1,0 +1,36 @@
+# Copyright 2026 koyan9
+# SPDX-License-Identifier: Apache-2.0
+
+spring:
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2s
+
+management:
+  health:
+    redis:
+      enabled: true
+
+demo:
+  instance-id: redis-node-1
+
+privacy:
+  guard:
+    audit:
+      dead-letter:
+        observability:
+          alert:
+            receiver:
+              replay-store:
+                namespace: demo-redis-shared
+                redis:
+                  enabled: true
+                  key-prefix: "privacy:demo:redis:webhook:replay:"
+                  scan-batch-size: 500
+                jdbc:
+                  enabled: false
+                  initialize-schema: false
+                file:
+                  enabled: false

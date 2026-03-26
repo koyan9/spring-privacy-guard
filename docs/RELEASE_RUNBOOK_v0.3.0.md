@@ -1,6 +1,7 @@
 # Release Runbook: v0.3.0
 
-This runbook is the shortest path to publishing `spring-privacy-guard v0.3.0`.
+This runbook is the archived shortest path that was used to publish `spring-privacy-guard v0.3.0` on 2026-03-20.
+Reuse it as the latest published example until a newer versioned runbook exists.
 
 ## 1. Final Local Check
 

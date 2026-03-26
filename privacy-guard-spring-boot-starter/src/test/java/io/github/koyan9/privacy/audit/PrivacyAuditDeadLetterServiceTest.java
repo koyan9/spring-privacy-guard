@@ -123,6 +123,51 @@ class PrivacyAuditDeadLetterServiceTest {
     }
 
     @Test
+    void replaysProvidedEntriesWithoutRefetchingThemById() {
+        AtomicReference<String> replayed = new AtomicReference<>();
+        AtomicReference<Long> deleted = new AtomicReference<>();
+        PrivacyAuditDeadLetterRepository repository = new PrivacyAuditDeadLetterRepository() {
+            @Override
+            public void save(PrivacyAuditDeadLetterEntry entry) {
+            }
+
+            @Override
+            public java.util.Optional<PrivacyAuditDeadLetterEntry> findById(long id) {
+                throw new AssertionError("findById should not be called when replaying provided entries");
+            }
+
+            @Override
+            public boolean deleteById(long id) {
+                deleted.set(id);
+                return true;
+            }
+        };
+        PrivacyAuditDeadLetterService service = new PrivacyAuditDeadLetterService(repository, event -> replayed.set(event.resourceId()));
+        PrivacyAuditDeadLetterEntry entry = new PrivacyAuditDeadLetterEntry(
+                42L,
+                Instant.now(),
+                3,
+                "TypeA",
+                "failure",
+                Instant.now(),
+                "READ",
+                "Patient",
+                "tenant-selected",
+                "actor",
+                "OK",
+                Map.of("tenant", "tenant-a")
+        );
+
+        PrivacyAuditDeadLetterReplayResult result = service.replayEntries(List.of(entry));
+
+        assertEquals(1, result.requested());
+        assertEquals(1, result.replayed());
+        assertEquals(0, result.failed());
+        assertEquals("tenant-selected", replayed.get());
+        assertEquals(42L, deleted.get());
+    }
+
+    @Test
     void deletesByCriteria() {
         InMemoryPrivacyAuditDeadLetterRepository repository = new InMemoryPrivacyAuditDeadLetterRepository();
         repository.save(new PrivacyAuditDeadLetterEntry(null, Instant.now(), 3, "TypeA", "one", Instant.now(), "READ", "Patient", "a", "actor", "OK", Map.of()));
@@ -146,5 +191,34 @@ class PrivacyAuditDeadLetterServiceTest {
 
         assertEquals(1, deleted);
         assertThat(repository.findAll()).extracting("resourceId").containsExactly("b");
+    }
+
+    @Test
+    void skipsPreselectedEntriesWithoutIdsDuringReplay() {
+        InMemoryPrivacyAuditDeadLetterRepository repository = new InMemoryPrivacyAuditDeadLetterRepository();
+        List<String> replayedIds = new ArrayList<>();
+        PrivacyAuditDeadLetterService service = new PrivacyAuditDeadLetterService(repository, event -> replayedIds.add(event.resourceId()));
+
+        PrivacyAuditDeadLetterReplayResult result = service.replayEntries(List.of(
+                new PrivacyAuditDeadLetterEntry(
+                        null,
+                        Instant.now(),
+                        3,
+                        "TypeA",
+                        "missing-id",
+                        Instant.now(),
+                        "READ",
+                        "Patient",
+                        "no-id",
+                        "actor",
+                        "OK",
+                        Map.of()
+                )
+        ));
+
+        assertEquals(1, result.requested());
+        assertEquals(0, result.replayed());
+        assertEquals(0, result.failed());
+        assertThat(replayedIds).isEmpty();
     }
 }

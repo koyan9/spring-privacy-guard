@@ -21,6 +21,7 @@ public class PrivacyAuditDeadLetterWebhookVerificationInterceptor implements Han
 
     private final PrivacyAuditDeadLetterWebhookRequestVerifier verifier;
     private final String pathPattern;
+    private final PrivacyAuditDeadLetterWebhookVerificationRouteRegistry routeRegistry;
     private final PrivacyAuditDeadLetterWebhookVerificationTelemetry telemetry;
     private final AntPathMatcher pathMatcher = new AntPathMatcher();
 
@@ -36,22 +37,38 @@ public class PrivacyAuditDeadLetterWebhookVerificationInterceptor implements Han
             String pathPattern,
             PrivacyAuditDeadLetterWebhookVerificationTelemetry telemetry
     ) {
+        this(verifier, pathPattern, null, telemetry);
+    }
+
+    public PrivacyAuditDeadLetterWebhookVerificationInterceptor(
+            PrivacyAuditDeadLetterWebhookRequestVerifier verifier,
+            String pathPattern,
+            PrivacyAuditDeadLetterWebhookVerificationRouteRegistry routeRegistry,
+            PrivacyAuditDeadLetterWebhookVerificationTelemetry telemetry
+    ) {
         this.verifier = verifier;
         this.pathPattern = pathPattern;
+        this.routeRegistry = routeRegistry;
         this.telemetry = telemetry == null ? PrivacyAuditDeadLetterWebhookVerificationTelemetry.noop() : telemetry;
     }
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
-        if (!"POST".equalsIgnoreCase(request.getMethod()) || !pathMatcher.match(pathPattern, request.getRequestURI())) {
+        if (!"POST".equalsIgnoreCase(request.getMethod()) || !matchesConfiguredRoute(request.getRequestURI())) {
             return true;
         }
         String body = StreamUtils.copyToString(request.getInputStream(), StandardCharsets.UTF_8);
         try {
-            verifier.verify(headers(request), body);
+            ResolvedVerifier resolvedVerifier = resolveVerifier(request.getRequestURI());
+            PrivacyAuditDeadLetterWebhookRequestVerifier selectedVerifier = resolvedVerifier.verifier();
+            if (selectedVerifier == null) {
+                return true;
+            }
+            selectedVerifier.verify(headers(request), body);
             return true;
         } catch (PrivacyAuditDeadLetterWebhookVerificationException ex) {
             telemetry.recordFailure(ex.reason());
+            telemetry.recordRouteFailure(resolveRouteTag(request.getRequestURI()), ex.reason());
             response.setStatus(status(ex.reason()));
             response.setContentType("application/json");
             response.getWriter().write("{\"error\":\"" + ex.getMessage() + "\",\"reason\":\"" + ex.reasonCode() + "\"}");
@@ -78,5 +95,31 @@ public class PrivacyAuditDeadLetterWebhookVerificationInterceptor implements Han
             case REPLAY_DETECTED -> HttpServletResponse.SC_CONFLICT;
             case INVALID_AUTHORIZATION, MISSING_SIGNATURE_HEADERS, EXPIRED_TIMESTAMP, INVALID_SIGNATURE -> HttpServletResponse.SC_UNAUTHORIZED;
         };
+    }
+
+    private boolean matchesConfiguredRoute(String requestUri) {
+        boolean matchesDefault = pathPattern != null && pathMatcher.match(pathPattern, requestUri);
+        boolean matchesTenantRoute = routeRegistry != null && routeRegistry.matches(requestUri);
+        return matchesDefault || matchesTenantRoute;
+    }
+
+    private ResolvedVerifier resolveVerifier(String requestUri) {
+        if (routeRegistry != null) {
+            PrivacyAuditDeadLetterWebhookVerificationRouteRegistry.Route route = routeRegistry.find(requestUri);
+            if (route != null) {
+                return new ResolvedVerifier(route.verifier(), route.pathPattern());
+            }
+        }
+        if (pathPattern != null && pathMatcher.match(pathPattern, requestUri)) {
+            return new ResolvedVerifier(verifier, pathPattern);
+        }
+        return new ResolvedVerifier(null, null);
+    }
+
+    private String resolveRouteTag(String requestUri) {
+        return resolveVerifier(requestUri).routeTag();
+    }
+
+    private record ResolvedVerifier(PrivacyAuditDeadLetterWebhookRequestVerifier verifier, String routeTag) {
     }
 }

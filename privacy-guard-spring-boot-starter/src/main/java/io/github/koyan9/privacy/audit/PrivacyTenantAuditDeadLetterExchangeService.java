@@ -20,14 +20,19 @@ import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 public class PrivacyTenantAuditDeadLetterExchangeService {
 
     private final PrivacyAuditDeadLetterExchangeService exchangeService;
+    private final PrivacyAuditDeadLetterRepository deadLetterRepository;
     private final PrivacyTenantAuditDeadLetterQueryService tenantQueryService;
     private final PrivacyTenantAuditPolicyResolver tenantAuditPolicyResolver;
+    private final PrivacyTenantAuditDeadLetterReadRepository tenantReadRepository;
+    private final PrivacyTenantAuditDeadLetterWriteRepository tenantWriteRepository;
     private final PrivacyAuditDeadLetterCsvCodec csvCodec;
     private final ObjectMapper objectMapper;
+    private final Supplier<PrivacyTenantAuditTelemetry> telemetrySupplier;
 
     public PrivacyTenantAuditDeadLetterExchangeService(
             PrivacyAuditDeadLetterExchangeService exchangeService,
@@ -36,13 +41,67 @@ public class PrivacyTenantAuditDeadLetterExchangeService {
             PrivacyAuditDeadLetterCsvCodec csvCodec,
             ObjectMapper objectMapper
     ) {
+        this(
+                exchangeService,
+                null,
+                tenantQueryService,
+                tenantAuditPolicyResolver,
+                null,
+                null,
+                csvCodec,
+                objectMapper,
+                (Supplier<PrivacyTenantAuditTelemetry>) null
+        );
+    }
+
+    public PrivacyTenantAuditDeadLetterExchangeService(
+            PrivacyAuditDeadLetterExchangeService exchangeService,
+            PrivacyAuditDeadLetterRepository deadLetterRepository,
+            PrivacyTenantAuditDeadLetterQueryService tenantQueryService,
+            PrivacyTenantAuditPolicyResolver tenantAuditPolicyResolver,
+            PrivacyTenantAuditDeadLetterReadRepository tenantReadRepository,
+            PrivacyTenantAuditDeadLetterWriteRepository tenantWriteRepository,
+            PrivacyAuditDeadLetterCsvCodec csvCodec,
+            ObjectMapper objectMapper,
+            PrivacyTenantAuditTelemetry telemetry
+    ) {
+        this(
+                exchangeService,
+                deadLetterRepository,
+                tenantQueryService,
+                tenantAuditPolicyResolver,
+                tenantReadRepository,
+                tenantWriteRepository,
+                csvCodec,
+                objectMapper,
+                () -> telemetry == null ? PrivacyTenantAuditTelemetry.noop() : telemetry
+        );
+    }
+
+    public PrivacyTenantAuditDeadLetterExchangeService(
+            PrivacyAuditDeadLetterExchangeService exchangeService,
+            PrivacyAuditDeadLetterRepository deadLetterRepository,
+            PrivacyTenantAuditDeadLetterQueryService tenantQueryService,
+            PrivacyTenantAuditPolicyResolver tenantAuditPolicyResolver,
+            PrivacyTenantAuditDeadLetterReadRepository tenantReadRepository,
+            PrivacyTenantAuditDeadLetterWriteRepository tenantWriteRepository,
+            PrivacyAuditDeadLetterCsvCodec csvCodec,
+            ObjectMapper objectMapper,
+            Supplier<PrivacyTenantAuditTelemetry> telemetrySupplier
+    ) {
         this.exchangeService = exchangeService;
+        this.deadLetterRepository = deadLetterRepository;
         this.tenantQueryService = tenantQueryService;
         this.tenantAuditPolicyResolver = tenantAuditPolicyResolver == null
                 ? PrivacyTenantAuditPolicyResolver.noop()
                 : tenantAuditPolicyResolver;
+        this.tenantReadRepository = tenantReadRepository;
+        this.tenantWriteRepository = tenantWriteRepository;
         this.csvCodec = csvCodec;
         this.objectMapper = objectMapper;
+        this.telemetrySupplier = telemetrySupplier == null
+                ? PrivacyTenantAuditTelemetry::noop
+                : telemetrySupplier;
     }
 
     public String exportJson(String tenantId, PrivacyAuditDeadLetterQueryCriteria criteria) {
@@ -51,6 +110,7 @@ public class PrivacyTenantAuditDeadLetterExchangeService {
             return exchangeService.exportJson(criteria);
         }
         try {
+            telemetry().recordQueryReadPath("dead_letter_export", readPathKind());
             return objectMapper.writeValueAsString(tenantQueryService.findByCriteria(normalizedTenant, criteria));
         } catch (IOException exception) {
             throw new IllegalStateException("Failed to export tenant-scoped privacy audit dead letters as JSON", exception);
@@ -62,6 +122,7 @@ public class PrivacyTenantAuditDeadLetterExchangeService {
         if (normalizedTenant == null) {
             return exchangeService.exportCsv(criteria);
         }
+        telemetry().recordQueryReadPath("dead_letter_export", readPathKind());
         return csvCodec.exportEntries(tenantQueryService.findByCriteria(normalizedTenant, criteria));
     }
 
@@ -70,13 +131,18 @@ public class PrivacyTenantAuditDeadLetterExchangeService {
             PrivacyAuditDeadLetterQueryCriteria criteria,
             String format
     ) {
+        String normalizedTenant = normalizeTenant(tenantId);
+        if (normalizedTenant == null) {
+            return exchangeService.exportManifest(criteria, format);
+        }
+        telemetry().recordQueryReadPath("dead_letter_manifest", readPathKind());
         String normalizedFormat = normalizeFormat(format);
+        List<PrivacyAuditDeadLetterEntry> entries = tenantQueryService.findByCriteria(normalizedTenant, criteria);
         String content = switch (normalizedFormat) {
-            case "json" -> exportJson(tenantId, criteria);
-            case "csv" -> exportCsv(tenantId, criteria);
+            case "json" -> writeJson(entries);
+            case "csv" -> csvCodec.exportEntries(entries);
             default -> throw new IllegalArgumentException("Unsupported dead-letter export format: " + format);
         };
-        List<PrivacyAuditDeadLetterEntry> entries = filteredEntries(tenantId, criteria);
         return new PrivacyAuditDeadLetterExportManifest(
                 normalizedFormat,
                 entries.size(),
@@ -99,7 +165,7 @@ public class PrivacyTenantAuditDeadLetterExchangeService {
             return exchangeService.importJson(resolvedContent, deduplicate, expectedChecksum);
         }
         List<PrivacyAuditDeadLetterEntry> scopedEntries = scopeEntries(parseJsonEntries(resolvedContent), normalizedTenant);
-        return importScopedEntries(scopedEntries, deduplicate, checksum);
+        return importScopedEntries(scopedEntries, normalizedTenant, deduplicate, checksum);
     }
 
     public PrivacyAuditDeadLetterImportResult importCsv(
@@ -116,7 +182,7 @@ public class PrivacyTenantAuditDeadLetterExchangeService {
             return exchangeService.importCsv(resolvedContent, deduplicate, expectedChecksum);
         }
         List<PrivacyAuditDeadLetterEntry> scopedEntries = scopeEntries(csvCodec.importEntries(resolvedContent), normalizedTenant);
-        return importScopedEntries(scopedEntries, deduplicate, checksum);
+        return importScopedEntries(scopedEntries, normalizedTenant, deduplicate, checksum);
     }
 
     private List<PrivacyAuditDeadLetterEntry> filteredEntries(String tenantId, PrivacyAuditDeadLetterQueryCriteria criteria) {
@@ -129,21 +195,21 @@ public class PrivacyTenantAuditDeadLetterExchangeService {
 
     private PrivacyAuditDeadLetterImportResult importScopedEntries(
             List<PrivacyAuditDeadLetterEntry> scopedEntries,
+            String tenantId,
             boolean deduplicate,
             String checksum
     ) {
-        try {
-            String scopedJson = objectMapper.writeValueAsString(scopedEntries);
-            PrivacyAuditDeadLetterImportResult imported = exchangeService.importJson(scopedJson, deduplicate, null);
-            return new PrivacyAuditDeadLetterImportResult(
-                    imported.received(),
-                    imported.imported(),
-                    imported.skippedDuplicates(),
-                    checksum
+        if (tenantWriteRepository != null && deadLetterRepository != null) {
+            telemetry().recordWritePath("dead_letter_import", "native");
+            return exchangeService.importEntries(
+                    scopedEntries,
+                    deduplicate,
+                    checksum,
+                    entries -> tenantWriteRepository.saveAllTenantAware(toWriteRequests(entries, tenantId))
             );
-        } catch (IOException exception) {
-            throw new IllegalStateException("Failed to import tenant-scoped privacy audit dead letters", exception);
         }
+        telemetry().recordWritePath("dead_letter_import", "fallback");
+        return exchangeService.importEntries(scopedEntries, deduplicate, checksum);
     }
 
     private List<PrivacyAuditDeadLetterEntry> parseJsonEntries(String content) {
@@ -190,6 +256,16 @@ public class PrivacyTenantAuditDeadLetterExchangeService {
         return List.copyOf(scoped);
     }
 
+    private List<PrivacyTenantAuditDeadLetterWriteRequest> toWriteRequests(
+            List<PrivacyAuditDeadLetterEntry> entries,
+            String tenantId
+    ) {
+        String detailKey = tenantDetailKey(tenantId);
+        return entries.stream()
+                .map(entry -> new PrivacyTenantAuditDeadLetterWriteRequest(entry, tenantId, detailKey))
+                .toList();
+    }
+
     private String tenantDetailKey(String tenantId) {
         PrivacyTenantAuditPolicy policy = tenantAuditPolicyResolver.resolve(tenantId);
         if (policy == null) {
@@ -228,5 +304,22 @@ public class PrivacyTenantAuditDeadLetterExchangeService {
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 digest is unavailable", exception);
         }
+    }
+
+    private String readPathKind() {
+        return tenantReadRepository != null ? "native" : "fallback";
+    }
+
+    private String writeJson(List<PrivacyAuditDeadLetterEntry> entries) {
+        try {
+            return objectMapper.writeValueAsString(entries);
+        } catch (IOException exception) {
+            throw new IllegalStateException("Failed to export tenant-scoped privacy audit dead letters as JSON", exception);
+        }
+    }
+
+    private PrivacyTenantAuditTelemetry telemetry() {
+        PrivacyTenantAuditTelemetry telemetry = telemetrySupplier.get();
+        return telemetry == null ? PrivacyTenantAuditTelemetry.noop() : telemetry;
     }
 }

@@ -36,13 +36,17 @@ import io.github.koyan9.privacy.audit.PrivacyAuditService;
 import io.github.koyan9.privacy.audit.PrivacyAuditStatsRepository;
 import io.github.koyan9.privacy.audit.PrivacyAuditStatsService;
 import io.github.koyan9.privacy.audit.PrivacyTenantAuditDeadLetterOperationsService;
+import io.github.koyan9.privacy.audit.PrivacyTenantAuditDeadLetterDeleteRepository;
 import io.github.koyan9.privacy.audit.PrivacyTenantAuditDeadLetterQueryService;
+import io.github.koyan9.privacy.audit.PrivacyTenantAuditDeadLetterReplayRepository;
 import io.github.koyan9.privacy.audit.PrivacyTenantAuditQueryService;
 import io.github.koyan9.privacy.audit.PrivacyTenantAuditReadRepository;
 import io.github.koyan9.privacy.audit.PrivacyTenantAuditPolicy;
 import io.github.koyan9.privacy.audit.PrivacyTenantAuditPolicyResolver;
 import io.github.koyan9.privacy.audit.PrivacyTenantAuditDeadLetterReadRepository;
 import io.github.koyan9.privacy.audit.PrivacyTenantAuditTelemetry;
+import io.github.koyan9.privacy.audit.PrivacyTenantDeadLetterObservabilityPolicy;
+import io.github.koyan9.privacy.audit.PrivacyTenantDeadLetterObservabilityPolicyResolver;
 import io.github.koyan9.privacy.audit.RepositoryBackedPrivacyAuditDeadLetterHandler;
 import io.github.koyan9.privacy.audit.RepositoryPrivacyAuditPublisher;
 import io.github.koyan9.privacy.core.MaskingService;
@@ -57,6 +61,8 @@ import io.github.koyan9.privacy.core.TextMaskingService;
 import io.github.koyan9.privacy.jackson.PrivacyGuardModule;
 import io.github.koyan9.privacy.logging.PrivacyLogSanitizer;
 import io.github.koyan9.privacy.logging.PrivacyLoggerFactory;
+import io.github.koyan9.privacy.logging.PrivacyTenantLoggingPolicy;
+import io.github.koyan9.privacy.logging.PrivacyTenantLoggingPolicyResolver;
 import io.github.koyan9.privacy.logging.logback.PrivacyLogbackConfigurer;
 import io.github.koyan9.privacy.logging.logback.PrivacyLogbackSanitizerSettings;
 import io.github.koyan9.privacy.tenant.PrivacyTenantContextFilter;
@@ -84,6 +90,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 @AutoConfiguration
 @EnableConfigurationProperties(PrivacyGuardProperties.class)
@@ -132,6 +139,35 @@ public class PrivacyGuardAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    public PrivacyTenantDeadLetterObservabilityPolicyResolver privacyTenantDeadLetterObservabilityPolicyResolver(
+            PrivacyGuardProperties properties
+    ) {
+        Map<String, PrivacyTenantDeadLetterObservabilityPolicy> tenantPolicies =
+                buildTenantDeadLetterObservabilityPolicies(properties.getTenant());
+        return tenantId -> {
+            String normalizedTenantId = normalizeTenantId(tenantId);
+            if (normalizedTenantId == null) {
+                return PrivacyTenantDeadLetterObservabilityPolicy.none();
+            }
+            return tenantPolicies.getOrDefault(normalizedTenantId, PrivacyTenantDeadLetterObservabilityPolicy.none());
+        };
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public PrivacyTenantLoggingPolicyResolver privacyTenantLoggingPolicyResolver(PrivacyGuardProperties properties) {
+        Map<String, PrivacyTenantLoggingPolicy> tenantLoggingPolicies = buildTenantLoggingPolicies(properties.getTenant());
+        return tenantId -> {
+            String normalizedTenantId = normalizeTenantId(tenantId);
+            if (normalizedTenantId == null) {
+                return PrivacyTenantLoggingPolicy.none();
+            }
+            return tenantLoggingPolicies.getOrDefault(normalizedTenantId, PrivacyTenantLoggingPolicy.none());
+        };
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     public MaskingService maskingService(
             PrivacyGuardProperties properties,
             ObjectProvider<MaskingStrategy> maskingStrategies,
@@ -175,21 +211,18 @@ public class PrivacyGuardAutoConfiguration {
     @ConditionalOnMissingBean
     @ConditionalOnClass(PatternLayout.class)
     @ConditionalOnProperty(prefix = "privacy.guard.logging", name = "enabled", havingValue = "true", matchIfMissing = true)
-    public PrivacyLogbackConfigurer privacyLogbackConfigurer(PrivacyLogSanitizer privacyLogSanitizer, PrivacyGuardProperties properties) {
-        PrivacyGuardProperties.Logging logging = properties.getLogging();
-        PrivacyLogbackSanitizerSettings settings = new PrivacyLogbackSanitizerSettings(
-                logging.getMdc().isEnabled(),
-                new java.util.LinkedHashSet<>(logging.getMdc().getIncludeKeys()),
-                new java.util.LinkedHashSet<>(logging.getMdc().getExcludeKeys()),
-                logging.getStructured().isEnabled(),
-                new java.util.LinkedHashSet<>(logging.getStructured().getIncludeKeys()),
-                new java.util.LinkedHashSet<>(logging.getStructured().getExcludeKeys())
-        );
+    public PrivacyLogbackConfigurer privacyLogbackConfigurer(
+            PrivacyLogSanitizer privacyLogSanitizer,
+            PrivacyGuardProperties properties,
+            PrivacyTenantProvider tenantProvider,
+            PrivacyTenantLoggingPolicyResolver tenantLoggingPolicyResolver
+    ) {
+        PrivacyLogbackSanitizerSettings baseSettings = buildLogbackSanitizerSettings(properties.getLogging());
         return new PrivacyLogbackConfigurer(
                 privacyLogSanitizer,
                 properties.getLogging().getLogback().isInstallTurboFilter(),
                 properties.getLogging().getLogback().isBlockUnsafeMessages(),
-                settings
+                () -> resolveLogbackSanitizerSettings(baseSettings, tenantProvider, tenantLoggingPolicyResolver)
         );
     }
 
@@ -256,6 +289,59 @@ public class PrivacyGuardAutoConfiguration {
         return Map.copyOf(tenantPolicies);
     }
 
+    private PrivacyLogbackSanitizerSettings buildLogbackSanitizerSettings(PrivacyGuardProperties.Logging logging) {
+        return new PrivacyLogbackSanitizerSettings(
+                logging.getMdc().isEnabled(),
+                new java.util.LinkedHashSet<>(logging.getMdc().getIncludeKeys()),
+                new java.util.LinkedHashSet<>(logging.getMdc().getExcludeKeys()),
+                logging.getStructured().isEnabled(),
+                new java.util.LinkedHashSet<>(logging.getStructured().getIncludeKeys()),
+                new java.util.LinkedHashSet<>(logging.getStructured().getExcludeKeys())
+        );
+    }
+
+    private Map<String, PrivacyTenantLoggingPolicy> buildTenantLoggingPolicies(PrivacyGuardProperties.Tenant tenant) {
+        if (tenant == null || !tenant.isEnabled() || tenant.getPolicies().isEmpty()) {
+            return Map.of();
+        }
+        Map<String, PrivacyTenantLoggingPolicy> overrides = new java.util.LinkedHashMap<>();
+        for (Map.Entry<String, PrivacyGuardProperties.TenantPolicy> entry : tenant.getPolicies().entrySet()) {
+            String tenantId = normalizeTenantId(entry.getKey());
+            PrivacyGuardProperties.TenantPolicy tenantPolicy = entry.getValue();
+            if (tenantId == null || tenantPolicy == null) {
+                continue;
+            }
+            PrivacyTenantLoggingPolicy policy = toTenantLoggingPolicy(tenantPolicy.getLogging());
+            if (policy.hasOverrides()) {
+                overrides.put(tenantId, policy);
+            }
+        }
+        return Map.copyOf(overrides);
+    }
+
+    private PrivacyLogbackSanitizerSettings resolveLogbackSanitizerSettings(
+            PrivacyLogbackSanitizerSettings baseSettings,
+            PrivacyTenantProvider tenantProvider,
+            PrivacyTenantLoggingPolicyResolver tenantLoggingPolicyResolver
+    ) {
+        String tenantId = normalizeTenantId(tenantProvider.currentTenantId());
+        if (tenantId == null) {
+            return baseSettings;
+        }
+        PrivacyTenantLoggingPolicy policy = tenantLoggingPolicyResolver.resolve(tenantId);
+        if (policy == null || !policy.hasOverrides()) {
+            return baseSettings;
+        }
+        return new PrivacyLogbackSanitizerSettings(
+                policy.mdcEnabled() != null ? policy.mdcEnabled() : baseSettings.isMdcEnabled(),
+                policy.mdcIncludeKeys() != null ? policy.mdcIncludeKeys() : baseSettings.getMdcIncludeKeys(),
+                policy.mdcExcludeKeys() != null ? policy.mdcExcludeKeys() : baseSettings.getMdcExcludeKeys(),
+                policy.structuredEnabled() != null ? policy.structuredEnabled() : baseSettings.isStructuredEnabled(),
+                policy.structuredIncludeKeys() != null ? policy.structuredIncludeKeys() : baseSettings.getStructuredIncludeKeys(),
+                policy.structuredExcludeKeys() != null ? policy.structuredExcludeKeys() : baseSettings.getStructuredExcludeKeys()
+        );
+    }
+
     private Map<String, PrivacyTenantAuditPolicy> buildTenantAuditPolicies(PrivacyGuardProperties.Tenant tenant) {
         if (tenant == null || !tenant.isEnabled() || tenant.getPolicies().isEmpty()) {
             return Map.of();
@@ -281,6 +367,68 @@ public class PrivacyGuardAutoConfiguration {
         return Map.copyOf(tenantAuditPolicies);
     }
 
+    private Map<String, PrivacyTenantDeadLetterObservabilityPolicy> buildTenantDeadLetterObservabilityPolicies(
+            PrivacyGuardProperties.Tenant tenant
+    ) {
+        if (tenant == null || !tenant.isEnabled() || tenant.getPolicies().isEmpty()) {
+            return Map.of();
+        }
+        Map<String, PrivacyTenantDeadLetterObservabilityPolicy> policies = new java.util.LinkedHashMap<>();
+        for (Map.Entry<String, PrivacyGuardProperties.TenantPolicy> entry : tenant.getPolicies().entrySet()) {
+            String tenantId = normalizeTenantId(entry.getKey());
+            PrivacyGuardProperties.TenantPolicy tenantPolicy = entry.getValue();
+            if (tenantId == null || tenantPolicy == null) {
+                continue;
+            }
+            PrivacyGuardProperties.TenantDeadLetterObservability deadLetterObservability =
+                    tenantPolicy.getObservability().getDeadLetter();
+            PrivacyTenantDeadLetterObservabilityPolicy policy = new PrivacyTenantDeadLetterObservabilityPolicy(
+                    deadLetterObservability.getWarningThreshold(),
+                    deadLetterObservability.getDownThreshold(),
+                    deadLetterObservability.getNotifyOnRecovery()
+            );
+            if (policy.hasOverrides()) {
+                policies.put(tenantId, policy);
+            }
+        }
+        return Map.copyOf(policies);
+    }
+
+    private PrivacyTenantLoggingPolicy toTenantLoggingPolicy(PrivacyGuardProperties.TenantLogging logging) {
+        if (logging == null) {
+            return PrivacyTenantLoggingPolicy.none();
+        }
+        return new PrivacyTenantLoggingPolicy(
+                logging.getMdc().getEnabled(),
+                normalizeOptionalKeys(logging.getMdc().getIncludeKeys()),
+                normalizeOptionalKeys(logging.getMdc().getExcludeKeys()),
+                logging.getStructured().getEnabled(),
+                normalizeOptionalKeys(logging.getStructured().getIncludeKeys()),
+                normalizeOptionalKeys(logging.getStructured().getExcludeKeys())
+        );
+    }
+
+    private java.util.Set<String> normalizeKeys(List<String> source) {
+        if (source == null || source.isEmpty()) {
+            return java.util.Set.of();
+        }
+        java.util.LinkedHashSet<String> normalized = new java.util.LinkedHashSet<>();
+        for (String value : source) {
+            if (value == null) {
+                continue;
+            }
+            String trimmed = value.trim();
+            if (!trimmed.isEmpty()) {
+                normalized.add(trimmed);
+            }
+        }
+        return java.util.Set.copyOf(normalized);
+    }
+
+    private java.util.Set<String> normalizeOptionalKeys(List<String> source) {
+        return source == null ? null : normalizeKeys(source);
+    }
+
     private void applyOverride(
             EnumMap<SensitiveType, java.util.Optional<java.util.regex.Pattern>> overrides,
             SensitiveType type,
@@ -294,6 +442,13 @@ public class PrivacyGuardAutoConfiguration {
             return;
         }
         overrides.put(type, java.util.Optional.of(java.util.regex.Pattern.compile(pattern)));
+    }
+
+    private String normalizeTenantId(String tenantId) {
+        if (tenantId == null || tenantId.isBlank()) {
+            return null;
+        }
+        return tenantId.trim();
     }
 
     @Bean
@@ -322,7 +477,7 @@ public class PrivacyGuardAutoConfiguration {
                     repository,
                     tenantProvider,
                     tenantAuditPolicyResolver,
-                    telemetryProvider.getIfAvailable(PrivacyTenantAuditTelemetry::noop)
+                    () -> telemetryProvider.getIfAvailable(PrivacyTenantAuditTelemetry::noop)
             );
         }
         return new LoggingPrivacyAuditDeadLetterHandler();
@@ -372,7 +527,7 @@ public class PrivacyGuardAutoConfiguration {
                 tenantProvider,
                 tenantAuditPolicyResolver,
                 tenantAuditReadRepositories.getIfAvailable(),
-                telemetryProvider.getIfAvailable(PrivacyTenantAuditTelemetry::noop)
+                () -> telemetryProvider.getIfAvailable(PrivacyTenantAuditTelemetry::noop)
         );
     }
 
@@ -393,7 +548,7 @@ public class PrivacyGuardAutoConfiguration {
                 tenantProvider,
                 tenantAuditPolicyResolver,
                 tenantAuditDeadLetterReadRepositories.getIfAvailable(),
-                telemetryProvider.getIfAvailable(PrivacyTenantAuditTelemetry::noop)
+                () -> telemetryProvider.getIfAvailable(PrivacyTenantAuditTelemetry::noop)
         );
     }
 
@@ -403,12 +558,20 @@ public class PrivacyGuardAutoConfiguration {
     public PrivacyTenantAuditDeadLetterOperationsService privacyTenantAuditDeadLetterOperationsService(
             PrivacyAuditDeadLetterService privacyAuditDeadLetterService,
             PrivacyTenantAuditDeadLetterQueryService privacyTenantAuditDeadLetterQueryService,
-            PrivacyTenantProvider tenantProvider
+            PrivacyTenantProvider tenantProvider,
+            PrivacyTenantAuditPolicyResolver tenantAuditPolicyResolver,
+            ObjectProvider<PrivacyTenantAuditDeadLetterDeleteRepository> tenantAuditDeadLetterDeleteRepositories,
+            ObjectProvider<PrivacyTenantAuditDeadLetterReplayRepository> tenantAuditDeadLetterReplayRepositories,
+            ObjectProvider<PrivacyTenantAuditTelemetry> telemetryProvider
     ) {
         return new PrivacyTenantAuditDeadLetterOperationsService(
                 privacyAuditDeadLetterService,
                 privacyTenantAuditDeadLetterQueryService,
-                tenantProvider
+                tenantProvider,
+                tenantAuditPolicyResolver,
+                tenantAuditDeadLetterDeleteRepositories.getIfAvailable(),
+                tenantAuditDeadLetterReplayRepositories.getIfAvailable(),
+                () -> telemetryProvider.getIfAvailable(PrivacyTenantAuditTelemetry::noop)
         );
     }
 
@@ -429,7 +592,7 @@ public class PrivacyGuardAutoConfiguration {
                         repository,
                         tenantProvider,
                         tenantAuditPolicyResolver,
-                        telemetryProvider.getIfAvailable(PrivacyTenantAuditTelemetry::noop)
+                        () -> telemetryProvider.getIfAvailable(PrivacyTenantAuditTelemetry::noop)
                 ))
                 .forEach(publishers::add);
         return new CompositePrivacyAuditPublisher(publishers);
@@ -483,7 +646,7 @@ public class PrivacyGuardAutoConfiguration {
                         privacyAuditExecutorProvider,
                         tenantProvider,
                         tenantAuditPolicyResolver,
-                        telemetryProvider.getIfAvailable(PrivacyTenantAuditTelemetry::noop)
+                        () -> telemetryProvider.getIfAvailable(PrivacyTenantAuditTelemetry::noop)
                 ))
                 .forEach(publishers::add);
         return new CompositePrivacyAuditPublisher(publishers);
@@ -539,7 +702,7 @@ public class PrivacyGuardAutoConfiguration {
             ObjectProvider<ScheduledExecutorService> privacyAuditExecutorProvider,
             PrivacyTenantProvider tenantProvider,
             PrivacyTenantAuditPolicyResolver tenantAuditPolicyResolver,
-            PrivacyTenantAuditTelemetry telemetry
+            Supplier<PrivacyTenantAuditTelemetry> telemetry
     ) {
         if (properties.getAudit().getBatch().isEnabled()) {
             return new BufferedPrivacyAuditPublisher(
@@ -588,7 +751,7 @@ public class PrivacyGuardAutoConfiguration {
         @Bean
         @ConditionalOnMissingBean
         @ConditionalOnExpression("'${privacy.guard.audit.repository-type:NONE}' == 'JDBC'")
-        public PrivacyAuditRepository jdbcPrivacyAuditRepository(
+        public JdbcPrivacyAuditRepository jdbcPrivacyAuditRepository(
                 org.springframework.jdbc.core.JdbcOperations jdbcOperations,
                 ObjectMapper objectMapper,
                 PrivacyGuardProperties properties
@@ -626,7 +789,7 @@ public class PrivacyGuardAutoConfiguration {
         @Bean
         @ConditionalOnMissingBean
         @ConditionalOnExpression("'${privacy.guard.audit.dead-letter.repository-type:NONE}' == 'JDBC'")
-        public PrivacyAuditDeadLetterRepository jdbcPrivacyAuditDeadLetterRepository(
+        public JdbcPrivacyAuditDeadLetterRepository jdbcPrivacyAuditDeadLetterRepository(
                 org.springframework.jdbc.core.JdbcOperations jdbcOperations,
                 ObjectMapper objectMapper,
                 PrivacyGuardProperties properties
@@ -682,4 +845,5 @@ public class PrivacyGuardAutoConfiguration {
             return Executors.newScheduledThreadPool(poolSize, threadFactory);
         }
     }
+
 }

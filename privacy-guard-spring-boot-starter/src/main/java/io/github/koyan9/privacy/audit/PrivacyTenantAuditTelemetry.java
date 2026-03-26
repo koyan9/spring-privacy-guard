@@ -11,6 +11,15 @@ public interface PrivacyTenantAuditTelemetry {
 
     void recordWritePath(String domain, String pathKind);
 
+    default void recordAlertTransition(String tenantId, String state, boolean recovery) {
+    }
+
+    default void recordAlertDelivery(String tenantId, String channel, String outcome) {
+    }
+
+    default void recordReceiverRouteFailure(String route, String reason) {
+    }
+
     static PrivacyTenantAuditTelemetry noop() {
         return new PrivacyTenantAuditTelemetry() {
             @Override

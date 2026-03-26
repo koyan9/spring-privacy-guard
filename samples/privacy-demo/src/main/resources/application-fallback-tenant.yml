@@ -1,0 +1,12 @@
+# Copyright 2026 koyan9
+# SPDX-License-Identifier: Apache-2.0
+
+demo:
+  instance-id: fallback-node-1
+
+privacy:
+  guard:
+    audit:
+      repository-type: NONE
+      dead-letter:
+        repository-type: NONE

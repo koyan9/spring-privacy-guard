@@ -198,6 +198,8 @@ public class PrivacyGuardProperties {
         private String fallbackMaskChar;
         private final Masking.Text text = new Masking.Text();
         private final TenantAudit audit = new TenantAudit();
+        private final TenantLogging logging = new TenantLogging();
+        private final TenantObservability observability = new TenantObservability();
 
         public String getFallbackMaskChar() {
             return fallbackMaskChar;
@@ -213,6 +215,14 @@ public class PrivacyGuardProperties {
 
         public TenantAudit getAudit() {
             return audit;
+        }
+
+        public TenantLogging getLogging() {
+            return logging;
+        }
+
+        public TenantObservability getObservability() {
+            return observability;
         }
     }
 
@@ -253,6 +263,91 @@ public class PrivacyGuardProperties {
 
         public void setTenantDetailKey(String tenantDetailKey) {
             this.tenantDetailKey = tenantDetailKey;
+        }
+    }
+
+    public static class TenantLogging {
+
+        private final TenantLoggingChannel mdc = new TenantLoggingChannel();
+        private final TenantLoggingChannel structured = new TenantLoggingChannel();
+
+        public TenantLoggingChannel getMdc() {
+            return mdc;
+        }
+
+        public TenantLoggingChannel getStructured() {
+            return structured;
+        }
+    }
+
+    public static class TenantLoggingChannel {
+
+        private Boolean enabled;
+        private java.util.List<String> includeKeys;
+        private java.util.List<String> excludeKeys;
+
+        public Boolean getEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(Boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public java.util.List<String> getIncludeKeys() {
+            return includeKeys;
+        }
+
+        public void setIncludeKeys(java.util.List<String> includeKeys) {
+            this.includeKeys = includeKeys == null ? null : new java.util.ArrayList<>(includeKeys);
+        }
+
+        public java.util.List<String> getExcludeKeys() {
+            return excludeKeys;
+        }
+
+        public void setExcludeKeys(java.util.List<String> excludeKeys) {
+            this.excludeKeys = excludeKeys == null ? null : new java.util.ArrayList<>(excludeKeys);
+        }
+    }
+
+    public static class TenantObservability {
+
+        private final TenantDeadLetterObservability deadLetter = new TenantDeadLetterObservability();
+
+        public TenantDeadLetterObservability getDeadLetter() {
+            return deadLetter;
+        }
+    }
+
+    public static class TenantDeadLetterObservability {
+
+        private Long warningThreshold;
+        private Long downThreshold;
+        private Boolean notifyOnRecovery;
+
+        public Long getWarningThreshold() {
+            return warningThreshold;
+        }
+
+        public void setWarningThreshold(Long warningThreshold) {
+            this.warningThreshold = warningThreshold;
+        }
+
+        public Long getDownThreshold() {
+            return downThreshold;
+        }
+
+        public void setDownThreshold(Long downThreshold) {
+            this.downThreshold = downThreshold;
+        }
+
+        public Boolean getNotifyOnRecovery() {
+            return notifyOnRecovery;
+        }
+
+        public void setNotifyOnRecovery(Boolean notifyOnRecovery) {
+            this.notifyOnRecovery = notifyOnRecovery;
         }
     }
 
@@ -525,6 +620,8 @@ public class PrivacyGuardProperties {
     public static class Health {
 
         private boolean enabled = true;
+        private boolean tenantEnabled = false;
+        private java.util.List<String> tenantIds = new java.util.ArrayList<>();
         private long warningThreshold = 1;
         private long downThreshold = 100;
 
@@ -534,6 +631,22 @@ public class PrivacyGuardProperties {
 
         public void setEnabled(boolean enabled) {
             this.enabled = enabled;
+        }
+
+        public boolean isTenantEnabled() {
+            return tenantEnabled;
+        }
+
+        public void setTenantEnabled(boolean tenantEnabled) {
+            this.tenantEnabled = tenantEnabled;
+        }
+
+        public java.util.List<String> getTenantIds() {
+            return tenantIds;
+        }
+
+        public void setTenantIds(java.util.List<String> tenantIds) {
+            this.tenantIds = tenantIds == null ? new java.util.ArrayList<>() : new java.util.ArrayList<>(tenantIds);
         }
 
         public long getWarningThreshold() {
@@ -556,6 +669,8 @@ public class PrivacyGuardProperties {
     public static class Metrics {
 
         private boolean enabled = true;
+        private boolean tenantEnabled = false;
+        private java.util.List<String> tenantIds = new java.util.ArrayList<>();
 
         public boolean isEnabled() {
             return enabled;
@@ -564,6 +679,22 @@ public class PrivacyGuardProperties {
         public void setEnabled(boolean enabled) {
             this.enabled = enabled;
         }
+
+        public boolean isTenantEnabled() {
+            return tenantEnabled;
+        }
+
+        public void setTenantEnabled(boolean tenantEnabled) {
+            this.tenantEnabled = tenantEnabled;
+        }
+
+        public java.util.List<String> getTenantIds() {
+            return tenantIds;
+        }
+
+        public void setTenantIds(java.util.List<String> tenantIds) {
+            this.tenantIds = tenantIds == null ? new java.util.ArrayList<>() : new java.util.ArrayList<>(tenantIds);
+        }
     }
 
     public static class Alert {
@@ -571,6 +702,7 @@ public class PrivacyGuardProperties {
         private boolean enabled = false;
         private Duration checkInterval = Duration.ofSeconds(30);
         private boolean notifyOnRecovery = true;
+        private final AlertTenant tenant = new AlertTenant();
         private final AlertLogging logging = new AlertLogging();
         private final AlertWebhook webhook = new AlertWebhook();
         private final AlertEmail email = new AlertEmail();
@@ -604,6 +736,10 @@ public class PrivacyGuardProperties {
             return logging;
         }
 
+        public AlertTenant getTenant() {
+            return tenant;
+        }
+
         public AlertWebhook getWebhook() {
             return webhook;
         }
@@ -614,6 +750,302 @@ public class PrivacyGuardProperties {
 
         public AlertReceiver getReceiver() {
             return receiver;
+        }
+    }
+
+    public static class AlertTenant {
+
+        private boolean enabled = false;
+        private java.util.List<String> tenantIds = new java.util.ArrayList<>();
+        private java.util.Map<String, AlertTenantRoute> routes = new java.util.LinkedHashMap<>();
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public java.util.List<String> getTenantIds() {
+            return tenantIds;
+        }
+
+        public void setTenantIds(java.util.List<String> tenantIds) {
+            this.tenantIds = tenantIds == null ? new java.util.ArrayList<>() : new java.util.ArrayList<>(tenantIds);
+        }
+
+        public java.util.Map<String, AlertTenantRoute> getRoutes() {
+            return routes;
+        }
+
+        public void setRoutes(java.util.Map<String, AlertTenantRoute> routes) {
+            this.routes = routes == null ? new java.util.LinkedHashMap<>() : new java.util.LinkedHashMap<>(routes);
+        }
+    }
+
+    public static class AlertTenantRoute {
+
+        private final AlertTenantRouteWebhook webhook = new AlertTenantRouteWebhook();
+        private final AlertTenantRouteEmail email = new AlertTenantRouteEmail();
+        private final AlertTenantRouteReceiver receiver = new AlertTenantRouteReceiver();
+
+        public AlertTenantRouteWebhook getWebhook() {
+            return webhook;
+        }
+
+        public AlertTenantRouteEmail getEmail() {
+            return email;
+        }
+
+        public AlertTenantRouteReceiver getReceiver() {
+            return receiver;
+        }
+    }
+
+    public static class AlertTenantRouteWebhook {
+
+        private String url;
+        private String bearerToken;
+        private String signatureSecret;
+        private String signatureAlgorithm;
+        private String signatureHeader;
+        private String timestampHeader;
+        private String nonceHeader;
+        private Integer maxAttempts;
+        private Duration backoff;
+        private AlertWebhook.BackoffPolicy backoffPolicy;
+        private Duration maxBackoff;
+        private Double jitter;
+        private Duration connectTimeout;
+        private Duration readTimeout;
+
+        public String getUrl() {
+            return url;
+        }
+
+        public void setUrl(String url) {
+            this.url = url;
+        }
+
+        public String getBearerToken() {
+            return bearerToken;
+        }
+
+        public void setBearerToken(String bearerToken) {
+            this.bearerToken = bearerToken;
+        }
+
+        public String getSignatureSecret() {
+            return signatureSecret;
+        }
+
+        public void setSignatureSecret(String signatureSecret) {
+            this.signatureSecret = signatureSecret;
+        }
+
+        public String getSignatureAlgorithm() {
+            return signatureAlgorithm;
+        }
+
+        public void setSignatureAlgorithm(String signatureAlgorithm) {
+            this.signatureAlgorithm = signatureAlgorithm;
+        }
+
+        public String getSignatureHeader() {
+            return signatureHeader;
+        }
+
+        public void setSignatureHeader(String signatureHeader) {
+            this.signatureHeader = signatureHeader;
+        }
+
+        public String getTimestampHeader() {
+            return timestampHeader;
+        }
+
+        public void setTimestampHeader(String timestampHeader) {
+            this.timestampHeader = timestampHeader;
+        }
+
+        public String getNonceHeader() {
+            return nonceHeader;
+        }
+
+        public void setNonceHeader(String nonceHeader) {
+            this.nonceHeader = nonceHeader;
+        }
+
+        public Integer getMaxAttempts() {
+            return maxAttempts;
+        }
+
+        public void setMaxAttempts(Integer maxAttempts) {
+            this.maxAttempts = maxAttempts;
+        }
+
+        public Duration getBackoff() {
+            return backoff;
+        }
+
+        public void setBackoff(Duration backoff) {
+            this.backoff = backoff;
+        }
+
+        public AlertWebhook.BackoffPolicy getBackoffPolicy() {
+            return backoffPolicy;
+        }
+
+        public void setBackoffPolicy(AlertWebhook.BackoffPolicy backoffPolicy) {
+            this.backoffPolicy = backoffPolicy;
+        }
+
+        public Duration getMaxBackoff() {
+            return maxBackoff;
+        }
+
+        public void setMaxBackoff(Duration maxBackoff) {
+            this.maxBackoff = maxBackoff;
+        }
+
+        public Double getJitter() {
+            return jitter;
+        }
+
+        public void setJitter(Double jitter) {
+            this.jitter = jitter;
+        }
+
+        public Duration getConnectTimeout() {
+            return connectTimeout;
+        }
+
+        public void setConnectTimeout(Duration connectTimeout) {
+            this.connectTimeout = connectTimeout;
+        }
+
+        public Duration getReadTimeout() {
+            return readTimeout;
+        }
+
+        public void setReadTimeout(Duration readTimeout) {
+            this.readTimeout = readTimeout;
+        }
+    }
+
+    public static class AlertTenantRouteEmail {
+
+        private String from;
+        private String to;
+        private String subjectPrefix;
+
+        public String getFrom() {
+            return from;
+        }
+
+        public void setFrom(String from) {
+            this.from = from;
+        }
+
+        public String getTo() {
+            return to;
+        }
+
+        public void setTo(String to) {
+            this.to = to;
+        }
+
+        public String getSubjectPrefix() {
+            return subjectPrefix;
+        }
+
+        public void setSubjectPrefix(String subjectPrefix) {
+            this.subjectPrefix = subjectPrefix;
+        }
+    }
+
+    public static class AlertTenantRouteReceiver {
+
+        private String pathPattern;
+        private String bearerToken;
+        private String signatureSecret;
+        private String signatureAlgorithm;
+        private String signatureHeader;
+        private String timestampHeader;
+        private String nonceHeader;
+        private Duration maxSkew;
+        private String replayNamespace;
+
+        public String getPathPattern() {
+            return pathPattern;
+        }
+
+        public void setPathPattern(String pathPattern) {
+            this.pathPattern = pathPattern;
+        }
+
+        public String getBearerToken() {
+            return bearerToken;
+        }
+
+        public void setBearerToken(String bearerToken) {
+            this.bearerToken = bearerToken;
+        }
+
+        public String getSignatureSecret() {
+            return signatureSecret;
+        }
+
+        public void setSignatureSecret(String signatureSecret) {
+            this.signatureSecret = signatureSecret;
+        }
+
+        public String getSignatureAlgorithm() {
+            return signatureAlgorithm;
+        }
+
+        public void setSignatureAlgorithm(String signatureAlgorithm) {
+            this.signatureAlgorithm = signatureAlgorithm;
+        }
+
+        public String getSignatureHeader() {
+            return signatureHeader;
+        }
+
+        public void setSignatureHeader(String signatureHeader) {
+            this.signatureHeader = signatureHeader;
+        }
+
+        public String getTimestampHeader() {
+            return timestampHeader;
+        }
+
+        public void setTimestampHeader(String timestampHeader) {
+            this.timestampHeader = timestampHeader;
+        }
+
+        public String getNonceHeader() {
+            return nonceHeader;
+        }
+
+        public void setNonceHeader(String nonceHeader) {
+            this.nonceHeader = nonceHeader;
+        }
+
+        public Duration getMaxSkew() {
+            return maxSkew;
+        }
+
+        public void setMaxSkew(Duration maxSkew) {
+            this.maxSkew = maxSkew;
+        }
+
+        public String getReplayNamespace() {
+            return replayNamespace;
+        }
+
+        public void setReplayNamespace(String replayNamespace) {
+            this.replayNamespace = replayNamespace;
         }
     }
 
@@ -725,11 +1157,20 @@ public class PrivacyGuardProperties {
 
     public static class AlertReceiverReplayStore {
 
+        private String namespace;
         private final io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStoreJdbcProperties jdbc =
                 new io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStoreJdbcProperties();
         private final io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStoreRedisProperties redis =
                 new io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStoreRedisProperties();
         private final AlertReceiverReplayStoreFile file = new AlertReceiverReplayStoreFile();
+
+        public String getNamespace() {
+            return namespace;
+        }
+
+        public void setNamespace(String namespace) {
+            this.namespace = namespace;
+        }
 
         public io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStoreJdbcProperties getJdbc() {
             return jdbc;

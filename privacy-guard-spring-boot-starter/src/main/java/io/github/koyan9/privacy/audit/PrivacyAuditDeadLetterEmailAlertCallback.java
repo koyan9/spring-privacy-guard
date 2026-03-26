@@ -24,24 +24,32 @@ public class PrivacyAuditDeadLetterEmailAlertCallback implements PrivacyAuditDea
 
     @Override
     public void handle(PrivacyAuditDeadLetterAlertEvent event) {
+        handle(null, event);
+    }
+
+    public void handle(String tenantId, PrivacyAuditDeadLetterAlertEvent event) {
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(properties.getFrom());
         message.setTo(properties.getTo());
-        message.setSubject(buildSubject(event));
-        message.setText(buildBody(event));
+        message.setSubject(buildSubject(tenantId, event));
+        message.setText(buildBody(tenantId, event));
         mailSender.send(message);
     }
 
-    private String buildSubject(PrivacyAuditDeadLetterAlertEvent event) {
+    private String buildSubject(String tenantId, PrivacyAuditDeadLetterAlertEvent event) {
         String prefix = properties.getSubjectPrefix() == null ? "" : properties.getSubjectPrefix().trim() + " ";
+        String tenantSuffix = tenantId == null || tenantId.isBlank() ? "" : " [tenant=" + tenantId.trim() + "]";
         if (event.recovery()) {
-            return prefix + "Dead-letter backlog recovered";
+            return prefix + "Dead-letter backlog recovered" + tenantSuffix;
         }
-        return prefix + "Dead-letter backlog " + event.currentSnapshot().state().name();
+        return prefix + "Dead-letter backlog " + event.currentSnapshot().state().name() + tenantSuffix;
     }
 
-    private String buildBody(PrivacyAuditDeadLetterAlertEvent event) {
+    private String buildBody(String tenantId, PrivacyAuditDeadLetterAlertEvent event) {
         StringBuilder body = new StringBuilder();
+        if (tenantId != null && !tenantId.isBlank()) {
+            body.append("tenantId: ").append(tenantId.trim()).append(System.lineSeparator());
+        }
         body.append("occurredAt: ").append(event.occurredAt()).append(System.lineSeparator());
         body.append("recovery: ").append(event.recovery()).append(System.lineSeparator());
         body.append("state: ").append(event.currentSnapshot().state()).append(System.lineSeparator());

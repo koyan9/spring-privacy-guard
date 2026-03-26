@@ -208,6 +208,29 @@ public class PrivacyAuditDeadLetterExchangeService {
         }
     }
 
+    PrivacyAuditDeadLetterImportResult importEntries(
+            List<PrivacyAuditDeadLetterEntry> entries,
+            boolean deduplicate,
+            String checksum
+    ) {
+        return importEntries(entries, deduplicate, checksum, deadLetterRepository::saveAll);
+    }
+
+    PrivacyAuditDeadLetterImportResult importEntries(
+            List<PrivacyAuditDeadLetterEntry> entries,
+            boolean deduplicate,
+            String checksum,
+            BatchSaver batchSaver
+    ) {
+        ImportAccumulator accumulator = new ImportAccumulator(deduplicate, DEFAULT_IMPORT_BATCH_SIZE, batchSaver);
+        if (entries != null) {
+            for (PrivacyAuditDeadLetterEntry entry : entries) {
+                accumulator.accept(entry);
+            }
+        }
+        return accumulator.finish(checksum);
+    }
+
     private PrivacyAuditDeadLetterImportResult importJson(
             JsonParser parser,
             boolean deduplicate,
@@ -215,7 +238,7 @@ public class PrivacyAuditDeadLetterExchangeService {
             int batchSize
     ) throws IOException {
         parser.setCodec(objectMapper);
-        ImportAccumulator accumulator = new ImportAccumulator(deduplicate, batchSize);
+        ImportAccumulator accumulator = new ImportAccumulator(deduplicate, batchSize, deadLetterRepository::saveAll);
         JsonToken token = parser.nextToken();
         if (token == null) {
             return accumulator.finish(checksum);
@@ -238,7 +261,7 @@ public class PrivacyAuditDeadLetterExchangeService {
             String checksum,
             int batchSize
     ) {
-        ImportAccumulator accumulator = new ImportAccumulator(deduplicate, batchSize);
+        ImportAccumulator accumulator = new ImportAccumulator(deduplicate, batchSize, deadLetterRepository::saveAll);
         csvCodec.importEntries(reader, accumulator::accept);
         return accumulator.finish(checksum);
     }
@@ -458,14 +481,16 @@ public class PrivacyAuditDeadLetterExchangeService {
         private final Map<String, PrivacyAuditDeadLetterEntry> fingerprints;
         private final boolean deduplicate;
         private final int batchSize;
+        private final BatchSaver batchSaver;
         private final java.util.ArrayList<PrivacyAuditDeadLetterEntry> buffer;
         private final AtomicInteger received = new AtomicInteger();
         private final AtomicInteger skipped = new AtomicInteger();
         private final AtomicInteger imported = new AtomicInteger();
 
-        private ImportAccumulator(boolean deduplicate, int batchSize) {
+        private ImportAccumulator(boolean deduplicate, int batchSize, BatchSaver batchSaver) {
             this.deduplicate = deduplicate;
             this.batchSize = normalizeBatchSize(batchSize);
+            this.batchSaver = batchSaver == null ? deadLetterRepository::saveAll : batchSaver;
             this.fingerprints = new LinkedHashMap<>(loadExistingFingerprints(deduplicate));
             this.buffer = new java.util.ArrayList<>(this.batchSize);
         }
@@ -501,10 +526,15 @@ public class PrivacyAuditDeadLetterExchangeService {
             if (buffer.isEmpty()) {
                 return;
             }
-            deadLetterRepository.saveAll(buffer);
+            batchSaver.save(List.copyOf(buffer));
             imported.addAndGet(buffer.size());
             buffer.clear();
         }
+    }
+
+    @FunctionalInterface
+    interface BatchSaver {
+        void save(List<PrivacyAuditDeadLetterEntry> entries);
     }
 
     private static final class DigestingWriter extends Writer {

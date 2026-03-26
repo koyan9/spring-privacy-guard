@@ -1,0 +1,55 @@
+# Copyright 2026 koyan9
+# SPDX-License-Identifier: Apache-2.0
+
+spring:
+  datasource:
+    url: ${PRIVACY_DEMO_POSTGRES_URL:jdbc:postgresql://localhost:5432/privacy_demo}
+    driver-class-name: org.postgresql.Driver
+    username: ${PRIVACY_DEMO_POSTGRES_USERNAME:privacy_demo}
+    password: ${PRIVACY_DEMO_POSTGRES_PASSWORD:privacy_demo}
+  data:
+    redis:
+      host: ${PRIVACY_DEMO_REDIS_HOST:localhost}
+      port: ${PRIVACY_DEMO_REDIS_PORT:6379}
+      timeout: 2s
+
+management:
+  health:
+    redis:
+      enabled: true
+
+demo:
+  instance-id: postgres-redis-node-1
+
+privacy:
+  guard:
+    audit:
+      repository-type: JDBC
+      jdbc:
+        initialize-schema: true
+        dialect: POSTGRESQL
+        table-name: privacy_audit_event_postgres_demo
+        tenant-column-name: tenant_key
+        tenant-detail-key: tenant
+      dead-letter:
+        repository-type: JDBC
+        jdbc:
+          initialize-schema: true
+          dialect: POSTGRESQL
+          table-name: privacy_audit_dead_letter_postgres_demo
+          tenant-column-name: tenant_key
+          tenant-detail-key: tenant
+        observability:
+          alert:
+            receiver:
+              replay-store:
+                namespace: demo-postgres-redis-shared
+                redis:
+                  enabled: true
+                  key-prefix: "privacy:demo:postgres:webhook:replay:"
+                  scan-batch-size: 500
+                jdbc:
+                  enabled: false
+                  initialize-schema: false
+                file:
+                  enabled: false

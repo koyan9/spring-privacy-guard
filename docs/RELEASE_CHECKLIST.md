@@ -18,6 +18,7 @@ Use this checklist before cutting a new release.
 - Confirm `CHANGELOG.md` includes the release contents
 - Prepare `docs/releases/RELEASE_NOTES_<tag>.md` or update `docs/releases/RELEASE_NOTES_TEMPLATE.md`
 - Optionally capture a dry run note such as `docs/RELEASE_DRY_RUN_v0.3.0.md`
+- Review the sample / rollout comparison matrix and confirm it matches the release scope
 
 ## Release Content
 

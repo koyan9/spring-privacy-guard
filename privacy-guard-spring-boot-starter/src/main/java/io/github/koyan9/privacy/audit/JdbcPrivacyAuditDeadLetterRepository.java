@@ -20,7 +20,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-public class JdbcPrivacyAuditDeadLetterRepository implements PrivacyAuditDeadLetterRepository, PrivacyAuditDeadLetterStatsRepository, PrivacyTenantAuditDeadLetterReadRepository, PrivacyTenantAuditDeadLetterWriteRepository {
+public class JdbcPrivacyAuditDeadLetterRepository implements
+        PrivacyAuditDeadLetterRepository,
+        PrivacyAuditDeadLetterStatsRepository,
+        PrivacyTenantAuditDeadLetterReadRepository,
+        PrivacyTenantAuditDeadLetterWriteRepository,
+        PrivacyTenantAuditDeadLetterDeleteRepository,
+        PrivacyTenantAuditDeadLetterReplayRepository {
 
     private static final TypeReference<Map<String, String>> DETAILS_TYPE = new TypeReference<>() {
     };
@@ -165,6 +171,58 @@ public class JdbcPrivacyAuditDeadLetterRepository implements PrivacyAuditDeadLet
     public boolean deleteById(long id) {
         Integer updated = jdbcOperations.update("delete from " + tableName + " where id = ?", id);
         return updated != null && updated > 0;
+    }
+
+    @Override
+    public int deleteByCriteria(
+            String tenantId,
+            String tenantDetailKey,
+            PrivacyAuditDeadLetterQueryCriteria criteria
+    ) {
+        PrivacyAuditDeadLetterQueryCriteria normalized = criteria == null
+                ? PrivacyAuditDeadLetterQueryCriteria.recent(100)
+                : criteria.normalize();
+        QueryParts queryParts = buildWhereClause(normalized, tenantId, tenantDetailKey);
+        String selectSql = "select id from " + tableName
+                + queryParts.whereClause()
+                + " order by failed_at " + normalized.sortDirection().name() + ", id " + normalized.sortDirection().name()
+                + " limit ? offset ?";
+        queryParts.args().add(normalized.limit());
+        queryParts.args().add(normalized.offset());
+        String sql = "delete from " + tableName + " where id in (select id from (" + selectSql + ") tenant_scope)";
+        Integer updated = jdbcOperations.update(sql, queryParts.args().toArray());
+        return updated == null ? 0 : updated;
+    }
+
+    @Override
+    public PrivacyAuditDeadLetterReplayResult replayByCriteria(
+            String tenantId,
+            String tenantDetailKey,
+            PrivacyAuditDeadLetterQueryCriteria criteria,
+            java.util.function.Predicate<PrivacyAuditDeadLetterEntry> replayAction
+    ) {
+        List<PrivacyAuditDeadLetterEntry> selected = findByCriteria(tenantId, tenantDetailKey, criteria);
+        List<Long> replayedIds = new ArrayList<>();
+        List<Long> failedIds = new ArrayList<>();
+        for (PrivacyAuditDeadLetterEntry entry : selected) {
+            if (entry.id() == null) {
+                continue;
+            }
+            if (!replayAction.test(entry)) {
+                failedIds.add(entry.id());
+                continue;
+            }
+            if (deleteById(entry.id())) {
+                replayedIds.add(entry.id());
+            }
+        }
+        return new PrivacyAuditDeadLetterReplayResult(
+                selected.size(),
+                replayedIds.size(),
+                failedIds.size(),
+                List.copyOf(replayedIds),
+                List.copyOf(failedIds)
+        );
     }
 
     private Map<String, Long> queryForGroupedCount(String column, QueryParts queryParts) {

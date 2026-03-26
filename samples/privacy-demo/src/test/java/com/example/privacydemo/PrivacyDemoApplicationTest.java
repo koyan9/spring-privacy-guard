@@ -27,6 +27,7 @@ import java.time.Instant;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -150,6 +151,7 @@ class PrivacyDemoApplicationTest {
                 .andExpect(jsonPath("$.headerName").value("X-Privacy-Tenant"))
                 .andExpect(jsonPath("$.defaultTenant").value("public"))
                 .andExpect(jsonPath("$.currentTenant").value("public"))
+                .andExpect(jsonPath("$.instanceId").value("default"))
                 .andExpect(jsonPath("$.configuredTenants[0]").value("public"))
                 .andExpect(jsonPath("$.managementFacade").value("PrivacyTenantAuditManagementService"));
 
@@ -170,8 +172,115 @@ class PrivacyDemoApplicationTest {
                 .andExpect(jsonPath("$.tenants[1].textAdditionalPatternCount").value(1))
                 .andExpect(jsonPath("$.tenants[1].auditIncludeDetailKeys[0]").value("phone"))
                 .andExpect(jsonPath("$.tenants[1].auditAttachTenantId").value(true))
+                .andExpect(jsonPath("$.tenants[1].deadLetterWarningThreshold").value(1))
+                .andExpect(jsonPath("$.tenants[1].deadLetterDownThreshold").value(2))
+                .andExpect(jsonPath("$.tenants[1].deadLetterNotifyOnRecovery").value(true))
+                .andExpect(jsonPath("$.tenants[1].loggingMdcEnabledOverride").value(true))
+                .andExpect(jsonPath("$.tenants[1].loggingMdcIncludeKeys[0]").value("email"))
+                .andExpect(jsonPath("$.tenants[2].loggingStructuredEnabledOverride").value(true))
+                .andExpect(jsonPath("$.tenants[2].loggingStructuredIncludeKeys[0]").value("phone"))
                 .andExpect(jsonPath("$.tenants[2].tenantId").value("tenant-b"))
-                .andExpect(jsonPath("$.tenants[2].auditTenantDetailKey").value("tenant"));
+                .andExpect(jsonPath("$.tenants[2].auditTenantDetailKey").value("tenant"))
+                .andExpect(jsonPath("$.tenants[2].deadLetterNotifyOnRecovery").value(false));
+    }
+
+    @Test
+    void exposesProtectedTenantObservabilitySnapshot() throws Exception {
+        mockMvc.perform(get("/demo-tenants/observability"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(get("/patients/demo").with(tenant("tenant-a")))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/audit-events")
+                        .param("action", "PATIENT_READ")
+                        .param("tenant", "tenant-a"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/audit-events/stats")
+                        .param("action", "PATIENT_READ")
+                        .param("tenant", "tenant-a"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/demo-tenants/observability").with(adminToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.available").value(true))
+                .andExpect(jsonPath("$.instanceId").value("default"))
+                .andExpect(jsonPath("$.receiverReplayStore.backend").value("IN_MEMORY"))
+                .andExpect(jsonPath("$.receiverReplayStore.namespace").value("demo-default"))
+                .andExpect(jsonPath("$.auditRepositoryType").value("IN_MEMORY"))
+                .andExpect(jsonPath("$.deadLetterRepositoryType").value("IN_MEMORY"))
+                .andExpect(jsonPath("$.repositoryCapabilities.audit.tenantReadNative").value(true))
+                .andExpect(jsonPath("$.repositoryCapabilities.deadLetter.tenantExchangeReadNative").value(true))
+                .andExpect(jsonPath("$.repositoryCapabilities.deadLetter.tenantImportNative").value(true))
+                .andExpect(jsonPath("$.deadLetterBacklog.available").value(true))
+                .andExpect(jsonPath("$.deadLetterBacklog.global.total").value(0))
+                .andExpect(jsonPath("$.deadLetterBacklog.global.state").value("CLEAR"))
+                .andExpect(jsonPath("$.deadLetterBacklog.currentTenant").value("public"))
+                .andExpect(jsonPath("$.tenantAlerting.enabled").value(true))
+                .andExpect(jsonPath("$.tenantAlerting.tenantIds[0]").value("tenant-a"))
+                .andExpect(jsonPath("$.readPaths.audit.native").value(greaterThanOrEqualTo(1.0)))
+                .andExpect(jsonPath("$.readPaths.auditStats.native").value(greaterThanOrEqualTo(1.0)))
+                .andExpect(jsonPath("$.readPaths.deadLetterExport.native").value(greaterThanOrEqualTo(0.0)))
+                .andExpect(jsonPath("$.readPaths.deadLetterManifest.native").value(greaterThanOrEqualTo(0.0)))
+                .andExpect(jsonPath("$.writePaths.auditWrite.native").value(greaterThanOrEqualTo(1.0)))
+                .andExpect(jsonPath("$.writePaths.deadLetterImport.native").value(greaterThanOrEqualTo(0.0)))
+                .andExpect(jsonPath("$.tenantOperationalMetrics.alertTransitions['tenant-a'].warning").value(greaterThanOrEqualTo(0.0)))
+                .andExpect(jsonPath("$.tenantOperationalMetrics.alertDeliveries['tenant-a'].loggingSuccess").value(greaterThanOrEqualTo(0.0)))
+                .andExpect(jsonPath("$.tenantOperationalMetrics.receiverRouteFailures['/demo-alert-receiver'].invalidSignature").value(greaterThanOrEqualTo(0.0)))
+                .andExpect(jsonPath("$.actuatorQueries.length()").value(13))
+                .andExpect(jsonPath("$.actuatorQueries[0]").value("/actuator/health"));
+    }
+
+    @Test
+    void exposesTenantScopedDeadLetterBacklogView() throws Exception {
+        deadLetterRepository.save(new PrivacyAuditDeadLetterEntry(
+                null,
+                Instant.now(),
+                3,
+                "java.lang.IllegalStateException",
+                "tenant a failure",
+                Instant.parse("2026-03-06T00:00:00Z"),
+                "READ",
+                "Patient",
+                "dead-letter-tenant-a",
+                "actor",
+                "OK",
+                Map.of("tenant", "tenant-a", "phone", "138####8000")
+        ));
+
+        DemoDeadLetterAlertCallback.TenantAlertRecord tenantAlert = awaitTenantAlert(Duration.ofSeconds(2));
+        assertThat(tenantAlert.tenantId()).isEqualTo("tenant-a");
+        assertThat(tenantAlert.event().currentSnapshot().state()).isEqualTo(PrivacyAuditDeadLetterBacklogState.WARNING);
+
+        mockMvc.perform(get("/demo-tenants/observability").with(adminToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.deadLetterBacklog.global.total").value(1))
+                .andExpect(jsonPath("$.deadLetterBacklog.global.state").value("WARNING"))
+                .andExpect(jsonPath("$.deadLetterBacklog.currentTenantSnapshot.total").value(0))
+                .andExpect(jsonPath("$.deadLetterBacklog.currentTenantSnapshot.state").value("CLEAR"))
+                .andExpect(jsonPath("$.deadLetterBacklog.configuredTenants['tenant-a'].total").value(1))
+                .andExpect(jsonPath("$.deadLetterBacklog.configuredTenants['tenant-a'].state").value("WARNING"))
+                .andExpect(jsonPath("$.deadLetterBacklog.configuredTenants['tenant-a'].warningThreshold").value(1))
+                .andExpect(jsonPath("$.deadLetterBacklog.configuredTenants['tenant-a'].downThreshold").value(2))
+                .andExpect(jsonPath("$.deadLetterBacklog.configuredTenants['tenant-b'].total").value(0))
+                .andExpect(jsonPath("$.deadLetterBacklog.configuredTenants['tenant-b'].state").value("CLEAR"))
+                .andExpect(jsonPath("$.tenantAlerting.lastTenantAlert.tenantId").value("tenant-a"))
+                .andExpect(jsonPath("$.tenantAlerting.lastTenantAlert.recovery").value(false))
+                .andExpect(jsonPath("$.tenantAlerting.lastTenantAlert.snapshot.total").value(1))
+                .andExpect(jsonPath("$.tenantAlerting.lastTenantAlert.snapshot.state").value("WARNING"))
+                .andExpect(jsonPath("$.tenantOperationalMetrics.alertTransitions['tenant-a'].warning").value(greaterThanOrEqualTo(1.0)))
+                .andExpect(jsonPath("$.tenantOperationalMetrics.alertDeliveries['tenant-a'].loggingSuccess").value(greaterThanOrEqualTo(1.0)));
+
+        mockMvc.perform(get("/actuator/health"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"))
+                .andExpect(jsonPath("$.components.privacyAuditTenantDeadLetters.status").value("UP"))
+                .andExpect(jsonPath("$.components.privacyAuditTenantDeadLetters.details.state").value("WARNING"))
+                .andExpect(jsonPath("$.components.privacyAuditTenantDeadLetters.details.tenantCount").value(3))
+                .andExpect(jsonPath("$.components.privacyAuditTenantDeadLetters.details.warningTenants[0]").value("tenant-a"))
+                .andExpect(jsonPath("$.components.privacyAuditTenantDeadLetters.details.tenants['tenant-a'].state").value("WARNING"))
+                .andExpect(jsonPath("$.components.privacyAuditTenantDeadLetters.details.tenants['tenant-b'].state").value("CLEAR"));
     }
 
     @Test
@@ -236,13 +345,16 @@ class PrivacyDemoApplicationTest {
         mockMvc.perform(get("/demo-alert-receiver/replay-store").with(adminToken()).param("limit", "1").param("offset", "0"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.count").value(1))
+                .andExpect(jsonPath("$.namespace").value("demo-default"))
                 .andExpect(jsonPath("$.limit").value(1))
                 .andExpect(jsonPath("$.offset").value(0))
-                .andExpect(jsonPath("$.entries[0].nonce").value("nonce-manage"));
+                .andExpect(jsonPath("$.entries[0].nonce").value("nonce-manage"))
+                .andExpect(jsonPath("$.entries[0].storageKey").value("demo-default:nonce-manage"));
 
         mockMvc.perform(get("/demo-alert-receiver/replay-store/stats").with(adminToken()).param("expiringWithin", "PT10M"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.count").value(1))
+                .andExpect(jsonPath("$.namespace").value("demo-default"))
                 .andExpect(jsonPath("$.expiringWithin").value("PT10M"))
                 .andExpect(jsonPath("$.expiringSoon").value(1));
 
@@ -495,6 +607,12 @@ class PrivacyDemoApplicationTest {
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].details.tenant").value("tenant-b"))
                 .andExpect(jsonPath("$[0].resourceId").value("dead-letter-tenant-a"));
+
+        mockMvc.perform(get("/demo-tenants/observability").with(adminToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.readPaths.deadLetterExport.native").value(greaterThanOrEqualTo(1.0)))
+                .andExpect(jsonPath("$.readPaths.deadLetterManifest.native").value(greaterThanOrEqualTo(1.0)))
+                .andExpect(jsonPath("$.writePaths.deadLetterImport.native").value(greaterThanOrEqualTo(1.0)));
     }
 
     @Test
@@ -635,6 +753,11 @@ class PrivacyDemoApplicationTest {
                 .contains("dead-letter-replay-tenant-b");
         assertThat(auditRepository.findAll()).extracting(PrivacyAuditEvent::action)
                 .contains("AUDIT_DEAD_LETTERS_DELETE", "AUDIT_DEAD_LETTERS_REPLAY", "READ");
+
+        mockMvc.perform(get("/demo-tenants/observability").with(adminToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.writePaths.deadLetterDelete.native").value(greaterThanOrEqualTo(1.0)))
+                .andExpect(jsonPath("$.writePaths.deadLetterReplay.native").value(greaterThanOrEqualTo(1.0)));
     }
 
     @Test
@@ -674,6 +797,18 @@ class PrivacyDemoApplicationTest {
             Thread.sleep(25L);
         }
         throw new AssertionError("Timed out waiting for dead-letter alert callback");
+    }
+
+    private DemoDeadLetterAlertCallback.TenantAlertRecord awaitTenantAlert(Duration timeout) throws Exception {
+        long deadline = System.nanoTime() + timeout.toNanos();
+        while (System.nanoTime() < deadline) {
+            java.util.Optional<DemoDeadLetterAlertCallback.TenantAlertRecord> alert = demoDeadLetterAlertCallback.lastTenantAlert();
+            if (alert.isPresent()) {
+                return alert.get();
+            }
+            Thread.sleep(25L);
+        }
+        throw new AssertionError("Timed out waiting for tenant dead-letter alert callback");
     }
 
     private RequestPostProcessor adminToken() {

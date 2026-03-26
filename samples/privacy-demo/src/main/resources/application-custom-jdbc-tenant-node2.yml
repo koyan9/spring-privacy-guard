@@ -1,0 +1,8 @@
+# Copyright 2026 koyan9
+# SPDX-License-Identifier: Apache-2.0
+
+server:
+  port: 8092
+
+demo:
+  instance-id: custom-jdbc-node-2

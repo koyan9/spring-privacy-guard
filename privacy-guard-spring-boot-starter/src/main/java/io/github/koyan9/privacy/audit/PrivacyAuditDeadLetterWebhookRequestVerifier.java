@@ -77,12 +77,20 @@ public class PrivacyAuditDeadLetterWebhookRequestVerifier {
                     "Invalid signature"
             );
         }
-        if (!replayStore.markIfNew(nonce, now, settings.maxSkew())) {
+        if (!replayStore.markIfNew(replayNonceKey(nonce), now, settings.maxSkew())) {
             throw new PrivacyAuditDeadLetterWebhookVerificationException(
                     PrivacyAuditDeadLetterWebhookVerificationException.Reason.REPLAY_DETECTED,
                     "Replay detected"
             );
         }
+    }
+
+    private String replayNonceKey(String nonce) {
+        String namespace = settings.replayNamespace();
+        if (!StringUtils.hasText(namespace)) {
+            return nonce;
+        }
+        return namespace.trim() + ":" + nonce;
     }
 
     private String header(Map<String, String> headers, String name) {

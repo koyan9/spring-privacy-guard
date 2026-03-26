@@ -1,0 +1,93 @@
+services:
+  builder:
+    image: maven:3.9.9-eclipse-temurin-17
+    working_dir: /workspace
+    command: >
+      sh -lc "./mvnw -q -DskipTests install -pl privacy-guard-core,privacy-guard-spring-boot-starter"
+    volumes:
+      - ../..:/workspace
+      - privacy-demo-m2:/root/.m2
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: privacy-demo-postgres
+    environment:
+      POSTGRES_DB: privacy_demo
+      POSTGRES_USER: privacy_demo
+      POSTGRES_PASSWORD: privacy_demo
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U privacy_demo -d privacy_demo"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - privacy-demo-postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: privacy-demo-postgres-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - privacy-demo-redis-data:/data
+
+  app-node1:
+    image: maven:3.9.9-eclipse-temurin-17
+    working_dir: /workspace
+    command: >
+      sh -lc "./mvnw -q -f samples/privacy-demo/pom.xml spring-boot:run -Dspring-boot.run.profiles=postgres-redis-tenant"
+    environment:
+      PRIVACY_DEMO_POSTGRES_URL: jdbc:postgresql://postgres:5432/privacy_demo
+      PRIVACY_DEMO_POSTGRES_USERNAME: privacy_demo
+      PRIVACY_DEMO_POSTGRES_PASSWORD: privacy_demo
+      PRIVACY_DEMO_REDIS_HOST: redis
+      PRIVACY_DEMO_REDIS_PORT: 6379
+    ports:
+      - "8088:8088"
+    depends_on:
+      builder:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ../..:/workspace
+      - privacy-demo-m2:/root/.m2
+
+  app-node2:
+    image: maven:3.9.9-eclipse-temurin-17
+    working_dir: /workspace
+    command: >
+      sh -lc "./mvnw -q -f samples/privacy-demo/pom.xml spring-boot:run -Dspring-boot.run.profiles=postgres-redis-tenant,postgres-redis-tenant-node2"
+    environment:
+      PRIVACY_DEMO_POSTGRES_URL: jdbc:postgresql://postgres:5432/privacy_demo
+      PRIVACY_DEMO_POSTGRES_USERNAME: privacy_demo
+      PRIVACY_DEMO_POSTGRES_PASSWORD: privacy_demo
+      PRIVACY_DEMO_REDIS_HOST: redis
+      PRIVACY_DEMO_REDIS_PORT: 6379
+    ports:
+      - "8091:8091"
+    depends_on:
+      builder:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ../..:/workspace
+      - privacy-demo-m2:/root/.m2
+
+volumes:
+  privacy-demo-m2:
+  privacy-demo-postgres-data:
+  privacy-demo-redis-data:

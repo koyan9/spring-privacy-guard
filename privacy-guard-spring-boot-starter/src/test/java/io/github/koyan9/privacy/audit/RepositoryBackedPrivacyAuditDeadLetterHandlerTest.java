@@ -81,4 +81,22 @@ class RepositoryBackedPrivacyAuditDeadLetterHandlerTest {
         assertEquals("demo", saved.get().resourceId());
         assertEquals(1.0d, meterRegistry.get("privacy.audit.tenant.write.path").tag("domain", "dead_letter_write").tag("path", "fallback").counter().count());
     }
+
+    @Test
+    void resolvesTelemetryLazilyFromSupplier() {
+        AtomicReference<PrivacyAuditDeadLetterEntry> saved = new AtomicReference<>();
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        AtomicReference<PrivacyTenantAuditTelemetry> telemetryRef = new AtomicReference<>(new MicrometerPrivacyTenantAuditTelemetry(meterRegistry));
+        RepositoryBackedPrivacyAuditDeadLetterHandler handler = new RepositoryBackedPrivacyAuditDeadLetterHandler(
+                saved::set,
+                () -> "tenant-a",
+                tenantId -> new PrivacyTenantAuditPolicy(java.util.Set.of(), java.util.Set.of(), true, "tenant"),
+                telemetryRef::get
+        );
+
+        handler.handle(new PrivacyAuditEvent(Instant.now(), "READ", "Patient", "demo", "actor", "OK", Map.of()), 3, new IllegalStateException("failed"));
+
+        assertEquals("demo", saved.get().resourceId());
+        assertEquals(1.0d, meterRegistry.get("privacy.audit.tenant.write.path").tag("domain", "dead_letter_write").tag("path", "fallback").counter().count());
+    }
 }

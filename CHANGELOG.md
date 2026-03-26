@@ -4,11 +4,45 @@ All notable changes to `spring-privacy-guard` will be documented in this file.
 
 ## [Unreleased]
 
+## [0.4.0] - TBD
+
+### Added
+
+- Added `PrivacyTenantDeadLetterObservabilityPolicy` and resolver support so tenant policies can override dead-letter warning/down thresholds and recovery notifications without changing existing stable audit or logging policy carriers.
+- Added tenant alert transition and delivery Micrometer telemetry plus receiver route failure counters for tenant-specific verification paths.
+- Added tenant-aware dead-letter import persistence so tenant-scoped import prefers repository-native bulk write hints and records `dead_letter_import` native/fallback telemetry.
+- Added tenant-scoped dead-letter export and manifest path telemetry plus sample repository capability reporting for tenant exchange read/write support.
+- Added a `fallback-tenant` sample profile that registers generic-only repositories so tenant native/fallback behavior can be compared locally.
+- Added a `custom-tenant-native` sample profile with custom tenant-aware repositories that implement the tenant SPI without relying on the built-in repository implementations.
+- Added a `custom-jdbc-tenant` sample profile with sample-defined JDBC tenant repositories, schema initialization, and native tenant-path verification.
+- Added a `custom-jdbc-tenant-node2` overlay plus multi-instance verification scripts so the custom JDBC tenant repositories can also be rehearsed in a two-node local rollout.
+- Added a PostgreSQL + Redis production-like sample profile pair, local compose recipe, and verification scripts for two-node rollout rehearsal.
 - Added a runnable `jdbc-tenant` sample profile with H2-backed JDBC audit, dead-letter, tenant-column, and replay-store wiring.
 - Added a sample integration test and deployment recipe docs for the local JDBC tenant profile.
 - Added Micrometer counters for tenant-aware query path selection (`native` vs `fallback`) across audit and dead-letter helper reads.
+- Added a protected `/demo-tenants/observability` sample endpoint plus integration coverage for tenant-path metrics.
+- Extended `PrivacyTenantContextSnapshot` so async callback chains can wrap `Executor`, `Consumer`, `Function`, and `Bi*` functional interfaces in addition to `Runnable`/`Callable`/`Supplier`.
+- Added tenant-scoped dead-letter backlog gauges and tenant-aware dead-letter alert callback routing, including built-in webhook/email wrappers that carry `tenantId` in remote notifications.
+- Added explicit tenant-to-target route overrides for built-in dead-letter webhook/email alerts.
+- Added tenant-specific receiver verification routes so built-in filter/interceptor mode can select bearer/signature settings by path.
+- Added `PrivacyTenantAuditDeadLetterDeleteRepository` so tenant-scoped dead-letter deletes can prefer repository-native criteria deletion.
+- Added `PrivacyTenantAuditDeadLetterReplayRepository` so tenant-scoped dead-letter replay can prefer repository-native criteria replay.
+- Added `PrivacyTenantLoggingPolicy` and `PrivacyTenantLoggingPolicyResolver` as stable tenant logging policy surfaces over the existing property model.
+- Added a tenant-aware dead-letter Actuator health indicator that summarizes backlog state across the configured tenant list.
+- Added tenant write-path telemetry for dead-letter criteria delete and replay management flows.
+- Upgraded the `jdbc-tenant` sample into a shared-JDBC local two-instance rollout reference with a node-2 overlay profile, instance metadata, and a multi-instance verification script.
+- Added Redis-backed sample profiles and a local multi-instance verification script for shared replay-store receiver deployments that already use Redis.
+- Added a Unix shell helper for bringing the sample's local Redis dependency up and down through the bundled Docker Compose file.
 
-## [0.3.0] - TBD
+### Changed
+
+- Improved tenant-scoped dead-letter replay to reuse preselected entries instead of reloading each selected id before publish/delete.
+
+### Fixed
+
+- Fixed tenant observability auto-configuration to bind Micrometer lazily so Boot metrics initialization order does not suppress counters.
+
+## [0.3.0] - 2026-03-20
 
 ### Added
 
@@ -35,7 +69,7 @@ All notable changes to `spring-privacy-guard` will be documented in this file.
 - Built-in in-memory and JDBC repositories now provide tenant-native read paths that tenant helpers can prefer before falling back to cross-page filtering.
 - Built-in repository publisher, async publisher, buffered publisher, and repository-backed dead-letter handler now preserve tenant-aware write hints across synchronous and asynchronous persistence flows.
 - Built-in JDBC schema resources and property metadata now cover optional dedicated tenant columns for audit and dead-letter tables.
-- Expanded release-readiness and maintainer documentation for the next `v0.3.0` cut, including draft release notes, operator guides, and release copy.
+- Expanded release-readiness and maintainer documentation for the `v0.3.0` release, including release notes, operator guides, and GitHub release copy.
 
 ### Fixed
 

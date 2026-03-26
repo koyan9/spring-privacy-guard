@@ -11,6 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 public class PrivacyTenantAuditDeadLetterQueryService {
@@ -22,7 +23,7 @@ public class PrivacyTenantAuditDeadLetterQueryService {
     private final PrivacyTenantProvider tenantProvider;
     private final PrivacyTenantAuditPolicyResolver tenantAuditPolicyResolver;
     private final PrivacyTenantAuditDeadLetterReadRepository tenantAuditDeadLetterReadRepository;
-    private final PrivacyTenantAuditTelemetry telemetry;
+    private final Supplier<PrivacyTenantAuditTelemetry> telemetrySupplier;
 
     public PrivacyTenantAuditDeadLetterQueryService(
             PrivacyAuditDeadLetterService privacyAuditDeadLetterService,
@@ -36,7 +37,7 @@ public class PrivacyTenantAuditDeadLetterQueryService {
                 tenantProvider,
                 tenantAuditPolicyResolver,
                 null,
-                null
+                (Supplier<PrivacyTenantAuditTelemetry>) null
         );
     }
 
@@ -53,7 +54,7 @@ public class PrivacyTenantAuditDeadLetterQueryService {
                 tenantProvider,
                 tenantAuditPolicyResolver,
                 tenantAuditDeadLetterReadRepository,
-                null
+                (Supplier<PrivacyTenantAuditTelemetry>) null
         );
     }
 
@@ -65,6 +66,24 @@ public class PrivacyTenantAuditDeadLetterQueryService {
             PrivacyTenantAuditDeadLetterReadRepository tenantAuditDeadLetterReadRepository,
             PrivacyTenantAuditTelemetry telemetry
     ) {
+        this(
+                privacyAuditDeadLetterService,
+                privacyAuditDeadLetterStatsService,
+                tenantProvider,
+                tenantAuditPolicyResolver,
+                tenantAuditDeadLetterReadRepository,
+                () -> telemetry == null ? PrivacyTenantAuditTelemetry.noop() : telemetry
+        );
+    }
+
+    public PrivacyTenantAuditDeadLetterQueryService(
+            PrivacyAuditDeadLetterService privacyAuditDeadLetterService,
+            PrivacyAuditDeadLetterStatsService privacyAuditDeadLetterStatsService,
+            PrivacyTenantProvider tenantProvider,
+            PrivacyTenantAuditPolicyResolver tenantAuditPolicyResolver,
+            PrivacyTenantAuditDeadLetterReadRepository tenantAuditDeadLetterReadRepository,
+            Supplier<PrivacyTenantAuditTelemetry> telemetrySupplier
+    ) {
         this.privacyAuditDeadLetterService = privacyAuditDeadLetterService;
         this.privacyAuditDeadLetterStatsService = privacyAuditDeadLetterStatsService;
         this.tenantProvider = tenantProvider == null ? PrivacyTenantProvider.noop() : tenantProvider;
@@ -72,7 +91,9 @@ public class PrivacyTenantAuditDeadLetterQueryService {
                 ? PrivacyTenantAuditPolicyResolver.noop()
                 : tenantAuditPolicyResolver;
         this.tenantAuditDeadLetterReadRepository = tenantAuditDeadLetterReadRepository;
-        this.telemetry = telemetry == null ? PrivacyTenantAuditTelemetry.noop() : telemetry;
+        this.telemetrySupplier = telemetrySupplier == null
+                ? PrivacyTenantAuditTelemetry::noop
+                : telemetrySupplier;
     }
 
     public List<PrivacyAuditDeadLetterEntry> findByCriteria(String tenantId, PrivacyAuditDeadLetterQueryCriteria criteria) {
@@ -85,10 +106,10 @@ public class PrivacyTenantAuditDeadLetterQueryService {
                 : criteria.normalize();
         String detailKey = tenantDetailKey(normalizedTenant);
         if (tenantAuditDeadLetterReadRepository != null) {
-            telemetry.recordQueryReadPath("dead_letter", "native");
+            telemetry().recordQueryReadPath("dead_letter", "native");
             return tenantAuditDeadLetterReadRepository.findByCriteria(normalizedTenant, detailKey, normalized);
         }
-        telemetry.recordQueryReadPath("dead_letter", "fallback");
+        telemetry().recordQueryReadPath("dead_letter", "fallback");
         List<PrivacyAuditDeadLetterEntry> filtered = collectFilteredEntries(normalized, normalizedTenant);
         return filtered.stream()
                 .skip(normalized.offset())
@@ -110,10 +131,10 @@ public class PrivacyTenantAuditDeadLetterQueryService {
                 : criteria.normalize();
         String detailKey = tenantDetailKey(normalizedTenant);
         if (tenantAuditDeadLetterReadRepository != null) {
-            telemetry.recordQueryReadPath("dead_letter_stats", "native");
+            telemetry().recordQueryReadPath("dead_letter_stats", "native");
             return tenantAuditDeadLetterReadRepository.computeStats(normalizedTenant, detailKey, normalized);
         }
-        telemetry.recordQueryReadPath("dead_letter_stats", "fallback");
+        telemetry().recordQueryReadPath("dead_letter_stats", "fallback");
         List<PrivacyAuditDeadLetterEntry> filtered = collectFilteredEntries(normalized, normalizedTenant);
         return new PrivacyAuditDeadLetterStats(
                 filtered.size(),
@@ -190,5 +211,10 @@ public class PrivacyTenantAuditDeadLetterQueryService {
                 .map(classifier)
                 .filter(value -> value != null && !value.isBlank())
                 .collect(Collectors.groupingBy(Function.identity(), LinkedHashMap::new, Collectors.counting()));
+    }
+
+    private PrivacyTenantAuditTelemetry telemetry() {
+        PrivacyTenantAuditTelemetry telemetry = telemetrySupplier.get();
+        return telemetry == null ? PrivacyTenantAuditTelemetry.noop() : telemetry;
     }
 }

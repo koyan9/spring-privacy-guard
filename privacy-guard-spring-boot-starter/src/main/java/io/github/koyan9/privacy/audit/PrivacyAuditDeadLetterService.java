@@ -57,28 +57,24 @@ public class PrivacyAuditDeadLetterService {
     }
 
     public PrivacyAuditDeadLetterReplayResult replayByCriteria(PrivacyAuditDeadLetterQueryCriteria criteria) {
-        List<PrivacyAuditDeadLetterEntry> selected = findByCriteria(criteria);
+        return replayEntries(findByCriteria(criteria));
+    }
+
+    public PrivacyAuditDeadLetterReplayResult replayEntries(List<PrivacyAuditDeadLetterEntry> entries) {
+        List<PrivacyAuditDeadLetterEntry> selected = entries == null ? List.of() : List.copyOf(entries);
         List<Long> replayedIds = new ArrayList<>();
         List<Long> failedIds = new ArrayList<>();
 
         for (PrivacyAuditDeadLetterEntry entry : selected) {
-            if (!claim(entry.id())) {
-                if (entry.id() != null) {
-                    failedIds.add(entry.id());
-                }
+            if (entry.id() == null) {
                 continue;
             }
-            try {
-                replayPublisher.publish(entry.toReplayAuditEvent());
-                if (entry.id() != null && deadLetterRepository.deleteById(entry.id())) {
-                    replayedIds.add(entry.id());
-                }
-            } catch (RuntimeException exception) {
-                if (entry.id() != null) {
-                    failedIds.add(entry.id());
-                }
-            } finally {
-                release(entry.id());
+            if (!replaySelectedEntry(entry)) {
+                failedIds.add(entry.id());
+                continue;
+            }
+            if (deadLetterRepository.deleteById(entry.id())) {
+                replayedIds.add(entry.id());
             }
         }
 
@@ -104,6 +100,23 @@ public class PrivacyAuditDeadLetterService {
             }
         }
         return deleted;
+    }
+
+    boolean replaySelectedEntry(PrivacyAuditDeadLetterEntry entry) {
+        if (entry == null || entry.id() == null) {
+            return false;
+        }
+        if (!claim(entry.id())) {
+            return false;
+        }
+        try {
+            replayPublisher.publish(entry.toReplayAuditEvent());
+            return true;
+        } catch (RuntimeException exception) {
+            return false;
+        } finally {
+            release(entry.id());
+        }
     }
 
     private boolean claim(Long id) {

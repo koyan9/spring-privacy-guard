@@ -129,7 +129,8 @@ class PrivacyGuardWebhookReceiverInterceptorIntegrationTest {
                     "X-Signature",
                     "X-Timestamp",
                     "X-Nonce",
-                    Duration.ofMinutes(5)
+                    Duration.ofMinutes(5),
+                    null
             );
         }
     }

@@ -2,3 +2,4 @@ io.github.koyan9.privacy.autoconfigure.PrivacyGuardAutoConfiguration
 io.github.koyan9.privacy.autoconfigure.PrivacyGuardDeadLetterExchangeAutoConfiguration
 io.github.koyan9.privacy.autoconfigure.PrivacyGuardDeadLetterObservabilityAutoConfiguration
 io.github.koyan9.privacy.autoconfigure.PrivacyGuardDeadLetterWebhookReceiverAutoConfiguration
+io.github.koyan9.privacy.autoconfigure.PrivacyGuardTenantObservabilityAutoConfiguration

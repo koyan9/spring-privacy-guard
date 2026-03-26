@@ -21,6 +21,8 @@ class MicrometerPrivacyAuditDeadLetterWebhookVerificationTelemetryTest {
         telemetry.recordFailure(PrivacyAuditDeadLetterWebhookVerificationException.Reason.INVALID_SIGNATURE);
         telemetry.recordFailure(PrivacyAuditDeadLetterWebhookVerificationException.Reason.REPLAY_DETECTED);
         telemetry.recordFailure(null);
+        telemetry.recordRouteFailure("/receiver/tenant-a-alerts", PrivacyAuditDeadLetterWebhookVerificationException.Reason.INVALID_SIGNATURE);
+        telemetry.recordRouteFailure(null, null);
 
         assertThat(registry.get("privacy.audit.deadletters.receiver.verification.failures")
                 .tag("reason", "invalid_signature")
@@ -31,6 +33,16 @@ class MicrometerPrivacyAuditDeadLetterWebhookVerificationTelemetryTest {
                 .counter()
                 .count()).isEqualTo(1.0d);
         assertThat(registry.get("privacy.audit.deadletters.receiver.verification.failures")
+                .tag("reason", "unknown")
+                .counter()
+                .count()).isEqualTo(1.0d);
+        assertThat(registry.get("privacy.audit.deadletters.receiver.route.failures")
+                .tag("route", "/receiver/tenant-a-alerts")
+                .tag("reason", "invalid_signature")
+                .counter()
+                .count()).isEqualTo(1.0d);
+        assertThat(registry.get("privacy.audit.deadletters.receiver.route.failures")
+                .tag("route", "default")
                 .tag("reason", "unknown")
                 .counter()
                 .count()).isEqualTo(1.0d);

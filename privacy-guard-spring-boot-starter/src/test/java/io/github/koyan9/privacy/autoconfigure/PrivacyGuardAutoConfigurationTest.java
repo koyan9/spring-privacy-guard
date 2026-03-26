@@ -8,6 +8,7 @@ package io.github.koyan9.privacy.autoconfigure;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.koyan9.privacy.audit.InMemoryPrivacyAuditDeadLetterRepository;
 import io.github.koyan9.privacy.audit.InMemoryPrivacyAuditRepository;
+import io.github.koyan9.privacy.audit.JdbcPrivacyAuditRepository;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterHandler;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterRepository;
 import io.github.koyan9.privacy.audit.PrivacyAuditEvent;
@@ -17,6 +18,10 @@ import io.github.koyan9.privacy.audit.PrivacyAuditQueryService;
 import io.github.koyan9.privacy.audit.PrivacyTenantAuditQueryService;
 import io.github.koyan9.privacy.audit.PrivacyTenantAuditDeadLetterOperationsService;
 import io.github.koyan9.privacy.audit.PrivacyTenantAuditDeadLetterQueryService;
+import io.github.koyan9.privacy.audit.PrivacyTenantAuditDeadLetterReplayRepository;
+import io.github.koyan9.privacy.audit.PrivacyTenantAuditReadRepository;
+import io.github.koyan9.privacy.audit.PrivacyTenantAuditWriteRepository;
+import io.github.koyan9.privacy.audit.PrivacyTenantDeadLetterObservabilityPolicyResolver;
 import io.github.koyan9.privacy.audit.PrivacyAuditRepository;
 import io.github.koyan9.privacy.audit.PrivacyAuditRepositoryType;
 import io.github.koyan9.privacy.audit.PrivacyAuditSchemaInitializer;
@@ -25,6 +30,8 @@ import io.github.koyan9.privacy.core.MaskingContext;
 import io.github.koyan9.privacy.core.MaskingService;
 import io.github.koyan9.privacy.core.MaskingStrategy;
 import io.github.koyan9.privacy.core.PrivacyTenantAwareMaskingStrategy;
+import io.github.koyan9.privacy.core.PrivacyTenantContextHolder;
+import io.github.koyan9.privacy.core.PrivacyTenantContextScope;
 import io.github.koyan9.privacy.core.PrivacyTenantPolicyResolver;
 import io.github.koyan9.privacy.core.PrivacyTenantProvider;
 import io.github.koyan9.privacy.core.SensitiveData;
@@ -32,7 +39,9 @@ import io.github.koyan9.privacy.core.SensitiveType;
 import io.github.koyan9.privacy.core.TextMaskingService;
 import io.github.koyan9.privacy.logging.PrivacyLogSanitizer;
 import io.github.koyan9.privacy.logging.PrivacyLoggerFactory;
+import io.github.koyan9.privacy.logging.PrivacyTenantLoggingPolicyResolver;
 import io.github.koyan9.privacy.logging.logback.PrivacyLogbackConfigurer;
+import io.github.koyan9.privacy.logging.logback.PrivacyLogbackRuntime;
 import io.github.koyan9.privacy.tenant.PrivacyTenantContextFilter;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -43,6 +52,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 import org.springframework.jdbc.core.JdbcOperations;
+import org.slf4j.event.KeyValuePair;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -75,6 +85,8 @@ class PrivacyGuardAutoConfigurationTest {
             assertThat(context).hasSingleBean(PrivacyLogbackConfigurer.class);
             assertThat(context).hasSingleBean(PrivacyTenantProvider.class);
             assertThat(context).hasSingleBean(PrivacyTenantPolicyResolver.class);
+            assertThat(context).hasSingleBean(PrivacyTenantDeadLetterObservabilityPolicyResolver.class);
+            assertThat(context).hasSingleBean(PrivacyTenantLoggingPolicyResolver.class);
             assertThat(context).hasSingleBean(PrivacyAuditService.class);
             assertThat(context).hasSingleBean(PrivacyAuditQueryService.class);
             assertThat(context).hasSingleBean(PrivacyTenantAuditQueryService.class);
@@ -150,6 +162,7 @@ class PrivacyGuardAutoConfigurationTest {
                     assertThat(context).hasSingleBean(PrivacyAuditDeadLetterHandler.class);
                     assertThat(context).hasSingleBean(PrivacyTenantAuditDeadLetterQueryService.class);
                     assertThat(context).hasSingleBean(PrivacyTenantAuditDeadLetterOperationsService.class);
+                    assertThat(context).hasSingleBean(PrivacyTenantAuditDeadLetterReplayRepository.class);
                 });
     }
 
@@ -162,7 +175,10 @@ class PrivacyGuardAutoConfigurationTest {
                 )
                 .withUserConfiguration(JdbcConfig.class)
                 .run(context -> {
+                    assertThat(context).hasSingleBean(JdbcPrivacyAuditRepository.class);
                     assertThat(context).hasSingleBean(PrivacyAuditRepository.class);
+                    assertThat(context).hasSingleBean(PrivacyTenantAuditReadRepository.class);
+                    assertThat(context).hasSingleBean(PrivacyTenantAuditWriteRepository.class);
                     assertThat(context).hasSingleBean(PrivacyAuditQueryService.class);
                 });
     }
@@ -287,6 +303,50 @@ class PrivacyGuardAutoConfigurationTest {
     }
 
     @Test
+    void appliesTenantLoggingPolicyFromProperties() {
+        contextRunner
+                .withPropertyValues(
+                        "privacy.guard.logging.mdc.enabled=true",
+                        "privacy.guard.logging.mdc.include-keys[0]=email",
+                        "privacy.guard.logging.structured.enabled=true",
+                        "privacy.guard.logging.structured.include-keys[0]=phone",
+                        "privacy.guard.tenant.enabled=true",
+                        "privacy.guard.tenant.default-tenant=public",
+                        "privacy.guard.tenant.policies[tenant-a].logging.mdc.include-keys[0]=phone",
+                        "privacy.guard.tenant.policies[tenant-a].logging.structured.enabled=false"
+                )
+                .run(context -> {
+                    PrivacyTenantLoggingPolicyResolver resolver = context.getBean(PrivacyTenantLoggingPolicyResolver.class);
+                    try (PrivacyTenantContextScope ignored = PrivacyTenantContextHolder.openScope("tenant-a")) {
+                        java.util.Map<String, String> tenantMdc = PrivacyLogbackRuntime.sanitizeMdc(java.util.Map.of(
+                                "email", "alice@example.com",
+                                "phone", "13800138000"
+                        ));
+                        assertThat(tenantMdc.get("email")).isEqualTo("alice@example.com");
+                        assertThat(tenantMdc.get("phone")).contains("138****8000");
+
+                        java.util.List<KeyValuePair> tenantPairs = PrivacyLogbackRuntime.sanitizeKeyValuePairs(java.util.List.of(
+                                new KeyValuePair("phone", "13800138000")
+                        ));
+                        assertThat(tenantPairs.get(0).value.toString()).isEqualTo("13800138000");
+                    } finally {
+                        PrivacyTenantContextHolder.clear();
+                    }
+
+                    assertThat(resolver.resolve("tenant-a").mdcIncludeKeys()).containsExactly("phone");
+                    assertThat(resolver.resolve("tenant-a").structuredEnabled()).isFalse();
+                    assertThat(resolver.resolve("tenant-b")).isEqualTo(io.github.koyan9.privacy.logging.PrivacyTenantLoggingPolicy.none());
+
+                    java.util.Map<String, String> defaultMdc = PrivacyLogbackRuntime.sanitizeMdc(java.util.Map.of(
+                            "email", "alice@example.com",
+                            "phone", "13800138000"
+                    ));
+                    assertThat(defaultMdc.get("email")).contains("a****@example.com");
+                    assertThat(defaultMdc.get("phone")).isEqualTo("13800138000");
+                });
+    }
+
+    @Test
     void registersTenantContextFilterWhenTenantModeEnabled() {
         webContextRunner
                 .withPropertyValues(
@@ -326,6 +386,18 @@ class PrivacyGuardAutoConfigurationTest {
                         "privacy.guard.tenant.policies[tenant-a].audit.exclude-detail-keys[0]=idCard",
                         "privacy.guard.tenant.policies[tenant-a].audit.attach-tenant-id=true",
                         "privacy.guard.tenant.policies[tenant-a].audit.tenant-detail-key=tenant",
+                        "privacy.guard.tenant.policies[tenant-a].observability.dead-letter.warning-threshold=2",
+                        "privacy.guard.tenant.policies[tenant-a].observability.dead-letter.down-threshold=4",
+                        "privacy.guard.tenant.policies[tenant-a].observability.dead-letter.notify-on-recovery=false",
+                        "privacy.guard.tenant.policies[tenant-a].logging.mdc.enabled=true",
+                        "privacy.guard.tenant.policies[tenant-a].logging.mdc.include-keys[0]=email",
+                        "privacy.guard.tenant.policies[tenant-a].logging.structured.enabled=false",
+                        "privacy.guard.tenant.policies[tenant-a].logging.structured.exclude-keys[0]=safe",
+                        "privacy.guard.audit.dead-letter.observability.alert.tenant.enabled=true",
+                        "privacy.guard.audit.dead-letter.observability.alert.tenant.tenant-ids[0]=tenant-a",
+                        "privacy.guard.audit.dead-letter.observability.alert.tenant.routes[tenant-a].webhook.url=https://tenant-a.example.com/alerts",
+                        "privacy.guard.audit.dead-letter.observability.alert.tenant.routes[tenant-a].email.to=tenant-a-ops@example.com",
+                        "privacy.guard.audit.dead-letter.observability.alert.tenant.routes[tenant-a].email.subject-prefix=[tenant-a]",
                         "privacy.guard.audit.enabled=true",
                         "privacy.guard.audit.log-events=false",
                         "privacy.guard.audit.repository-type=JDBC",
@@ -362,6 +434,23 @@ class PrivacyGuardAutoConfigurationTest {
                     assertThat(properties.getTenant().getPolicies().get("tenant-a").getAudit().getExcludeDetailKeys()).containsExactly("idCard");
                     assertThat(properties.getTenant().getPolicies().get("tenant-a").getAudit().isAttachTenantId()).isTrue();
                     assertThat(properties.getTenant().getPolicies().get("tenant-a").getAudit().getTenantDetailKey()).isEqualTo("tenant");
+                    assertThat(properties.getTenant().getPolicies().get("tenant-a").getObservability().getDeadLetter().getWarningThreshold()).isEqualTo(2L);
+                    assertThat(properties.getTenant().getPolicies().get("tenant-a").getObservability().getDeadLetter().getDownThreshold()).isEqualTo(4L);
+                    assertThat(properties.getTenant().getPolicies().get("tenant-a").getObservability().getDeadLetter().getNotifyOnRecovery()).isFalse();
+                    assertThat(properties.getTenant().getPolicies().get("tenant-a").getLogging().getMdc().getEnabled()).isTrue();
+                    assertThat(properties.getTenant().getPolicies().get("tenant-a").getLogging().getMdc().getIncludeKeys()).containsExactly("email");
+                    assertThat(properties.getTenant().getPolicies().get("tenant-a").getLogging().getStructured().getEnabled()).isFalse();
+                    assertThat(properties.getTenant().getPolicies().get("tenant-a").getLogging().getStructured().getExcludeKeys()).containsExactly("safe");
+                    assertThat(properties.getAudit().getDeadLetter().getObservability().getAlert().getTenant().isEnabled()).isTrue();
+                    assertThat(properties.getAudit().getDeadLetter().getObservability().getAlert().getTenant().getTenantIds()).containsExactly("tenant-a");
+                    assertThat(properties.getAudit().getDeadLetter().getObservability().getAlert().getTenant().getRoutes())
+                            .containsKey("tenant-a");
+                    assertThat(properties.getAudit().getDeadLetter().getObservability().getAlert().getTenant().getRoutes().get("tenant-a").getWebhook().getUrl())
+                            .isEqualTo("https://tenant-a.example.com/alerts");
+                    assertThat(properties.getAudit().getDeadLetter().getObservability().getAlert().getTenant().getRoutes().get("tenant-a").getEmail().getTo())
+                            .isEqualTo("tenant-a-ops@example.com");
+                    assertThat(properties.getAudit().getDeadLetter().getObservability().getAlert().getTenant().getRoutes().get("tenant-a").getEmail().getSubjectPrefix())
+                            .isEqualTo("[tenant-a]");
                     assertThat(properties.getAudit().isEnabled()).isTrue();
                     assertThat(properties.getAudit().isLogEvents()).isFalse();
                     assertThat(properties.getAudit().getRepositoryType()).isEqualTo(PrivacyAuditRepositoryType.JDBC);

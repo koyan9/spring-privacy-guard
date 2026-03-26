@@ -13,13 +13,17 @@ import io.github.koyan9.privacy.audit.PrivacyTenantAuditManagementService;
 import io.github.koyan9.privacy.audit.PrivacyTenantAuditDeadLetterExchangeService;
 import io.github.koyan9.privacy.audit.PrivacyTenantAuditDeadLetterQueryService;
 import io.github.koyan9.privacy.audit.PrivacyTenantAuditDeadLetterOperationsService;
+import io.github.koyan9.privacy.audit.PrivacyTenantAuditDeadLetterReadRepository;
+import io.github.koyan9.privacy.audit.PrivacyTenantAuditDeadLetterWriteRepository;
 import io.github.koyan9.privacy.audit.PrivacyTenantAuditQueryService;
 import io.github.koyan9.privacy.audit.PrivacyAuditQueryService;
 import io.github.koyan9.privacy.audit.PrivacyAuditStatsService;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterService;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterStatsService;
 import io.github.koyan9.privacy.audit.PrivacyTenantAuditPolicyResolver;
+import io.github.koyan9.privacy.audit.PrivacyTenantAuditTelemetry;
 import io.github.koyan9.privacy.core.PrivacyTenantProvider;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -62,17 +66,25 @@ public class PrivacyGuardDeadLetterExchangeAutoConfiguration {
     })
     public PrivacyTenantAuditDeadLetterExchangeService privacyTenantAuditDeadLetterExchangeService(
             PrivacyAuditDeadLetterExchangeService exchangeService,
+            PrivacyAuditDeadLetterRepository repository,
             PrivacyTenantAuditDeadLetterQueryService tenantQueryService,
             PrivacyTenantAuditPolicyResolver tenantAuditPolicyResolver,
+            ObjectProvider<PrivacyTenantAuditDeadLetterReadRepository> tenantReadRepositories,
+            ObjectProvider<PrivacyTenantAuditDeadLetterWriteRepository> tenantWriteRepositories,
+            ObjectProvider<PrivacyTenantAuditTelemetry> telemetryProvider,
             PrivacyAuditDeadLetterCsvCodec csvCodec,
             ObjectMapper objectMapper
     ) {
         return new PrivacyTenantAuditDeadLetterExchangeService(
                 exchangeService,
+                repository,
                 tenantQueryService,
                 tenantAuditPolicyResolver,
+                tenantReadRepositories.getIfAvailable(),
+                tenantWriteRepositories.getIfAvailable(),
                 csvCodec,
-                objectMapper
+                objectMapper,
+                () -> telemetryProvider.getIfAvailable(PrivacyTenantAuditTelemetry::noop)
         );
     }
 

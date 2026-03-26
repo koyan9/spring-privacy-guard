@@ -52,7 +52,8 @@ class DemoWebhookAlertReceiverManagementController {
                 .skip(normalizedOffset)
                 .limit(normalizedLimit)
                 .map(entry -> Map.<String, Object>of(
-                        "nonce", entry.getKey(),
+                        "nonce", displayNonce(entry.getKey()),
+                        "storageKey", entry.getKey(),
                         "expiresAt", entry.getValue().toString()
                 ))
                 .toList();
@@ -60,6 +61,7 @@ class DemoWebhookAlertReceiverManagementController {
         response.put("count", snapshot.size());
         response.put("limit", normalizedLimit);
         response.put("offset", normalizedOffset);
+        response.put("namespace", replayNamespace());
         response.put("storeFile", storeFile());
         response.put("entries", entries);
         recordManagementAction("DEMO_ALERT_REPLAY_STORE_QUERY", Map.of(
@@ -83,6 +85,7 @@ class DemoWebhookAlertReceiverManagementController {
         Instant latest = snapshot.values().stream().max(Comparator.naturalOrder()).orElse(null);
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("count", snapshot.size());
+        response.put("namespace", replayNamespace());
         response.put("expiringWithin", expiringWithin.toString());
         response.put("expiringSoon", expiringSoon);
         response.put("earliestExpiry", earliest == null ? null : earliest.toString());
@@ -104,6 +107,17 @@ class DemoWebhookAlertReceiverManagementController {
         return Map.of("cleared", cleared);
     }
 
+    private String displayNonce(String storageKey) {
+        String namespace = replayNamespace();
+        if (namespace == null || namespace.isBlank()) {
+            return storageKey;
+        }
+        String prefix = namespace.trim() + ":";
+        return storageKey != null && storageKey.startsWith(prefix)
+                ? storageKey.substring(prefix.length())
+                : storageKey;
+    }
+
     private void recordManagementAction(String action, Map<String, String> details) {
         privacyAuditService.record(action, "DemoWebhookAlertReplayStore", "receiver", ADMIN_ACTOR, "SUCCESS", details);
     }
@@ -117,5 +131,15 @@ class DemoWebhookAlertReceiverManagementController {
                 .getReplayStore()
                 .getFile();
         return file.isEnabled() ? file.getPath() : null;
+    }
+
+    private String replayNamespace() {
+        return guardProperties.getAudit()
+                .getDeadLetter()
+                .getObservability()
+                .getAlert()
+                .getReceiver()
+                .getReplayStore()
+                .getNamespace();
     }
 }

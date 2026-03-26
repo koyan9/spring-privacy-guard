@@ -11,11 +11,13 @@ import org.slf4j.event.KeyValuePair;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 public final class PrivacyLogbackRuntime {
 
     private static volatile PrivacyLogSanitizer privacyLogSanitizer;
-    private static volatile PrivacyLogbackSanitizerSettings sanitizerSettings = PrivacyLogbackSanitizerSettings.disabled();
+    private static volatile Supplier<PrivacyLogbackSanitizerSettings> sanitizerSettingsSupplier =
+            PrivacyLogbackSanitizerSettings::disabled;
 
     private PrivacyLogbackRuntime() {
     }
@@ -25,13 +27,17 @@ public final class PrivacyLogbackRuntime {
     }
 
     public static void set(PrivacyLogSanitizer sanitizer, PrivacyLogbackSanitizerSettings settings) {
+        set(sanitizer, () -> settings == null ? PrivacyLogbackSanitizerSettings.disabled() : settings);
+    }
+
+    public static void set(PrivacyLogSanitizer sanitizer, Supplier<PrivacyLogbackSanitizerSettings> settingsSupplier) {
         privacyLogSanitizer = sanitizer;
-        sanitizerSettings = settings == null ? PrivacyLogbackSanitizerSettings.disabled() : settings;
+        sanitizerSettingsSupplier = settingsSupplier == null ? PrivacyLogbackSanitizerSettings::disabled : settingsSupplier;
     }
 
     public static void clear() {
         privacyLogSanitizer = null;
-        sanitizerSettings = PrivacyLogbackSanitizerSettings.disabled();
+        sanitizerSettingsSupplier = PrivacyLogbackSanitizerSettings::disabled;
     }
 
     public static String sanitize(String message) {
@@ -52,7 +58,7 @@ public final class PrivacyLogbackRuntime {
 
     public static Map<String, String> sanitizeMdc(Map<String, String> mdc) {
         PrivacyLogSanitizer sanitizer = privacyLogSanitizer;
-        PrivacyLogbackSanitizerSettings settings = sanitizerSettings;
+        PrivacyLogbackSanitizerSettings settings = resolveSettings();
         if (sanitizer == null || mdc == null || settings == null || !settings.isMdcEnabled()) {
             return mdc;
         }
@@ -71,7 +77,7 @@ public final class PrivacyLogbackRuntime {
 
     public static List<KeyValuePair> sanitizeKeyValuePairs(List<KeyValuePair> pairs) {
         PrivacyLogSanitizer sanitizer = privacyLogSanitizer;
-        PrivacyLogbackSanitizerSettings settings = sanitizerSettings;
+        PrivacyLogbackSanitizerSettings settings = resolveSettings();
         if (sanitizer == null || pairs == null || settings == null || !settings.isStructuredEnabled()) {
             return pairs;
         }
@@ -102,5 +108,14 @@ public final class PrivacyLogbackRuntime {
             return includeKeys.contains(key);
         }
         return true;
+    }
+
+    private static PrivacyLogbackSanitizerSettings resolveSettings() {
+        Supplier<PrivacyLogbackSanitizerSettings> supplier = sanitizerSettingsSupplier;
+        if (supplier == null) {
+            return PrivacyLogbackSanitizerSettings.disabled();
+        }
+        PrivacyLogbackSanitizerSettings settings = supplier.get();
+        return settings == null ? PrivacyLogbackSanitizerSettings.disabled() : settings;
     }
 }

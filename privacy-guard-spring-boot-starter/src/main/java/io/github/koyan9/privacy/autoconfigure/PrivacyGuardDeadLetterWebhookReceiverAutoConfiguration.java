@@ -17,6 +17,7 @@ import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStoreMe
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStoreObservationService;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStoreSchemaLocationResolver;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookRequestVerifier;
+import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookVerificationRouteRegistry;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookVerificationTelemetry;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookVerificationFilter;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookVerificationInterceptor;
@@ -43,6 +44,8 @@ import org.springframework.util.StringUtils;
 
 import javax.sql.DataSource;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 @AutoConfiguration
 public class PrivacyGuardDeadLetterWebhookReceiverAutoConfiguration {
@@ -123,7 +126,14 @@ public class PrivacyGuardDeadLetterWebhookReceiverAutoConfiguration {
                 verification.getSignatureHeader(),
                 verification.getTimestampHeader(),
                 verification.getNonceHeader(),
-                verification.getMaxSkew()
+                verification.getMaxSkew(),
+                properties.getAudit()
+                        .getDeadLetter()
+                        .getObservability()
+                        .getAlert()
+                        .getReceiver()
+                        .getReplayStore()
+                        .getNamespace()
         );
     }
 
@@ -148,6 +158,36 @@ public class PrivacyGuardDeadLetterWebhookReceiverAutoConfiguration {
             PrivacyAuditDeadLetterWebhookReplayStore replayStore
     ) {
         return new PrivacyAuditDeadLetterWebhookRequestVerifier(settings, replayStore);
+    }
+
+    @Bean
+    @Conditional(ReceiverVerificationPropertiesEnabledCondition.class)
+    @ConditionalOnBean(PrivacyAuditDeadLetterWebhookReplayStore.class)
+    @ConditionalOnMissingBean(PrivacyAuditDeadLetterWebhookVerificationRouteRegistry.class)
+    public PrivacyAuditDeadLetterWebhookVerificationRouteRegistry privacyAuditDeadLetterWebhookVerificationRouteRegistry(
+            PrivacyGuardProperties properties,
+            PrivacyAuditDeadLetterWebhookReplayStore replayStore
+    ) {
+        List<PrivacyAuditDeadLetterWebhookVerificationRouteRegistry.Route> routes = new ArrayList<>();
+        PrivacyAuditDeadLetterWebhookVerificationSettings defaults = verificationSettingsFrom(properties);
+        for (var entry : properties.getAudit().getDeadLetter().getObservability().getAlert().getTenant().getRoutes().entrySet()) {
+            String tenantId = normalize(entry.getKey());
+            PrivacyGuardProperties.AlertTenantRoute route = entry.getValue();
+            if (tenantId == null || route == null || route.getReceiver() == null) {
+                continue;
+            }
+            String pathPattern = normalize(route.getReceiver().getPathPattern());
+            if (pathPattern == null) {
+                continue;
+            }
+            PrivacyAuditDeadLetterWebhookVerificationSettings settings = mergeVerificationSettings(defaults, route.getReceiver());
+            routes.add(new PrivacyAuditDeadLetterWebhookVerificationRouteRegistry.Route(
+                    tenantId,
+                    pathPattern,
+                    new PrivacyAuditDeadLetterWebhookRequestVerifier(settings, replayStore)
+            ));
+        }
+        return new PrivacyAuditDeadLetterWebhookVerificationRouteRegistry(routes);
     }
 
     @Bean
@@ -233,12 +273,14 @@ public class PrivacyGuardDeadLetterWebhookReceiverAutoConfiguration {
     @ConditionalOnExpression("'${privacy.guard.audit.dead-letter.observability.alert.receiver.filter.enabled:false}' == 'true' and '${privacy.guard.audit.dead-letter.observability.alert.receiver.interceptor.enabled:false}' != 'true'")
     public PrivacyAuditDeadLetterWebhookVerificationFilter privacyAuditDeadLetterWebhookVerificationFilter(
             PrivacyAuditDeadLetterWebhookRequestVerifier verifier,
+            ObjectProvider<PrivacyAuditDeadLetterWebhookVerificationRouteRegistry> routeRegistryProvider,
             PrivacyGuardProperties properties,
             ObjectProvider<PrivacyAuditDeadLetterWebhookVerificationTelemetry> telemetryProvider
     ) {
         return new PrivacyAuditDeadLetterWebhookVerificationFilter(
                 verifier,
                 properties.getAudit().getDeadLetter().getObservability().getAlert().getReceiver().getFilter().getPathPattern(),
+                routeRegistryProvider.getIfAvailable(),
                 telemetryProvider.getIfAvailable(PrivacyAuditDeadLetterWebhookVerificationTelemetry::noop)
         );
     }
@@ -254,10 +296,17 @@ public class PrivacyGuardDeadLetterWebhookReceiverAutoConfiguration {
             havingValue = "true"
     )
     public PrivacyAuditDeadLetterWebhookBodyCachingFilter privacyAuditDeadLetterWebhookBodyCachingFilter(
+            ObjectProvider<PrivacyAuditDeadLetterWebhookVerificationRouteRegistry> routeRegistryProvider,
             PrivacyGuardProperties properties
     ) {
+        List<String> pathPatterns = new ArrayList<>();
+        pathPatterns.add(properties.getAudit().getDeadLetter().getObservability().getAlert().getReceiver().getInterceptor().getPathPattern());
+        PrivacyAuditDeadLetterWebhookVerificationRouteRegistry routeRegistry = routeRegistryProvider.getIfAvailable();
+        if (routeRegistry != null) {
+            pathPatterns.addAll(routeRegistry.pathPatterns());
+        }
         return new PrivacyAuditDeadLetterWebhookBodyCachingFilter(
-                properties.getAudit().getDeadLetter().getObservability().getAlert().getReceiver().getInterceptor().getPathPattern()
+                pathPatterns
         );
     }
 
@@ -273,12 +322,14 @@ public class PrivacyGuardDeadLetterWebhookReceiverAutoConfiguration {
     )
     public PrivacyAuditDeadLetterWebhookVerificationInterceptor privacyAuditDeadLetterWebhookVerificationInterceptor(
             PrivacyAuditDeadLetterWebhookRequestVerifier verifier,
+            ObjectProvider<PrivacyAuditDeadLetterWebhookVerificationRouteRegistry> routeRegistryProvider,
             PrivacyGuardProperties properties,
             ObjectProvider<PrivacyAuditDeadLetterWebhookVerificationTelemetry> telemetryProvider
     ) {
         return new PrivacyAuditDeadLetterWebhookVerificationInterceptor(
                 verifier,
                 properties.getAudit().getDeadLetter().getObservability().getAlert().getReceiver().getInterceptor().getPathPattern(),
+                routeRegistryProvider.getIfAvailable(),
                 telemetryProvider.getIfAvailable(PrivacyAuditDeadLetterWebhookVerificationTelemetry::noop)
         );
     }
@@ -295,11 +346,18 @@ public class PrivacyGuardDeadLetterWebhookReceiverAutoConfiguration {
     )
     public PrivacyGuardDeadLetterWebhookReceiverMvcConfigurer privacyAuditDeadLetterWebhookReceiverMvcConfigurer(
             PrivacyAuditDeadLetterWebhookVerificationInterceptor interceptor,
+            ObjectProvider<PrivacyAuditDeadLetterWebhookVerificationRouteRegistry> routeRegistryProvider,
             PrivacyGuardProperties properties
     ) {
+        List<String> pathPatterns = new ArrayList<>();
+        pathPatterns.add(properties.getAudit().getDeadLetter().getObservability().getAlert().getReceiver().getInterceptor().getPathPattern());
+        PrivacyAuditDeadLetterWebhookVerificationRouteRegistry routeRegistry = routeRegistryProvider.getIfAvailable();
+        if (routeRegistry != null) {
+            pathPatterns.addAll(routeRegistry.pathPatterns());
+        }
         return new PrivacyGuardDeadLetterWebhookReceiverMvcConfigurer(
                 interceptor,
-                properties.getAudit().getDeadLetter().getObservability().getAlert().getReceiver().getInterceptor().getPathPattern()
+                pathPatterns
         );
     }
 
@@ -401,5 +459,57 @@ public class PrivacyGuardDeadLetterWebhookReceiverAutoConfiguration {
                     redisProperties.getScanBatchSize()
             );
         }
+    }
+
+    private PrivacyAuditDeadLetterWebhookVerificationSettings verificationSettingsFrom(PrivacyGuardProperties properties) {
+        PrivacyGuardProperties.AlertReceiverVerification verification = properties.getAudit()
+                .getDeadLetter()
+                .getObservability()
+                .getAlert()
+                .getReceiver()
+                .getVerification();
+        return new PrivacyAuditDeadLetterWebhookVerificationSettings(
+                verification.getBearerToken(),
+                verification.getSignatureSecret(),
+                verification.getSignatureAlgorithm(),
+                verification.getSignatureHeader(),
+                verification.getTimestampHeader(),
+                verification.getNonceHeader(),
+                verification.getMaxSkew(),
+                properties.getAudit()
+                        .getDeadLetter()
+                        .getObservability()
+                        .getAlert()
+                        .getReceiver()
+                        .getReplayStore()
+                        .getNamespace()
+        );
+    }
+
+    private PrivacyAuditDeadLetterWebhookVerificationSettings mergeVerificationSettings(
+            PrivacyAuditDeadLetterWebhookVerificationSettings defaults,
+            PrivacyGuardProperties.AlertTenantRouteReceiver route
+    ) {
+        return new PrivacyAuditDeadLetterWebhookVerificationSettings(
+                firstNonNull(route.getBearerToken(), defaults.bearerToken()),
+                firstNonNull(route.getSignatureSecret(), defaults.signatureSecret()),
+                firstNonNull(route.getSignatureAlgorithm(), defaults.signatureAlgorithm()),
+                firstNonNull(route.getSignatureHeader(), defaults.signatureHeader()),
+                firstNonNull(route.getTimestampHeader(), defaults.timestampHeader()),
+                firstNonNull(route.getNonceHeader(), defaults.nonceHeader()),
+                firstNonNull(route.getMaxSkew(), defaults.maxSkew()),
+                firstNonNull(route.getReplayNamespace(), defaults.replayNamespace())
+        );
+    }
+
+    private String normalize(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        return value.trim();
+    }
+
+    private <T> T firstNonNull(T routeValue, T defaultValue) {
+        return routeValue != null ? routeValue : defaultValue;
     }
 }

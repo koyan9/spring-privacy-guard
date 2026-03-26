@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -173,6 +174,41 @@ class PrivacyTenantAuditDeadLetterQueryServiceTest {
 
         assertThat(meterRegistry.get("privacy.audit.tenant.read.path").tag("domain", "dead_letter").tag("path", "fallback").counter().count()).isEqualTo(1.0d);
         assertThat(meterRegistry.get("privacy.audit.tenant.read.path").tag("domain", "dead_letter_stats").tag("path", "fallback").counter().count()).isEqualTo(1.0d);
+    }
+
+    @Test
+    void resolvesTelemetryLazilyFromSupplier() {
+        PrivacyAuditDeadLetterRepository repository = new PrivacyAuditDeadLetterRepository() {
+            @Override
+            public void save(PrivacyAuditDeadLetterEntry entry) {
+            }
+
+            @Override
+            public List<PrivacyAuditDeadLetterEntry> findByCriteria(PrivacyAuditDeadLetterQueryCriteria criteria) {
+                return List.of(entry("A1", "tenant-a"));
+            }
+        };
+        PrivacyAuditDeadLetterService deadLetterService = new PrivacyAuditDeadLetterService(repository, event -> {
+        });
+        PrivacyAuditDeadLetterStatsService deadLetterStatsService = new PrivacyAuditDeadLetterStatsService(
+                criteria -> new PrivacyAuditDeadLetterStats(1, Map.of("READ", 1L), Map.of("OK", 1L), Map.of("Patient", 1L), Map.of("TypeA", 1L))
+        );
+        AtomicReference<PrivacyTenantAuditTelemetry> telemetryRef = new AtomicReference<>();
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        telemetryRef.set(new MicrometerPrivacyTenantAuditTelemetry(meterRegistry));
+
+        PrivacyTenantAuditDeadLetterQueryService service = new PrivacyTenantAuditDeadLetterQueryService(
+                deadLetterService,
+                deadLetterStatsService,
+                () -> "tenant-a",
+                tenantId -> new PrivacyTenantAuditPolicy(java.util.Set.of(), java.util.Set.of(), true, "tenant"),
+                null,
+                telemetryRef::get
+        );
+
+        service.findByCriteria("tenant-a", PrivacyAuditDeadLetterQueryCriteria.recent(10));
+
+        assertThat(meterRegistry.get("privacy.audit.tenant.read.path").tag("domain", "dead_letter").tag("path", "fallback").counter().count()).isEqualTo(1.0d);
     }
 
     private PrivacyAuditDeadLetterEntry entry(String resourceId, String tenant) {
