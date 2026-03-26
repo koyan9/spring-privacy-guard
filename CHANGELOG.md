@@ -4,6 +4,8 @@ All notable changes to `spring-privacy-guard` will be documented in this file.
 
 ## [Unreleased]
 
+- Updated `.github/workflows/release.yml` to use `softprops/action-gh-release@v2.6.1` so future release runs avoid the Node 20 crash observed during the `v0.4.0` publication workflow.
+
 ## [0.4.0] - 2026-03-27
 
 ### Added
