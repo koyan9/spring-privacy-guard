@@ -80,6 +80,11 @@ class PrivacyTenantAuditQueryServiceTest {
             public PrivacyAuditQueryStats computeStats(String tenantId, String tenantDetailKey, PrivacyAuditQueryCriteria criteria) {
                 return new PrivacyAuditQueryStats(1, Map.of("READ", 1L), Map.of("SUCCESS", 1L), Map.of("Patient", 1L));
             }
+
+            @Override
+            public boolean supportsTenantRead() {
+                return true;
+            }
         };
         PrivacyTenantAuditQueryService service = new PrivacyTenantAuditQueryService(
                 queryService,
@@ -120,6 +125,42 @@ class PrivacyTenantAuditQueryServiceTest {
         service.findByCriteria("tenant-a", PrivacyAuditQueryCriteria.recent(10));
         service.computeStats("tenant-a", PrivacyAuditQueryCriteria.recent(10));
 
+        assertThat(meterRegistry.get("privacy.audit.tenant.read.path").tag("domain", "audit").tag("path", "fallback").counter().count()).isEqualTo(1.0d);
+        assertThat(meterRegistry.get("privacy.audit.tenant.read.path").tag("domain", "audit_stats").tag("path", "fallback").counter().count()).isEqualTo(1.0d);
+    }
+
+    @Test
+    void fallsBackWhenReadRepositoryDoesNotDeclareNativeCapability() {
+        PrivacyAuditQueryRepository repository = criteria -> List.of(event("A1", "tenant-a"), event("B1", "tenant-b"));
+        PrivacyAuditQueryService queryService = new PrivacyAuditQueryService(repository);
+        PrivacyAuditStatsService statsService = new PrivacyAuditStatsService(
+                criteria -> new PrivacyAuditQueryStats(2, Map.of("READ", 2L), Map.of("SUCCESS", 2L), Map.of("Patient", 2L))
+        );
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        PrivacyTenantAuditReadRepository capabilityFalseRepository = new PrivacyTenantAuditReadRepository() {
+            @Override
+            public List<PrivacyAuditEvent> findByCriteria(String tenantId, String tenantDetailKey, PrivacyAuditQueryCriteria criteria) {
+                throw new AssertionError("query service should fall back when read capability is false");
+            }
+
+            @Override
+            public PrivacyAuditQueryStats computeStats(String tenantId, String tenantDetailKey, PrivacyAuditQueryCriteria criteria) {
+                throw new AssertionError("stats service should fall back when read capability is false");
+            }
+        };
+        PrivacyTenantAuditQueryService service = new PrivacyTenantAuditQueryService(
+                queryService,
+                statsService,
+                () -> "tenant-a",
+                tenantId -> new PrivacyTenantAuditPolicy(java.util.Set.of(), java.util.Set.of(), true, "tenant"),
+                capabilityFalseRepository,
+                new MicrometerPrivacyTenantAuditTelemetry(meterRegistry)
+        );
+
+        assertThat(service.findByCriteria("tenant-a", PrivacyAuditQueryCriteria.recent(10)))
+                .extracting(PrivacyAuditEvent::resourceId)
+                .containsExactly("A1");
+        assertThat(service.computeStats("tenant-a", PrivacyAuditQueryCriteria.recent(10)).total()).isEqualTo(1);
         assertThat(meterRegistry.get("privacy.audit.tenant.read.path").tag("domain", "audit").tag("path", "fallback").counter().count()).isEqualTo(1.0d);
         assertThat(meterRegistry.get("privacy.audit.tenant.read.path").tag("domain", "audit_stats").tag("path", "fallback").counter().count()).isEqualTo(1.0d);
     }

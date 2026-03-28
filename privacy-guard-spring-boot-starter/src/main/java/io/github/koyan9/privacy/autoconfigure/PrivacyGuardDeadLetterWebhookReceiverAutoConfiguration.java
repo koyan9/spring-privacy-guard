@@ -23,6 +23,9 @@ import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookVerificationF
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookVerificationInterceptor;
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookVerificationSettings;
 import io.github.koyan9.privacy.audit.PrivacyAuditSchemaInitializer;
+import io.github.koyan9.privacy.audit.PrivacyTenantDeadLetterAlertReceiverPolicy;
+import io.github.koyan9.privacy.audit.PrivacyTenantDeadLetterAlertRoutePolicy;
+import io.github.koyan9.privacy.audit.PrivacyTenantDeadLetterAlertRoutePolicyResolver;
 import io.github.koyan9.privacy.audit.RedisPrivacyAuditDeadLetterWebhookReplayStore;
 import io.github.koyan9.privacy.audit.MicrometerPrivacyAuditDeadLetterWebhookVerificationTelemetry;
 import org.slf4j.Logger;
@@ -166,21 +169,21 @@ public class PrivacyGuardDeadLetterWebhookReceiverAutoConfiguration {
     @ConditionalOnMissingBean(PrivacyAuditDeadLetterWebhookVerificationRouteRegistry.class)
     public PrivacyAuditDeadLetterWebhookVerificationRouteRegistry privacyAuditDeadLetterWebhookVerificationRouteRegistry(
             PrivacyGuardProperties properties,
-            PrivacyAuditDeadLetterWebhookReplayStore replayStore
+            PrivacyAuditDeadLetterWebhookReplayStore replayStore,
+            PrivacyTenantDeadLetterAlertRoutePolicyResolver routePolicyResolver
     ) {
         List<PrivacyAuditDeadLetterWebhookVerificationRouteRegistry.Route> routes = new ArrayList<>();
         PrivacyAuditDeadLetterWebhookVerificationSettings defaults = verificationSettingsFrom(properties);
-        for (var entry : properties.getAudit().getDeadLetter().getObservability().getAlert().getTenant().getRoutes().entrySet()) {
-            String tenantId = normalize(entry.getKey());
-            PrivacyGuardProperties.AlertTenantRoute route = entry.getValue();
-            if (tenantId == null || route == null || route.getReceiver() == null) {
-                continue;
-            }
-            String pathPattern = normalize(route.getReceiver().getPathPattern());
+        for (String tenantId : resolveTenantAlertRouteTenantIds(properties)) {
+            PrivacyTenantDeadLetterAlertRoutePolicy routePolicy = routePolicyResolver.resolve(tenantId);
+            PrivacyTenantDeadLetterAlertReceiverPolicy receiverPolicy = routePolicy == null
+                    ? PrivacyTenantDeadLetterAlertReceiverPolicy.none()
+                    : routePolicy.receiver();
+            String pathPattern = normalize(receiverPolicy.pathPattern());
             if (pathPattern == null) {
                 continue;
             }
-            PrivacyAuditDeadLetterWebhookVerificationSettings settings = mergeVerificationSettings(defaults, route.getReceiver());
+            PrivacyAuditDeadLetterWebhookVerificationSettings settings = mergeVerificationSettings(defaults, receiverPolicy);
             routes.add(new PrivacyAuditDeadLetterWebhookVerificationRouteRegistry.Route(
                     tenantId,
                     pathPattern,
@@ -488,18 +491,28 @@ public class PrivacyGuardDeadLetterWebhookReceiverAutoConfiguration {
 
     private PrivacyAuditDeadLetterWebhookVerificationSettings mergeVerificationSettings(
             PrivacyAuditDeadLetterWebhookVerificationSettings defaults,
-            PrivacyGuardProperties.AlertTenantRouteReceiver route
+            PrivacyTenantDeadLetterAlertReceiverPolicy route
     ) {
         return new PrivacyAuditDeadLetterWebhookVerificationSettings(
-                firstNonNull(route.getBearerToken(), defaults.bearerToken()),
-                firstNonNull(route.getSignatureSecret(), defaults.signatureSecret()),
-                firstNonNull(route.getSignatureAlgorithm(), defaults.signatureAlgorithm()),
-                firstNonNull(route.getSignatureHeader(), defaults.signatureHeader()),
-                firstNonNull(route.getTimestampHeader(), defaults.timestampHeader()),
-                firstNonNull(route.getNonceHeader(), defaults.nonceHeader()),
-                firstNonNull(route.getMaxSkew(), defaults.maxSkew()),
-                firstNonNull(route.getReplayNamespace(), defaults.replayNamespace())
+                firstNonNull(route.bearerToken(), defaults.bearerToken()),
+                firstNonNull(route.signatureSecret(), defaults.signatureSecret()),
+                firstNonNull(route.signatureAlgorithm(), defaults.signatureAlgorithm()),
+                firstNonNull(route.signatureHeader(), defaults.signatureHeader()),
+                firstNonNull(route.timestampHeader(), defaults.timestampHeader()),
+                firstNonNull(route.nonceHeader(), defaults.nonceHeader()),
+                firstNonNull(route.maxSkew(), defaults.maxSkew()),
+                firstNonNull(route.replayNamespace(), defaults.replayNamespace())
         );
+    }
+
+    private List<String> resolveTenantAlertRouteTenantIds(PrivacyGuardProperties properties) {
+        java.util.LinkedHashSet<String> tenantIds = new java.util.LinkedHashSet<>();
+        tenantIds.addAll(properties.getTenant().getPolicies().keySet());
+        tenantIds.addAll(properties.getAudit().getDeadLetter().getObservability().getAlert().getTenant().getRoutes().keySet());
+        tenantIds.removeIf(value -> !StringUtils.hasText(value));
+        return tenantIds.stream()
+                .map(String::trim)
+                .toList();
     }
 
     private String normalize(String value) {

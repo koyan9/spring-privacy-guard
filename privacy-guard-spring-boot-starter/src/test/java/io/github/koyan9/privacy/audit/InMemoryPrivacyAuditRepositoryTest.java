@@ -100,4 +100,28 @@ class InMemoryPrivacyAuditRepositoryTest {
         assertEquals(2, stats.total());
         assertEquals(2L, stats.byAction().get("READ"));
     }
+
+    @Test
+    void materializesTenantDetailsForTenantAwareWrites() {
+        InMemoryPrivacyAuditRepository repository = new InMemoryPrivacyAuditRepository();
+
+        repository.save(new PrivacyTenantAuditWriteRequest(
+                new PrivacyAuditEvent(
+                        Instant.parse("2026-03-06T00:00:00Z"),
+                        "READ",
+                        "Patient",
+                        "tenant-aware",
+                        "alice",
+                        "OK",
+                        Map.of("phone", "138****8000")
+                ),
+                "tenant-a",
+                "tenant"
+        ));
+
+        List<PrivacyAuditEvent> events = repository.findByCriteria("tenant-a", "tenant", PrivacyAuditQueryCriteria.recent(10));
+
+        assertEquals(List.of("tenant-aware"), events.stream().map(PrivacyAuditEvent::resourceId).toList());
+        assertEquals("tenant-a", repository.findAll().get(0).details().get("tenant"));
+    }
 }

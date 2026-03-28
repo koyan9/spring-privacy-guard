@@ -48,8 +48,6 @@ class TenantScopedPrivacyAuditDeadLetterWebhookAlertCallbackTest {
         tenantServer = server(tenantBodies);
 
         PrivacyGuardProperties.AlertWebhook defaultProperties = webhookProperties(globalServer);
-        PrivacyGuardProperties.AlertTenantRoute route = new PrivacyGuardProperties.AlertTenantRoute();
-        route.getWebhook().setUrl("http://127.0.0.1:" + tenantServer.getAddress().getPort() + "/alerts");
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
 
         TenantScopedPrivacyAuditDeadLetterWebhookAlertCallback callback =
@@ -59,7 +57,28 @@ class TenantScopedPrivacyAuditDeadLetterWebhookAlertCallbackTest {
                         defaultProperties,
                         PrivacyAuditDeadLetterWebhookAlertTelemetry.noop(),
                         new MicrometerPrivacyTenantAuditTelemetry(registry),
-                        Map.of("tenant-a", route)
+                        tenantId -> "tenant-a".equals(tenantId)
+                                ? new PrivacyTenantDeadLetterAlertRoutePolicy(
+                                new PrivacyTenantDeadLetterAlertWebhookPolicy(
+                                        "http://127.0.0.1:" + tenantServer.getAddress().getPort() + "/alerts",
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        null
+                                ),
+                                PrivacyTenantDeadLetterAlertEmailPolicy.none(),
+                                PrivacyTenantDeadLetterAlertReceiverPolicy.none()
+                        )
+                                : PrivacyTenantDeadLetterAlertRoutePolicy.none()
                 );
 
         callback.handle("tenant-a", event());
@@ -87,7 +106,7 @@ class TenantScopedPrivacyAuditDeadLetterWebhookAlertCallbackTest {
                         webhookProperties(globalServer),
                         PrivacyAuditDeadLetterWebhookAlertTelemetry.noop(),
                         new MicrometerPrivacyTenantAuditTelemetry(registry),
-                        Map.of()
+                        PrivacyTenantDeadLetterAlertRoutePolicyResolver.noop()
                 );
 
         callback.handle("tenant-b", event());
@@ -99,6 +118,52 @@ class TenantScopedPrivacyAuditDeadLetterWebhookAlertCallbackTest {
                 .tag("outcome", "success")
                 .counter()
                 .count()).isEqualTo(1.0d);
+    }
+
+    @Test
+    void skipsWebhookDeliveryWhenTenantDeliveryPolicyDisablesWebhook() throws Exception {
+        LinkedBlockingQueue<String> tenantBodies = new LinkedBlockingQueue<>();
+        tenantServer = server(tenantBodies);
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+
+        TenantScopedPrivacyAuditDeadLetterWebhookAlertCallback callback =
+                new TenantScopedPrivacyAuditDeadLetterWebhookAlertCallback(
+                        HttpClient.newHttpClient(),
+                        new ObjectMapper(),
+                        webhookProperties(tenantServer),
+                        PrivacyAuditDeadLetterWebhookAlertTelemetry.noop(),
+                        new MicrometerPrivacyTenantAuditTelemetry(registry),
+                        tenantId -> new PrivacyTenantDeadLetterAlertRoutePolicy(
+                                new PrivacyTenantDeadLetterAlertWebhookPolicy(
+                                        "http://127.0.0.1:" + tenantServer.getAddress().getPort() + "/alerts",
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        null,
+                                        null
+                                ),
+                                PrivacyTenantDeadLetterAlertEmailPolicy.none(),
+                                PrivacyTenantDeadLetterAlertReceiverPolicy.none()
+                        ),
+                        tenantId -> new PrivacyTenantDeadLetterAlertDeliveryPolicy(null, Boolean.FALSE, null)
+                );
+
+        assertThat(callback.supportsTenant("tenant-a")).isFalse();
+        callback.handle("tenant-a", event());
+
+        assertThat(tenantBodies.poll(200, TimeUnit.MILLISECONDS)).isNull();
+        assertThat(registry.find("privacy.audit.deadletters.alert.tenant.deliveries")
+                .tag("tenant", "tenant-a")
+                .tag("channel", "webhook")
+                .counters()).isEmpty();
     }
 
     private HttpServer server(LinkedBlockingQueue<String> bodies) throws IOException {

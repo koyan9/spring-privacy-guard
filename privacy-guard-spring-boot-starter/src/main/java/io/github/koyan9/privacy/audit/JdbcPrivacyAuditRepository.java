@@ -83,6 +83,16 @@ public class JdbcPrivacyAuditRepository implements PrivacyAuditRepository, Priva
     }
 
     @Override
+    public boolean supportsTenantRead() {
+        return true;
+    }
+
+    @Override
+    public boolean supportsTenantWrite() {
+        return true;
+    }
+
+    @Override
     public List<PrivacyAuditEvent> findByCriteria(PrivacyAuditQueryCriteria criteria) {
         QueryParts queryParts = buildWhereClause(criteria.normalize());
         String sql = "select occurred_at, action, resource_type, resource_id, actor, outcome, details_json from "
@@ -233,7 +243,7 @@ public class JdbcPrivacyAuditRepository implements PrivacyAuditRepository, Priva
     }
 
     private Object[] toSqlArgs(PrivacyTenantAuditWriteRequest request) {
-        PrivacyAuditEvent event = request.event();
+        PrivacyAuditEvent event = materializeTenantDetails(request);
         if (hasTenantColumn()) {
             return new Object[]{
                     event.occurredAt(),
@@ -255,6 +265,29 @@ public class JdbcPrivacyAuditRepository implements PrivacyAuditRepository, Priva
                 event.outcome(),
                 toJson(event)
         };
+    }
+
+    private PrivacyAuditEvent materializeTenantDetails(PrivacyTenantAuditWriteRequest request) {
+        PrivacyAuditEvent event = request.event();
+        String tenantId = request.tenantId();
+        String detailKey = normalizeTenantDetailKey(request.tenantDetailKey());
+        if (tenantId == null || tenantId.isBlank()) {
+            return event;
+        }
+        if (tenantId.equals(event.details().get(detailKey))) {
+            return event;
+        }
+        Map<String, String> details = new LinkedHashMap<>(event.details());
+        details.putIfAbsent(detailKey, tenantId);
+        return new PrivacyAuditEvent(
+                event.occurredAt(),
+                event.action(),
+                event.resourceType(),
+                event.resourceId(),
+                event.actor(),
+                event.outcome(),
+                details
+        );
     }
 
     private String toJson(PrivacyAuditEvent event) {

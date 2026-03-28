@@ -104,6 +104,16 @@ class CustomTenantAuditRepository implements
         requests.forEach(this::save);
     }
 
+    @Override
+    public boolean supportsTenantRead() {
+        return true;
+    }
+
+    @Override
+    public boolean supportsTenantWrite() {
+        return true;
+    }
+
     void clear() {
         allEvents.clear();
         tenantBuckets.clear();

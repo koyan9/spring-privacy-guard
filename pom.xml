@@ -9,7 +9,7 @@
 
     <groupId>io.github.koyan9</groupId>
     <artifactId>spring-privacy-guard-parent</artifactId>
-    <version>0.4.0</version>
+    <version>0.5.0</version>
     <packaging>pom</packaging>
 
     <name>spring-privacy-guard</name>

@@ -33,6 +33,21 @@ class PrivacyAuditDeadLetterServiceTest {
     }
 
     @Test
+    void findsDeadLetterById() {
+        InMemoryPrivacyAuditDeadLetterRepository repository = new InMemoryPrivacyAuditDeadLetterRepository();
+        repository.save(new PrivacyAuditDeadLetterEntry(null, Instant.now(), 3, "A", "one", Instant.now(), "READ", "Patient", "a", "actor", "OK", Map.of()));
+        PrivacyAuditDeadLetterService service = new PrivacyAuditDeadLetterService(repository, event -> {
+        });
+        long id = repository.findAll().get(0).id();
+
+        assertThat(service.findById(id))
+                .isPresent()
+                .get()
+                .extracting(PrivacyAuditDeadLetterEntry::resourceId)
+                .isEqualTo("a");
+    }
+
+    @Test
     void replaysAndDeletesSingleDeadLetterEntryWithReplayMetadata() {
         InMemoryPrivacyAuditDeadLetterRepository repository = new InMemoryPrivacyAuditDeadLetterRepository();
         repository.save(new PrivacyAuditDeadLetterEntry(null, Instant.now(), 3, "A", "one", Instant.now(), "READ", "Patient", "a", "actor", "OK", Map.of()));

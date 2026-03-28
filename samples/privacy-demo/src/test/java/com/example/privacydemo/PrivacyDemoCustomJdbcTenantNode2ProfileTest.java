@@ -7,6 +7,7 @@ package com.example.privacydemo;
 
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStore;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -22,6 +23,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles({"custom-jdbc-tenant", "custom-jdbc-tenant-node2"})
+@Tag("sample")
+@Tag("sample-custom")
+@Tag("sample-jdbc")
+@Tag("sample-multi-instance")
 class PrivacyDemoCustomJdbcTenantNode2ProfileTest {
 
     @Autowired

@@ -36,7 +36,11 @@ class DemoWebhookAlertReceiverController {
         this.store = store;
     }
 
-    @PostMapping("/demo-alert-receiver")
+    @PostMapping({
+            "/demo-alert-receiver",
+            "/demo-alert-receiver/tenant-a",
+            "/demo-alert-receiver/tenant-b"
+    })
     @ResponseStatus(HttpStatus.ACCEPTED)
     public Map<String, Object> receive(@RequestBody String body) {
         Map<String, Object> payload = parse(body);

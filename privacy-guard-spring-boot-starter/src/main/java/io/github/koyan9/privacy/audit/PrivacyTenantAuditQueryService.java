@@ -105,7 +105,7 @@ public class PrivacyTenantAuditQueryService {
                 ? PrivacyAuditQueryCriteria.recent(100)
                 : criteria.normalize();
         String detailKey = tenantDetailKey(normalizedTenant);
-        if (tenantAuditReadRepository != null) {
+        if (tenantAuditReadRepository != null && tenantAuditReadRepository.supportsTenantRead()) {
             telemetry().recordQueryReadPath("audit", "native");
             return tenantAuditReadRepository.findByCriteria(normalizedTenant, detailKey, normalized);
         }
@@ -130,7 +130,7 @@ public class PrivacyTenantAuditQueryService {
                 ? PrivacyAuditQueryCriteria.recent(100)
                 : criteria.normalize();
         String detailKey = tenantDetailKey(normalizedTenant);
-        if (tenantAuditReadRepository != null) {
+        if (tenantAuditReadRepository != null && tenantAuditReadRepository.supportsTenantRead()) {
             telemetry().recordQueryReadPath("audit_stats", "native");
             return tenantAuditReadRepository.computeStats(normalizedTenant, detailKey, normalized);
         }

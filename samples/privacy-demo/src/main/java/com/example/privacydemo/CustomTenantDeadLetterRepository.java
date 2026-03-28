@@ -102,6 +102,45 @@ class CustomTenantDeadLetterRepository implements
     }
 
     @Override
+    public boolean supportsTenantRead() {
+        return true;
+    }
+
+    @Override
+    public Optional<PrivacyAuditDeadLetterEntry> findById(
+            String tenantId,
+            String tenantDetailKey,
+            long id
+    ) {
+        if (tenantId == null || tenantId.isBlank()) {
+            return findById(id);
+        }
+        return bucket(tenantId).stream()
+                .filter(entry -> entry.id() != null && entry.id() == id)
+                .findFirst();
+    }
+
+    @Override
+    public boolean supportsTenantFindById() {
+        return true;
+    }
+
+    @Override
+    public boolean supportsTenantExchangeRead() {
+        return true;
+    }
+
+    @Override
+    public boolean supportsTenantImport() {
+        return true;
+    }
+
+    @Override
+    public boolean supportsTenantWrite() {
+        return true;
+    }
+
+    @Override
     public void save(PrivacyTenantAuditDeadLetterWriteRequest request) {
         store(request.entry(), resolveTenantId(request.entry().details(), request.tenantId(), request.tenantDetailKey()));
     }
@@ -135,6 +174,18 @@ class CustomTenantDeadLetterRepository implements
     }
 
     @Override
+    public boolean deleteById(String tenantId, String tenantDetailKey, long id) {
+        if (tenantId == null || tenantId.isBlank()) {
+            return deleteById(id);
+        }
+        return findById(tenantId, tenantDetailKey, id)
+                .map(PrivacyAuditDeadLetterEntry::id)
+                .filter(java.util.Objects::nonNull)
+                .map(this::deleteById)
+                .orElse(false);
+    }
+
+    @Override
     public int deleteByCriteria(String tenantId, String tenantDetailKey, PrivacyAuditDeadLetterQueryCriteria criteria) {
         List<Long> selectedIds = findByCriteria(tenantId, tenantDetailKey, criteria).stream()
                 .map(PrivacyAuditDeadLetterEntry::id)
@@ -147,6 +198,16 @@ class CustomTenantDeadLetterRepository implements
             }
         }
         return deleted;
+    }
+
+    @Override
+    public boolean supportsTenantDelete() {
+        return true;
+    }
+
+    @Override
+    public boolean supportsTenantDeleteById() {
+        return true;
     }
 
     @Override
@@ -167,7 +228,7 @@ class CustomTenantDeadLetterRepository implements
                 failedIds.add(entry.id());
                 continue;
             }
-            if (deleteById(entry.id())) {
+            if (deleteById(tenantId, tenantDetailKey, entry.id())) {
                 replayedIds.add(entry.id());
             }
         }
@@ -178,6 +239,30 @@ class CustomTenantDeadLetterRepository implements
                 List.copyOf(replayedIds),
                 List.copyOf(failedIds)
         );
+    }
+
+    @Override
+    public boolean supportsTenantReplay() {
+        return true;
+    }
+
+    @Override
+    public boolean replayById(
+            String tenantId,
+            String tenantDetailKey,
+            long id,
+            java.util.function.Predicate<PrivacyAuditDeadLetterEntry> replayAction
+    ) {
+        return findById(tenantId, tenantDetailKey, id)
+                .filter(entry -> entry.id() != null)
+                .map(entry -> replayAction.test(entry)
+                        && deleteById(tenantId, tenantDetailKey, entry.id()))
+                .orElse(false);
+    }
+
+    @Override
+    public boolean supportsTenantReplayById() {
+        return true;
     }
 
     void clear() {

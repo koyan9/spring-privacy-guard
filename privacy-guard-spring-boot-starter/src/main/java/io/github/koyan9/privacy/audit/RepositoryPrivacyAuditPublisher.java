@@ -70,7 +70,8 @@ public class RepositoryPrivacyAuditPublisher implements PrivacyAuditPublisher {
 
     @Override
     public void publish(PrivacyAuditEvent event) {
-        if (privacyAuditRepository instanceof PrivacyTenantAuditWriteRepository tenantAwareRepository) {
+        if (privacyAuditRepository instanceof PrivacyTenantAuditWriteRepository tenantAwareRepository
+                && tenantAwareRepository.supportsTenantWrite()) {
             String tenantId = currentTenantId();
             telemetry().recordWritePath("audit_write", "native");
             tenantAwareRepository.save(new PrivacyTenantAuditWriteRequest(

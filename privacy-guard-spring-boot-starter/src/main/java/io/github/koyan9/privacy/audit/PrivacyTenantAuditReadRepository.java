@@ -15,4 +15,8 @@ public interface PrivacyTenantAuditReadRepository {
     List<PrivacyAuditEvent> findByCriteria(String tenantId, String tenantDetailKey, PrivacyAuditQueryCriteria criteria);
 
     PrivacyAuditQueryStats computeStats(String tenantId, String tenantDetailKey, PrivacyAuditQueryCriteria criteria);
+
+    default boolean supportsTenantRead() {
+        return false;
+    }
 }

@@ -25,6 +25,10 @@ import io.github.koyan9.privacy.audit.PrivacyTenantAuditDeadLetterAlertMonitor;
 import io.github.koyan9.privacy.audit.PrivacyTenantAuditDeadLetterObservationService;
 import io.github.koyan9.privacy.audit.PrivacyTenantAuditDeadLetterQueryService;
 import io.github.koyan9.privacy.audit.PrivacyTenantAuditTelemetry;
+import io.github.koyan9.privacy.audit.PrivacyTenantDeadLetterAlertDeliveryPolicyResolver;
+import io.github.koyan9.privacy.audit.PrivacyTenantDeadLetterAlertMonitoringPolicy;
+import io.github.koyan9.privacy.audit.PrivacyTenantDeadLetterAlertMonitoringPolicyResolver;
+import io.github.koyan9.privacy.audit.PrivacyTenantDeadLetterAlertRoutePolicyResolver;
 import io.github.koyan9.privacy.audit.PrivacyTenantDeadLetterObservabilityPolicyResolver;
 import io.github.koyan9.privacy.audit.TenantScopedPrivacyAuditDeadLetterEmailAlertCallback;
 import io.github.koyan9.privacy.audit.TenantScopedPrivacyAuditDeadLetterWebhookAlertCallback;
@@ -38,8 +42,14 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Condition;
+import org.springframework.context.annotation.ConditionContext;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+import org.springframework.core.env.ConfigurableEnvironment;
+import org.springframework.core.env.EnumerablePropertySource;
+import org.springframework.core.env.PropertySource;
+import org.springframework.core.type.AnnotatedTypeMetadata;
 
 import java.net.http.HttpClient;
 import java.util.LinkedHashSet;
@@ -52,6 +62,90 @@ import java.util.concurrent.atomic.AtomicInteger;
 @AutoConfiguration(after = PrivacyGuardAutoConfiguration.class)
 @ConditionalOnProperty(prefix = "privacy.guard.audit", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class PrivacyGuardDeadLetterObservabilityAutoConfiguration {
+
+    static class TenantWebhookTargetConfiguredCondition implements Condition {
+
+        @Override
+        public boolean matches(ConditionContext context, AnnotatedTypeMetadata metadata) {
+            if (hasConfiguredProperty(context, "privacy.guard.audit.dead-letter.observability.alert.webhook.url")) {
+                return true;
+            }
+            return hasAnyConfiguredProperty(
+                    context,
+                    "privacy.guard.tenant.policies",
+                    ".observability.dead-letter.alert.webhook.url"
+            ) || hasAnyConfiguredProperty(
+                    context,
+                    "privacy.guard.audit.dead-letter.observability.alert.tenant.routes",
+                    ".webhook.url"
+            );
+        }
+    }
+
+    static class TenantEmailTargetConfiguredCondition implements Condition {
+
+        @Override
+        public boolean matches(ConditionContext context, AnnotatedTypeMetadata metadata) {
+            boolean globalFromConfigured = hasConfiguredProperty(
+                    context,
+                    "privacy.guard.audit.dead-letter.observability.alert.email.from"
+            );
+            boolean globalToConfigured = hasConfiguredProperty(
+                    context,
+                    "privacy.guard.audit.dead-letter.observability.alert.email.to"
+            );
+            if (globalFromConfigured && globalToConfigured) {
+                return true;
+            }
+            boolean anyTenantEmailToConfigured = hasAnyConfiguredProperty(
+                    context,
+                    "privacy.guard.tenant.policies",
+                    ".observability.dead-letter.alert.email.to"
+            ) || hasAnyConfiguredProperty(
+                    context,
+                    "privacy.guard.audit.dead-letter.observability.alert.tenant.routes",
+                    ".email.to"
+            );
+            if (!anyTenantEmailToConfigured) {
+                return false;
+            }
+            return globalFromConfigured
+                    || hasAnyConfiguredProperty(
+                    context,
+                    "privacy.guard.tenant.policies",
+                    ".observability.dead-letter.alert.email.from"
+            )
+                    || hasAnyConfiguredProperty(
+                    context,
+                    "privacy.guard.audit.dead-letter.observability.alert.tenant.routes",
+                    ".email.from"
+            );
+        }
+    }
+
+    static class TenantLoggingDeliveryConfiguredCondition implements Condition {
+
+        @Override
+        public boolean matches(ConditionContext context, AnnotatedTypeMetadata metadata) {
+            String globalLoggingEnabled = context.getEnvironment().getProperty(
+                    "privacy.guard.audit.dead-letter.observability.alert.logging.enabled"
+            );
+            if (globalLoggingEnabled == null || Boolean.parseBoolean(globalLoggingEnabled)) {
+                return true;
+            }
+            return hasAnyConfiguredBooleanProperty(
+                    context,
+                    "privacy.guard.tenant.policies",
+                    ".observability.dead-letter.alert.logging.enabled",
+                    true
+            ) || hasAnyConfiguredBooleanProperty(
+                    context,
+                    "privacy.guard.audit.dead-letter.observability.alert.tenant.routes",
+                    ".logging.enabled",
+                    true
+            );
+        }
+    }
 
     @Bean
     @ConditionalOnBean(PrivacyAuditDeadLetterStatsService.class)
@@ -166,14 +260,18 @@ public class PrivacyGuardDeadLetterObservabilityAutoConfiguration {
     @ConditionalOnMissingBean(LoggingPrivacyTenantAuditDeadLetterAlertCallback.class)
     @ConditionalOnExpression(
             "'${privacy.guard.audit.dead-letter.observability.alert.enabled:false}' == 'true' and " +
-                    "'${privacy.guard.audit.dead-letter.observability.alert.tenant.enabled:false}' == 'true' and " +
-                    "'${privacy.guard.audit.dead-letter.observability.alert.logging.enabled:true}' == 'true'"
+                    "'${privacy.guard.audit.dead-letter.observability.alert.tenant.enabled:false}' == 'true'"
     )
+    @org.springframework.context.annotation.Conditional(TenantLoggingDeliveryConfiguredCondition.class)
     public LoggingPrivacyTenantAuditDeadLetterAlertCallback loggingPrivacyTenantAuditDeadLetterAlertCallback(
-            ObjectProvider<PrivacyTenantAuditTelemetry> telemetryProvider
+            ObjectProvider<PrivacyTenantAuditTelemetry> telemetryProvider,
+            PrivacyTenantDeadLetterAlertDeliveryPolicyResolver deliveryPolicyResolver,
+            PrivacyGuardProperties properties
     ) {
         return new LoggingPrivacyTenantAuditDeadLetterAlertCallback(
-                telemetryProvider.getIfAvailable(PrivacyTenantAuditTelemetry::noop)
+                telemetryProvider.getIfAvailable(PrivacyTenantAuditTelemetry::noop),
+                deliveryPolicyResolver,
+                properties.getAudit().getDeadLetter().getObservability().getAlert().getLogging().isEnabled()
         );
     }
 
@@ -185,7 +283,8 @@ public class PrivacyGuardDeadLetterObservabilityAutoConfiguration {
 
     @Bean(name = "privacyAuditDeadLetterWebhookHttpClient")
     @ConditionalOnMissingBean(name = "privacyAuditDeadLetterWebhookHttpClient")
-    @ConditionalOnExpression("'${privacy.guard.audit.dead-letter.observability.alert.enabled:false}' == 'true' and '${privacy.guard.audit.dead-letter.observability.alert.webhook.url:}' != ''")
+    @ConditionalOnExpression("'${privacy.guard.audit.dead-letter.observability.alert.enabled:false}' == 'true'")
+    @org.springframework.context.annotation.Conditional(TenantWebhookTargetConfiguredCondition.class)
     HttpClient privacyAuditDeadLetterWebhookHttpClient(PrivacyGuardProperties properties) {
         return HttpClient.newBuilder()
                 .connectTimeout(properties.getAudit().getDeadLetter().getObservability().getAlert().getWebhook().getConnectTimeout())
@@ -212,18 +311,20 @@ public class PrivacyGuardDeadLetterObservabilityAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(TenantScopedPrivacyAuditDeadLetterWebhookAlertCallback.class)
-    @ConditionalOnBean(PrivacyAuditDeadLetterWebhookAlertCallback.class)
+    @ConditionalOnBean(ObjectMapper.class)
     @ConditionalOnExpression(
             "'${privacy.guard.audit.dead-letter.observability.alert.enabled:false}' == 'true' and " +
-                    "'${privacy.guard.audit.dead-letter.observability.alert.tenant.enabled:false}' == 'true' and " +
-                    "'${privacy.guard.audit.dead-letter.observability.alert.webhook.url:}' != ''"
+                    "'${privacy.guard.audit.dead-letter.observability.alert.tenant.enabled:false}' == 'true'"
     )
+    @org.springframework.context.annotation.Conditional(TenantWebhookTargetConfiguredCondition.class)
     public PrivacyTenantAuditDeadLetterAlertCallback privacyTenantAuditDeadLetterWebhookAlertCallback(
             HttpClient privacyAuditDeadLetterWebhookHttpClient,
             ObjectMapper objectMapper,
             PrivacyGuardProperties properties,
             PrivacyAuditDeadLetterWebhookAlertTelemetry telemetry,
-            ObjectProvider<PrivacyTenantAuditTelemetry> tenantTelemetryProvider
+            ObjectProvider<PrivacyTenantAuditTelemetry> tenantTelemetryProvider,
+            PrivacyTenantDeadLetterAlertRoutePolicyResolver routePolicyResolver,
+            PrivacyTenantDeadLetterAlertDeliveryPolicyResolver deliveryPolicyResolver
     ) {
         return new TenantScopedPrivacyAuditDeadLetterWebhookAlertCallback(
                 privacyAuditDeadLetterWebhookHttpClient,
@@ -231,7 +332,8 @@ public class PrivacyGuardDeadLetterObservabilityAutoConfiguration {
                 properties.getAudit().getDeadLetter().getObservability().getAlert().getWebhook(),
                 telemetry,
                 tenantTelemetryProvider.getIfAvailable(PrivacyTenantAuditTelemetry::noop),
-                properties.getAudit().getDeadLetter().getObservability().getAlert().getTenant().getRoutes()
+                routePolicyResolver,
+                deliveryPolicyResolver
         );
     }
 
@@ -311,6 +413,7 @@ public class PrivacyGuardDeadLetterObservabilityAutoConfiguration {
             @Qualifier("privacyAuditTenantDeadLetterAlertExecutor")
             ScheduledExecutorService privacyAuditTenantDeadLetterAlertExecutor,
             PrivacyTenantDeadLetterObservabilityPolicyResolver observabilityPolicyResolver,
+            PrivacyTenantDeadLetterAlertMonitoringPolicyResolver monitoringPolicyResolver,
             ObjectProvider<PrivacyTenantAuditTelemetry> telemetryProvider,
             PrivacyGuardProperties properties
     ) {
@@ -319,7 +422,7 @@ public class PrivacyGuardDeadLetterObservabilityAutoConfiguration {
         return new PrivacyTenantAuditDeadLetterAlertMonitor(
                 observationService,
                 callbackList,
-                resolveTenantAlertTenantIds(properties),
+                resolveTenantAlertTenantIds(properties, monitoringPolicyResolver),
                 privacyAuditTenantDeadLetterAlertExecutor,
                 alert.getCheckInterval(),
                 observabilityPolicyResolver,
@@ -362,23 +465,25 @@ public class PrivacyGuardDeadLetterObservabilityAutoConfiguration {
 
         @Bean
         @ConditionalOnMissingBean(TenantScopedPrivacyAuditDeadLetterEmailAlertCallback.class)
-        @ConditionalOnBean(PrivacyAuditDeadLetterEmailAlertCallback.class)
+        @ConditionalOnBean(org.springframework.mail.javamail.JavaMailSender.class)
         @ConditionalOnExpression(
                 "'${privacy.guard.audit.dead-letter.observability.alert.enabled:false}' == 'true' and " +
-                        "'${privacy.guard.audit.dead-letter.observability.alert.tenant.enabled:false}' == 'true' and " +
-                        "'${privacy.guard.audit.dead-letter.observability.alert.email.to:}' != '' and " +
-                        "'${privacy.guard.audit.dead-letter.observability.alert.email.from:}' != ''"
+                        "'${privacy.guard.audit.dead-letter.observability.alert.tenant.enabled:false}' == 'true'"
         )
+        @org.springframework.context.annotation.Conditional(TenantEmailTargetConfiguredCondition.class)
         PrivacyTenantAuditDeadLetterAlertCallback privacyTenantAuditDeadLetterEmailAlertCallback(
                 org.springframework.mail.javamail.JavaMailSender javaMailSender,
                 ObjectProvider<PrivacyTenantAuditTelemetry> telemetryProvider,
-                PrivacyGuardProperties properties
+                PrivacyGuardProperties properties,
+                PrivacyTenantDeadLetterAlertRoutePolicyResolver routePolicyResolver,
+                PrivacyTenantDeadLetterAlertDeliveryPolicyResolver deliveryPolicyResolver
         ) {
             return new TenantScopedPrivacyAuditDeadLetterEmailAlertCallback(
                     javaMailSender,
                     properties.getAudit().getDeadLetter().getObservability().getAlert().getEmail(),
                     telemetryProvider.getIfAvailable(PrivacyTenantAuditTelemetry::noop),
-                    properties.getAudit().getDeadLetter().getObservability().getAlert().getTenant().getRoutes()
+                    routePolicyResolver,
+                    deliveryPolicyResolver
             );
         }
     }
@@ -406,13 +511,88 @@ public class PrivacyGuardDeadLetterObservabilityAutoConfiguration {
         return List.copyOf(tenantIds);
     }
 
-    private static List<String> resolveTenantAlertTenantIds(PrivacyGuardProperties properties) {
+    static List<String> resolveTenantAlertTenantIds(
+            PrivacyGuardProperties properties,
+            PrivacyTenantDeadLetterAlertMonitoringPolicyResolver monitoringPolicyResolver
+    ) {
         LinkedHashSet<String> tenantIds = new LinkedHashSet<>();
-        tenantIds.addAll(properties.getAudit().getDeadLetter().getObservability().getAlert().getTenant().getTenantIds());
-        if (tenantIds.isEmpty()) {
+        List<String> configuredTenantIds = properties.getAudit().getDeadLetter().getObservability().getAlert().getTenant().getTenantIds();
+        tenantIds.addAll(configuredTenantIds);
+        boolean hasExplicitTenantIds = !tenantIds.isEmpty();
+        if (!hasExplicitTenantIds) {
             tenantIds.addAll(resolveTenantMetricIds(properties));
+        }
+        LinkedHashSet<String> candidates = new LinkedHashSet<>(tenantIds);
+        candidates.addAll(resolveTenantMetricIds(properties));
+        candidates.addAll(properties.getAudit().getDeadLetter().getObservability().getAlert().getTenant().getRoutes().keySet());
+        for (String candidate : candidates) {
+            if (candidate == null || candidate.isBlank()) {
+                continue;
+            }
+            PrivacyTenantDeadLetterAlertMonitoringPolicy policy = monitoringPolicyResolver == null
+                    ? PrivacyTenantDeadLetterAlertMonitoringPolicy.none()
+                    : monitoringPolicyResolver.resolve(candidate);
+            if (policy == null || !policy.hasOverrides()) {
+                continue;
+            }
+            if (policy.resolveEnabled(!hasExplicitTenantIds || tenantIds.contains(candidate))) {
+                tenantIds.add(candidate);
+            } else {
+                tenantIds.remove(candidate);
+            }
         }
         tenantIds.removeIf(value -> value == null || value.isBlank());
         return List.copyOf(tenantIds);
+    }
+
+    private static boolean hasConfiguredProperty(ConditionContext context, String propertyName) {
+        return org.springframework.util.StringUtils.hasText(context.getEnvironment().getProperty(propertyName));
+    }
+
+    private static boolean hasAnyConfiguredProperty(ConditionContext context, String rootPrefix, String propertySuffix) {
+        if (!(context.getEnvironment() instanceof ConfigurableEnvironment environment)) {
+            return false;
+        }
+        for (PropertySource<?> propertySource : environment.getPropertySources()) {
+            if (!(propertySource instanceof EnumerablePropertySource<?> enumerablePropertySource)) {
+                continue;
+            }
+            for (String propertyName : enumerablePropertySource.getPropertyNames()) {
+                if (!propertyName.startsWith(rootPrefix) || !propertyName.contains(propertySuffix)) {
+                    continue;
+                }
+                Object value = enumerablePropertySource.getProperty(propertyName);
+                if (value != null && org.springframework.util.StringUtils.hasText(value.toString())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasAnyConfiguredBooleanProperty(
+            ConditionContext context,
+            String rootPrefix,
+            String propertySuffix,
+            boolean expectedValue
+    ) {
+        if (!(context.getEnvironment() instanceof ConfigurableEnvironment environment)) {
+            return false;
+        }
+        for (PropertySource<?> propertySource : environment.getPropertySources()) {
+            if (!(propertySource instanceof EnumerablePropertySource<?> enumerablePropertySource)) {
+                continue;
+            }
+            for (String propertyName : enumerablePropertySource.getPropertyNames()) {
+                if (!propertyName.startsWith(rootPrefix) || !propertyName.contains(propertySuffix)) {
+                    continue;
+                }
+                Object value = enumerablePropertySource.getProperty(propertyName);
+                if (value != null && Boolean.parseBoolean(value.toString()) == expectedValue) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 }

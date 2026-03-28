@@ -4,8 +4,8 @@
 
 [![CI](https://github.com/koyan9/spring-privacy-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/koyan9/spring-privacy-guard/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/koyan9/spring-privacy-guard?display_name=tag)](https://github.com/koyan9/spring-privacy-guard/releases/latest)
-[![Changelog](https://img.shields.io/badge/Changelog-0.4.0-0f766e)](CHANGELOG.md)
-[![Release Notes](https://img.shields.io/badge/Release%20Notes-v0.4.0-1d4ed8)](docs/releases/RELEASE_NOTES_v0.4.0.md)
+[![Changelog](https://img.shields.io/badge/Changelog-0.5.0-0f766e)](CHANGELOG.md)
+[![Release Notes](https://img.shields.io/badge/Release%20Notes-v0.5.0-1d4ed8)](docs/releases/RELEASE_NOTES_v0.5.0.md)
 [![Security](https://img.shields.io/badge/Security-Policy-7f1d1d)](SECURITY.md)
 [![Support](https://img.shields.io/badge/Support-Guide-1f2937)](SUPPORT.md)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
@@ -17,9 +17,10 @@ A Spring Boot starter for masking sensitive data, sanitizing logs, tracing priva
 
 ## Development Status
 
-- Latest published release: `v0.4.0`
-- Current next-work focus after `v0.4.0`: deeper repository-native tenant isolation beyond the current built-in SPI coverage, broader production rollout guides, and the next release cycle setup
-- Newly completed in the current development cycle: tenant-native dead-letter replay for built-in `IN_MEMORY` / `JDBC` repositories, stable tenant logging policy resolution, tenant-scoped dead-letter observability policy overrides, tenant operational telemetry for alerting and receiver routes, and PostgreSQL + Redis multi-instance sample recipes
+- Latest published release: `v0.5.0`
+- Current branch version: `0.5.0`
+- Current next-work focus after `v0.5.0`: broader production rollout guides, the next iteration of tenant policy surface, and the next versioned release cycle setup
+- Newly completed in the current development cycle: tenant-native single-entry dead-letter delete / replay, dedicated by-id capability flags and write-path telemetry, stable tenant alert route / delivery / monitoring policy resolution, and expanded sample policy / observability visibility
 - Best sources for current progress: `CHANGELOG.md` for completed/unreleased work, `docs/ROADMAP.md` for next priorities, and `docs/INDEX.md` for the doc map
 
 ## Modules
@@ -55,6 +56,8 @@ Add the starter:
     <version>0.4.0</version>
 </dependency>
 ```
+
+The current branch and the latest published artifact are aligned to `v0.5.0`.
 
 Example model:
 
@@ -116,7 +119,9 @@ Recommended quick-start paths:
 | `privacy.guard.audit.dead-letter.observability.alert.enabled` | `false` | Enables dead-letter alerting. |
 | `privacy.guard.audit.dead-letter.observability.alert.tenant.enabled` | `false` | Enables tenant-scoped dead-letter alert monitoring for the configured tenant list. |
 | `privacy.guard.audit.dead-letter.observability.alert.tenant.tenant-ids` | empty | Optional allowlist of tenants monitored by tenant-scoped dead-letter alert routing. |
-| `privacy.guard.audit.dead-letter.observability.alert.tenant.routes` | empty | Optional tenant-to-target route overrides for webhook/email dead-letter alerts. |
+| `privacy.guard.tenant.policies.*.observability.dead-letter.alert.*` | empty | Preferred tenant-scoped webhook, email, and receiver route overrides for dead-letter alerts. |
+| `privacy.guard.tenant.policies.*.observability.dead-letter.alert.{logging,webhook,email}.enabled` | empty | Optional tenant-scoped delivery toggles that override the global logging/webhook/email alert defaults. |
+| `privacy.guard.audit.dead-letter.observability.alert.tenant.routes` | empty | Legacy tenant route override map kept for backward compatibility. |
 | `privacy.guard.audit.dead-letter.observability.alert.webhook.url` | empty | Enables built-in webhook alerts. |
 | `privacy.guard.audit.dead-letter.observability.alert.webhook.backoff-policy` | `FIXED` | Retry backoff policy for webhook alerts. |
 | `privacy.guard.audit.dead-letter.observability.alert.webhook.max-backoff` | `backoff*10 (max 30s)` | Max delay for webhook retry backoff when exponential policy is used. |
@@ -180,6 +185,9 @@ Stable interfaces include:
 - `PrivacyTenantAwareMaskingStrategy`
 - `PrivacyTenantAuditPolicyResolver`
 - `PrivacyTenantLoggingPolicyResolver`
+- `PrivacyTenantDeadLetterObservabilityPolicyResolver`
+- `PrivacyTenantDeadLetterAlertDeliveryPolicyResolver`
+- `PrivacyTenantDeadLetterAlertRoutePolicyResolver`
 - `PrivacyTenantAuditReadRepository`
 - `PrivacyTenantAuditDeadLetterReadRepository`
 - `PrivacyTenantAuditWriteRepository`
@@ -194,7 +202,7 @@ Stable interfaces include:
 - `PrivacyAuditDeadLetterWebhookAlertTelemetry`
 - `PrivacyAuditDeadLetterWebhookVerificationTelemetry`
 
-Directly coupled carrier types such as `MaskingContext`, `TextMaskingRule`, `PrivacyTenantPolicy`, `PrivacyTenantAuditPolicy`, `PrivacyTenantLoggingPolicy`, `PrivacyTenantAuditWriteRequest`, `PrivacyTenantAuditDeadLetterWriteRequest`, `PrivacyAuditEvent`, `PrivacyAuditQueryCriteria`, `PrivacyAuditDeadLetterEntry`, and replay-store snapshot records are also marked with `@StableSpi`.
+Directly coupled carrier types such as `MaskingContext`, `TextMaskingRule`, `PrivacyTenantPolicy`, `PrivacyTenantAuditPolicy`, `PrivacyTenantLoggingPolicy`, `PrivacyTenantDeadLetterObservabilityPolicy`, `PrivacyTenantDeadLetterAlertDeliveryPolicy`, `PrivacyTenantDeadLetterAlertRoutePolicy`, `PrivacyTenantDeadLetterAlertWebhookPolicy`, `PrivacyTenantDeadLetterAlertEmailPolicy`, `PrivacyTenantDeadLetterAlertReceiverPolicy`, `PrivacyTenantAuditWriteRequest`, `PrivacyTenantAuditDeadLetterWriteRequest`, `PrivacyAuditEvent`, `PrivacyAuditQueryCriteria`, `PrivacyAuditDeadLetterEntry`, and replay-store snapshot records are also marked with `@StableSpi`.
 
 Repository implementations, auto-configuration classes, servlet adapters, metrics binders, and schema helpers are internal runtime wiring rather than stable SPI.
 
@@ -305,6 +313,7 @@ The starter supports:
 - tenant-aware dead-letter batch delete and replay via `PrivacyTenantAuditDeadLetterOperationsService`
 - tenant-aware dead-letter export, import, and manifest flows via `PrivacyTenantAuditDeadLetterExchangeService`
 - unified tenant-aware management entry point via `PrivacyTenantAuditManagementService`
+- explicit tenant-aware single dead-letter delete and replay by `id` via `PrivacyTenantAuditManagementService` and the dead-letter helper layer
 - optional tenant-scoped dead-letter alert monitoring through `PrivacyTenantAuditDeadLetterAlertMonitor` and `PrivacyTenantAuditDeadLetterAlertCallback`
 
 Sample dead-letter endpoints include:
@@ -312,7 +321,9 @@ Sample dead-letter endpoints include:
 - `GET /audit-dead-letters`
 - `GET /audit-dead-letters/stats`
 - `DELETE /audit-dead-letters/{id}`
+- `DELETE /audit-dead-letters/{id}?tenant=tenant-a`
 - `POST /audit-dead-letters/{id}/replay`
+- `POST /audit-dead-letters/{id}/replay?tenant=tenant-b`
 - `POST /audit-dead-letters/replay?limit=100`
 
 ## Observability and Alerts
@@ -379,27 +390,36 @@ You can also route specific tenants to different webhook targets:
 ```yaml
 privacy:
   guard:
-    audit:
-      dead-letter:
-        observability:
-          alert:
-            enabled: true
-            tenant:
-              enabled: true
-              tenant-ids:
-                - tenant-a
-              routes:
-                tenant-a:
-                  webhook:
-                    url: https://tenant-a.example.com/privacy-alerts
-                    bearer-token: tenant-a-token
+    tenant:
+      policies:
+        tenant-a:
+          observability:
+            dead-letter:
+              alert:
+                webhook:
+                  url: https://tenant-a.example.com/privacy-alerts
+                  bearer-token: tenant-a-token
 ```
+
+The legacy `privacy.guard.audit.dead-letter.observability.alert.tenant.routes.<tenantId>.webhook.*` path is still supported and bridges into the same effective tenant route policy.
+If you need to suppress webhook delivery for a tenant while keeping tenant alert monitoring enabled, set `privacy.guard.tenant.policies.<tenantId>.observability.dead-letter.alert.webhook.enabled=false`.
 
 If the same application also receives tenant-specific callbacks, you can route receiver verification by path:
 
 ```yaml
 privacy:
   guard:
+    tenant:
+      policies:
+        tenant-a:
+          observability:
+            dead-letter:
+              alert:
+                receiver:
+                  path-pattern: /tenant-a/privacy-alerts
+                  bearer-token: tenant-a-token
+                  signature-secret: tenant-a-secret
+                  replay-namespace: tenant-a-receiver
     audit:
       dead-letter:
         observability:
@@ -407,14 +427,6 @@ privacy:
             receiver:
               filter:
                 enabled: true
-            tenant:
-              routes:
-                tenant-a:
-                  receiver:
-                    path-pattern: /tenant-a/privacy-alerts
-                    bearer-token: tenant-a-token
-                    signature-secret: tenant-a-secret
-                    replay-namespace: tenant-a-receiver
 ```
 
 ### Built-in Email Alerts
@@ -445,20 +457,34 @@ You can also override recipients or subject prefixes per tenant:
 ```yaml
 privacy:
   guard:
-    audit:
-      dead-letter:
-        observability:
-          alert:
-            enabled: true
-            tenant:
-              enabled: true
-              tenant-ids:
-                - tenant-a
-              routes:
-                tenant-a:
-                  email:
-                    to: tenant-a-ops@example.com
-                    subject-prefix: "[tenant-a]"
+    tenant:
+      policies:
+        tenant-a:
+          observability:
+            dead-letter:
+              alert:
+                email:
+                  to: tenant-a-ops@example.com
+                  subject-prefix: "[tenant-a]"
+```
+
+Tenant alert delivery can also be controlled independently per channel:
+
+```yaml
+privacy:
+  guard:
+    tenant:
+      policies:
+        tenant-a:
+          observability:
+            dead-letter:
+              alert:
+                logging:
+                  enabled: true
+                webhook:
+                  enabled: false
+                email:
+                  enabled: true
 ```
 
 ### Webhook Verification SPI
@@ -604,11 +630,11 @@ The sample uses filter mode by default. To switch to interceptor mode:
 
 - Triage using `SUPPORT.md`, `SECURITY.md`, and `docs/GITHUB_LABELS.md`
 - Run `python scripts/check_repo_hygiene.py` before tagging
-- Follow `docs/MAINTAINER_GUIDE.md`; the latest published release template is now `docs/RELEASE_EXECUTION_v0.4.0.md`
+- Follow `docs/MAINTAINER_GUIDE.md`; the latest published release template is now `docs/RELEASE_EXECUTION_v0.5.0.md`
 
 ## Roadmap
 
-Recent `v0.3.0` release-readiness and post-release polish:
+Recent release-readiness and post-release polish:
 
 1. JDBC production guide and migration notes across audit, dead-letter, and replay-store tables
 2. Stable SPI markers for supported extension points and their carrier types
@@ -634,15 +660,15 @@ Post-release themes and longer-term follow-up stay in `docs/ROADMAP.md`.
 - Receiver operations: `docs/RECEIVER_OPERATIONS.md`
 - Roadmap: `docs/ROADMAP.md`
 - Release checklist: `docs/RELEASE_CHECKLIST.md`
-- Current published release notes: `docs/releases/RELEASE_NOTES_v0.4.0.md`
-- Current published release execution guide: `docs/RELEASE_EXECUTION_v0.4.0.md`
-- Current published release runbook: `docs/RELEASE_RUNBOOK_v0.4.0.md`
-- Current published release dry run record: `docs/RELEASE_DRY_RUN_v0.4.0.md`
-- Current published release announcement: `docs/RELEASE_ANNOUNCEMENT_v0.4.0.md`
-- Current published release announcement (zh-CN): `docs/RELEASE_ANNOUNCEMENT_v0.4.0.zh-CN.md`
-- Current published GitHub release copy: `docs/GITHUB_RELEASE_COPY_v0.4.0.md`
-- Previous release notes archive: `docs/releases/RELEASE_NOTES_v0.3.0.md`
-- Older release notes archive: `docs/releases/RELEASE_NOTES_v0.2.0.md`
+- Current published release notes: `docs/releases/RELEASE_NOTES_v0.5.0.md`
+- Current published release execution guide: `docs/RELEASE_EXECUTION_v0.5.0.md`
+- Current published release runbook: `docs/RELEASE_RUNBOOK_v0.5.0.md`
+- Current published release dry run record: `docs/RELEASE_DRY_RUN_v0.5.0.md`
+- Current published release announcement: `docs/RELEASE_ANNOUNCEMENT_v0.5.0.md`
+- Current published release announcement (zh-CN): `docs/RELEASE_ANNOUNCEMENT_v0.5.0.zh-CN.md`
+- Current published GitHub release copy: `docs/GITHUB_RELEASE_COPY_v0.5.0.md`
+- Previous release notes archive: `docs/releases/RELEASE_NOTES_v0.4.0.md`
+- Older release notes archive: `docs/releases/RELEASE_NOTES_v0.3.0.md`
 - GitHub metadata: `docs/GITHUB_METADATA.md`
 
 ## Release Notes

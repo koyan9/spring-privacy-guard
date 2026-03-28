@@ -7,6 +7,7 @@ package com.example.privacydemo;
 
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterEntry;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -27,6 +28,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("custom-tenant-native")
+@Tag("sample")
+@Tag("sample-custom")
+@Tag("sample-tenant")
 class PrivacyDemoCustomTenantNativeProfileTest {
 
     @Autowired
@@ -130,11 +134,14 @@ class PrivacyDemoCustomTenantNativeProfileTest {
                 .andExpect(jsonPath("$.repositoryImplementations.deadLetter").value("CustomTenantDeadLetterRepository"))
                 .andExpect(jsonPath("$.repositoryCapabilities.audit.tenantReadNative").value(true))
                 .andExpect(jsonPath("$.repositoryCapabilities.audit.tenantWriteNative").value(true))
+                .andExpect(jsonPath("$.repositoryCapabilities.deadLetter.tenantFindByIdNative").value(true))
                 .andExpect(jsonPath("$.repositoryCapabilities.deadLetter.tenantReadNative").value(true))
                 .andExpect(jsonPath("$.repositoryCapabilities.deadLetter.tenantExchangeReadNative").value(true))
                 .andExpect(jsonPath("$.repositoryCapabilities.deadLetter.tenantImportNative").value(true))
                 .andExpect(jsonPath("$.repositoryCapabilities.deadLetter.tenantDeleteNative").value(true))
+                .andExpect(jsonPath("$.repositoryCapabilities.deadLetter.tenantDeleteByIdNative").value(true))
                 .andExpect(jsonPath("$.repositoryCapabilities.deadLetter.tenantReplayNative").value(true))
+                .andExpect(jsonPath("$.repositoryCapabilities.deadLetter.tenantReplayByIdNative").value(true))
                 .andExpect(jsonPath("$.readPaths.audit.native").value(greaterThanOrEqualTo(1.0)))
                 .andExpect(jsonPath("$.readPaths.auditStats.native").value(greaterThanOrEqualTo(1.0)))
                 .andExpect(jsonPath("$.readPaths.deadLetterExport.native").value(greaterThanOrEqualTo(1.0)))
@@ -142,6 +149,8 @@ class PrivacyDemoCustomTenantNativeProfileTest {
                 .andExpect(jsonPath("$.writePaths.auditWrite.native").value(greaterThanOrEqualTo(1.0)))
                 .andExpect(jsonPath("$.writePaths.deadLetterImport.native").value(greaterThanOrEqualTo(1.0)))
                 .andExpect(jsonPath("$.writePaths.deadLetterDelete.native").value(greaterThanOrEqualTo(1.0)))
-                .andExpect(jsonPath("$.writePaths.deadLetterReplay.native").value(greaterThanOrEqualTo(1.0)));
+                .andExpect(jsonPath("$.writePaths.deadLetterDeleteById.native").value(greaterThanOrEqualTo(0.0)))
+                .andExpect(jsonPath("$.writePaths.deadLetterReplay.native").value(greaterThanOrEqualTo(1.0)))
+                .andExpect(jsonPath("$.writePaths.deadLetterReplayById.native").value(greaterThanOrEqualTo(0.0)));
     }
 }

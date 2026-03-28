@@ -13,6 +13,7 @@ import io.github.koyan9.privacy.core.TextMaskingService;
 import io.github.koyan9.privacy.logging.PrivacyLogSanitizer;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
@@ -120,5 +121,37 @@ class PrivacyAuditServiceTest {
 
         assertEquals("tenant-a", event.details().get("tenant"));
         assertEquals("138****8000", event.details().get("phone"));
+    }
+
+    @Test
+    void remainsTenantReadableThroughBuiltInRepositoryWhenServicePolicyDoesNotAttachTenantId() {
+        InMemoryPrivacyAuditRepository repository = new InMemoryPrivacyAuditRepository();
+        PrivacyTenantAuditPolicy tenantAuditPolicy = new PrivacyTenantAuditPolicy(Set.of("phone"), Set.of(), false, "tenant");
+        PrivacyAuditService service = new PrivacyAuditService(
+                new RepositoryPrivacyAuditPublisher(repository, () -> "tenant-a", tenantId -> tenantAuditPolicy),
+                new PrivacyLogSanitizer(new TextMaskingService(new MaskingService())),
+                () -> "tenant-a",
+                tenantId -> tenantAuditPolicy
+        );
+
+        PrivacyAuditEvent event = service.record(
+                "PATIENT_READ",
+                "Patient",
+                "demo",
+                "actor",
+                "SUCCESS",
+                Map.of("phone", "13800138000")
+        );
+
+        assertEquals("138****8000", event.details().get("phone"));
+        org.junit.jupiter.api.Assertions.assertFalse(event.details().containsKey("tenant"));
+        assertEquals(
+                List.of("demo"),
+                repository.findByCriteria("tenant-a", "tenant", PrivacyAuditQueryCriteria.recent(10))
+                        .stream()
+                        .map(PrivacyAuditEvent::resourceId)
+                        .toList()
+        );
+        assertEquals("tenant-a", repository.findAll().get(0).details().get("tenant"));
     }
 }

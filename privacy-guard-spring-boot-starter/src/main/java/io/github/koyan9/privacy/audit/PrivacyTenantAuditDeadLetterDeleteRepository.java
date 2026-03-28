@@ -15,4 +15,20 @@ public interface PrivacyTenantAuditDeadLetterDeleteRepository {
             String tenantDetailKey,
             PrivacyAuditDeadLetterQueryCriteria criteria
     );
+
+    default boolean deleteById(
+            String tenantId,
+            String tenantDetailKey,
+            long id
+    ) {
+        return false;
+    }
+
+    default boolean supportsTenantDelete() {
+        return false;
+    }
+
+    default boolean supportsTenantDeleteById() {
+        return false;
+    }
 }

@@ -1,7 +1,7 @@
 # Release Runbook: v0.4.0
 
-Draft runbook for the next `spring-privacy-guard` release candidate.
-Use this as the shortest path when preparing `v0.4.0`.
+Published runbook reference for the released `spring-privacy-guard v0.4.0` baseline.
+Use this as the shortest operator template when preparing the next versioned release.
 
 ## 1. Final Local Check
 

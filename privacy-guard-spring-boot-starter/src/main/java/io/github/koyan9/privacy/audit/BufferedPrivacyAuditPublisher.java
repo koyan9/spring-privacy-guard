@@ -249,7 +249,8 @@ public class BufferedPrivacyAuditPublisher implements PrivacyAuditPublisher, Dis
     }
 
     private void saveBatch(List<BufferedEvent> batch) {
-        if (repository instanceof PrivacyTenantAuditWriteRepository tenantAwareRepository) {
+        if (repository instanceof PrivacyTenantAuditWriteRepository tenantAwareRepository
+                && tenantAwareRepository.supportsTenantWrite()) {
             telemetry().recordWritePath("audit_batch_write", "native");
             tenantAwareRepository.saveAllTenantAware(batch.stream()
                     .map(BufferedEvent::toWriteRequest)

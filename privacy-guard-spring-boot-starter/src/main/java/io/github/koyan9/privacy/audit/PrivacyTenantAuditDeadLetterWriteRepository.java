@@ -22,4 +22,12 @@ public interface PrivacyTenantAuditDeadLetterWriteRepository {
             save(request);
         }
     }
+
+    default boolean supportsTenantWrite() {
+        return false;
+    }
+
+    default boolean supportsTenantImport() {
+        return false;
+    }
 }

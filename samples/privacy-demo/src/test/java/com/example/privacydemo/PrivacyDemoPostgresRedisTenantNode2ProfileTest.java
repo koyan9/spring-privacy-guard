@@ -7,6 +7,7 @@ package com.example.privacydemo;
 
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStore;
 import io.github.koyan9.privacy.audit.RedisPrivacyAuditDeadLetterWebhookReplayStore;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -36,6 +37,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @ActiveProfiles({"postgres-redis-tenant", "postgres-redis-tenant-node2"})
 @Import(PrivacyDemoPostgresRedisTenantNode2ProfileTest.RedisConfig.class)
+@Tag("sample")
+@Tag("sample-postgres-redis")
+@Tag("sample-multi-instance")
 class PrivacyDemoPostgresRedisTenantNode2ProfileTest {
 
     @Autowired

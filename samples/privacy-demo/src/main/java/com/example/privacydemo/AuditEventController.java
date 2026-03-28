@@ -403,13 +403,19 @@ class AuditEventController {
     }
 
     @DeleteMapping("/audit-dead-letters/{id}")
-    public boolean deleteDeadLetter(@PathVariable long id) {
-        boolean deleted = privacyTenantAuditManagementService.deleteDeadLetter(id);
+    public boolean deleteDeadLetter(
+            @PathVariable long id,
+            @RequestParam(required = false) String tenant
+    ) {
+        boolean deleted = privacyTenantAuditManagementService.deleteDeadLetter(tenant, id);
+        Map<String, String> details = new LinkedHashMap<>();
+        putIfPresent(details, "tenant", tenant);
+        details.put("deleted", String.valueOf(deleted));
         recordManagementAction(
                 "AUDIT_DEAD_LETTER_DELETE",
                 "PrivacyAuditDeadLetter",
                 String.valueOf(id),
-                Map.of("deleted", String.valueOf(deleted))
+                details
         );
         return deleted;
     }
@@ -456,13 +462,19 @@ class AuditEventController {
     }
 
     @PostMapping("/audit-dead-letters/{id}/replay")
-    public boolean replayDeadLetter(@PathVariable long id) {
-        boolean replayed = privacyTenantAuditManagementService.replayDeadLetter(id);
+    public boolean replayDeadLetter(
+            @PathVariable long id,
+            @RequestParam(required = false) String tenant
+    ) {
+        boolean replayed = privacyTenantAuditManagementService.replayDeadLetter(tenant, id);
+        Map<String, String> details = new LinkedHashMap<>();
+        putIfPresent(details, "tenant", tenant);
+        details.put("replayed", String.valueOf(replayed));
         recordManagementAction(
                 "AUDIT_DEAD_LETTER_REPLAY",
                 "PrivacyAuditDeadLetter",
                 String.valueOf(id),
-                Map.of("replayed", String.valueOf(replayed))
+                details
         );
         return replayed;
     }

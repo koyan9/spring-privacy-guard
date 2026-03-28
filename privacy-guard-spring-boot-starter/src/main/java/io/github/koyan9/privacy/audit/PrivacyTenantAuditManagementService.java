@@ -90,6 +90,16 @@ public class PrivacyTenantAuditManagementService {
         return privacyAuditDeadLetterService.delete(id);
     }
 
+    public boolean deleteDeadLetter(String tenantId, long id) {
+        return hasTenant(tenantId)
+                ? privacyTenantAuditDeadLetterOperationsService.deleteById(tenantId, id)
+                : privacyAuditDeadLetterService.delete(id);
+    }
+
+    public boolean deleteDeadLetterForCurrentTenant(long id) {
+        return deleteDeadLetter(tenantProvider.currentTenantId(), id);
+    }
+
     public int deleteDeadLetters(String tenantId, PrivacyAuditDeadLetterQueryCriteria criteria) {
         return hasTenant(tenantId)
                 ? privacyTenantAuditDeadLetterOperationsService.deleteByCriteria(tenantId, criteria)
@@ -102,6 +112,16 @@ public class PrivacyTenantAuditManagementService {
 
     public boolean replayDeadLetter(long id) {
         return privacyAuditDeadLetterService.replay(id);
+    }
+
+    public boolean replayDeadLetter(String tenantId, long id) {
+        return hasTenant(tenantId)
+                ? privacyTenantAuditDeadLetterOperationsService.replayById(tenantId, id)
+                : privacyAuditDeadLetterService.replay(id);
+    }
+
+    public boolean replayDeadLetterForCurrentTenant(long id) {
+        return replayDeadLetter(tenantProvider.currentTenantId(), id);
     }
 
     public PrivacyAuditDeadLetterReplayResult replayDeadLetters(String tenantId, PrivacyAuditDeadLetterQueryCriteria criteria) {

@@ -104,7 +104,7 @@ public class PrivacyTenantAuditDeadLetterOperationsService {
         PrivacyAuditDeadLetterQueryCriteria normalizedCriteria = criteria == null
                 ? PrivacyAuditDeadLetterQueryCriteria.recent(100)
                 : criteria.normalize();
-        if (tenantDeleteRepository != null) {
+        if (tenantDeleteRepository != null && tenantDeleteRepository.supportsTenantDelete()) {
             telemetry().recordWritePath("dead_letter_delete", "native");
             return tenantDeleteRepository.deleteByCriteria(
                     normalizedTenant,
@@ -127,6 +127,28 @@ public class PrivacyTenantAuditDeadLetterOperationsService {
         return deleteByCriteria(tenantProvider.currentTenantId(), criteria);
     }
 
+    public boolean deleteById(String tenantId, long id) {
+        String normalizedTenant = normalizeTenant(tenantId);
+        if (normalizedTenant == null) {
+            return privacyAuditDeadLetterService.delete(id);
+        }
+        String detailKey = tenantDetailKey(normalizedTenant);
+        if (tenantDeleteRepository != null && tenantDeleteRepository.supportsTenantDeleteById()) {
+            telemetry().recordWritePath("dead_letter_delete_by_id", "native");
+            return tenantDeleteRepository.deleteById(normalizedTenant, detailKey, id);
+        }
+        telemetry().recordWritePath("dead_letter_delete_by_id", "fallback");
+        return privacyTenantAuditDeadLetterQueryService.findById(normalizedTenant, id)
+                .map(PrivacyAuditDeadLetterEntry::id)
+                .filter(java.util.Objects::nonNull)
+                .map(privacyAuditDeadLetterService::delete)
+                .orElse(false);
+    }
+
+    public boolean deleteForCurrentTenant(long id) {
+        return deleteById(tenantProvider.currentTenantId(), id);
+    }
+
     public PrivacyAuditDeadLetterReplayResult replayByCriteria(String tenantId, PrivacyAuditDeadLetterQueryCriteria criteria) {
         String normalizedTenant = normalizeTenant(tenantId);
         if (normalizedTenant == null) {
@@ -136,7 +158,7 @@ public class PrivacyTenantAuditDeadLetterOperationsService {
                 ? PrivacyAuditDeadLetterQueryCriteria.recent(100)
                 : criteria.normalize();
         String detailKey = tenantDetailKey(normalizedTenant);
-        if (tenantReplayRepository != null) {
+        if (tenantReplayRepository != null && tenantReplayRepository.supportsTenantReplay()) {
             telemetry().recordWritePath("dead_letter_replay", "native");
             return tenantReplayRepository.replayByCriteria(
                     normalizedTenant,
@@ -153,6 +175,33 @@ public class PrivacyTenantAuditDeadLetterOperationsService {
 
     public PrivacyAuditDeadLetterReplayResult replayForCurrentTenant(PrivacyAuditDeadLetterQueryCriteria criteria) {
         return replayByCriteria(tenantProvider.currentTenantId(), criteria);
+    }
+
+    public boolean replayById(String tenantId, long id) {
+        String normalizedTenant = normalizeTenant(tenantId);
+        if (normalizedTenant == null) {
+            return privacyAuditDeadLetterService.replay(id);
+        }
+        String detailKey = tenantDetailKey(normalizedTenant);
+        if (tenantReplayRepository != null && tenantReplayRepository.supportsTenantReplayById()) {
+            telemetry().recordWritePath("dead_letter_replay_by_id", "native");
+            return tenantReplayRepository.replayById(
+                    normalizedTenant,
+                    detailKey,
+                    id,
+                    privacyAuditDeadLetterService::replaySelectedEntry
+            );
+        }
+        telemetry().recordWritePath("dead_letter_replay_by_id", "fallback");
+        return privacyTenantAuditDeadLetterQueryService.findById(normalizedTenant, id)
+                .filter(entry -> entry.id() != null)
+                .map(entry -> privacyAuditDeadLetterService.replaySelectedEntry(entry)
+                        && privacyAuditDeadLetterService.delete(entry.id()))
+                .orElse(false);
+    }
+
+    public boolean replayForCurrentTenant(long id) {
+        return replayById(tenantProvider.currentTenantId(), id);
     }
 
     private String tenantDetailKey(String tenantId) {

@@ -4,8 +4,8 @@
 
 [![CI](https://github.com/koyan9/spring-privacy-guard/actions/workflows/ci.yml/badge.svg)](https://github.com/koyan9/spring-privacy-guard/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/koyan9/spring-privacy-guard?display_name=tag)](https://github.com/koyan9/spring-privacy-guard/releases/latest)
-[![Changelog](https://img.shields.io/badge/Changelog-0.3.0-0f766e)](CHANGELOG.md)
-[![Release Notes](https://img.shields.io/badge/Release%20Notes-v0.3.0-1d4ed8)](docs/releases/RELEASE_NOTES_v0.3.0.md)
+[![Changelog](https://img.shields.io/badge/Changelog-0.5.0-0f766e)](CHANGELOG.md)
+[![Release Notes](https://img.shields.io/badge/Release%20Notes-v0.5.0-1d4ed8)](docs/releases/RELEASE_NOTES_v0.5.0.md)
 [![Security](https://img.shields.io/badge/Security-Policy-7f1d1d)](SECURITY.md)
 [![Support](https://img.shields.io/badge/Support-Guide-1f2937)](SUPPORT.md)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
@@ -17,17 +17,15 @@
 
 ## 当前状态
 
-- 最新已发布版本：`v0.3.0`
-- 当前分支准备中的下一版候选：`v0.4.0`
-- 当前未发布开发重点：`v0.3.0` 之后的多租户补强，包括 observability、tenant-scoped dead-letter management、receiver routing，以及多实例 sample workflow
-- 本开发周期已完成：
-  - tenant-native dead-letter replay
-  - stable tenant logging policy
-  - tenant dead-letter observability policy
-  - tenant operational telemetry
-  - import/export/manifest exchange-path telemetry
-  - built-in / fallback / custom native / custom JDBC / production-like sample 对照矩阵
-- 当前进度建议优先阅读：`CHANGELOG.md`、`docs/ROADMAP.md`、`docs/INDEX.md`
+- 最新已发布版本：`v0.5.0`
+- 当前分支版本：`0.5.0`
+- `v0.5.0` 之后的当前重点：补齐更完整的生产 rollout 指南，并为下一轮 tenant policy / repository-native 能力扩展与后续发布周期做准备
+- 本轮开发周期刚完成：
+-  单条 dead-letter `lookup / delete / replay` 的 tenant-native 管理闭环
+-  `deleteById` / `replayById` 的 native capability flag 与独立 write-path telemetry
+-  stable tenant alert route / delivery / monitoring policy resolver
+-  sample policy / observability 视图对 effective tenant alert state 的直接展示
+- 当前进度建议优先阅读：已完成与未发布工作看 `CHANGELOG.md`，下一步优先级看 `docs/ROADMAP.md`，文档总览看 `docs/INDEX.md`
 
 ## 模块说明
 
@@ -64,7 +62,7 @@
 <dependency>
     <groupId>io.github.koyan9</groupId>
     <artifactId>spring-privacy-guard-spring-boot-starter</artifactId>
-    <version>0.3.0</version>
+    <version>0.4.0</version>
 </dependency>
 ```
 
@@ -116,6 +114,8 @@ privacy:
 | `privacy.guard.audit.dead-letter.observability.health.down-threshold` | `100` | backlog down 阈值 |
 | `privacy.guard.audit.dead-letter.observability.alert.enabled` | `false` | 启用死信告警 |
 | `privacy.guard.audit.dead-letter.observability.alert.tenant.enabled` | `false` | 启用租户级死信告警 |
+| `privacy.guard.tenant.policies.*.observability.dead-letter.alert.*` | 空 | 首选的租户级 webhook / email / receiver route override 配置入口 |
+| `privacy.guard.tenant.policies.*.observability.dead-letter.alert.{logging,webhook,email}.enabled` | 空 | 租户级 delivery 开关，可覆盖全局 logging / webhook / email 告警默认行为 |
 | `privacy.guard.audit.dead-letter.observability.alert.receiver.verification.enabled` | `false` | 启用 receiver 验签配置 |
 | `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.namespace` | 空 | replay-store namespace |
 | `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.redis.enabled` | `false` | 启用 Redis replay-store |
@@ -161,6 +161,8 @@ MaskingStrategy customNameMaskingStrategy() {
 - `PrivacyTenantAuditPolicyResolver`
 - `PrivacyTenantLoggingPolicyResolver`
 - `PrivacyTenantDeadLetterObservabilityPolicyResolver`
+- `PrivacyTenantDeadLetterAlertDeliveryPolicyResolver`
+- `PrivacyTenantDeadLetterAlertRoutePolicyResolver`
 - `PrivacyTenantAuditReadRepository`
 - `PrivacyTenantAuditDeadLetterReadRepository`
 - `PrivacyTenantAuditWriteRepository`
@@ -185,6 +187,11 @@ MaskingStrategy customNameMaskingStrategy() {
 - `PrivacyTenantAuditPolicy`
 - `PrivacyTenantLoggingPolicy`
 - `PrivacyTenantDeadLetterObservabilityPolicy`
+- `PrivacyTenantDeadLetterAlertDeliveryPolicy`
+- `PrivacyTenantDeadLetterAlertRoutePolicy`
+- `PrivacyTenantDeadLetterAlertWebhookPolicy`
+- `PrivacyTenantDeadLetterAlertEmailPolicy`
+- `PrivacyTenantDeadLetterAlertReceiverPolicy`
 - `PrivacyAuditEvent`
 - `PrivacyAuditQueryCriteria`
 - `PrivacyAuditDeadLetterEntry`
@@ -239,6 +246,8 @@ privacy:
 - `attach-tenant-id=true` 时，租户标识会在清洗后附加到 detail 中
 - tenant logging override 会覆盖全局 MDC / structured key 选择
 - tenant dead-letter observability override 只作用于 tenant backlog snapshot、tenant health summary 和 tenant alert monitor
+- tenant dead-letter alert route override 现在优先放在 `privacy.guard.tenant.policies.<tenantId>.observability.dead-letter.alert.*`
+- tenant dead-letter alert delivery 现在也可以按租户分别控制 logging / webhook / email 是否启用
 
 ## 审计与死信
 
@@ -257,7 +266,9 @@ Starter 提供：
 - `GET /audit-dead-letters`
 - `GET /audit-dead-letters/stats`
 - `DELETE /audit-dead-letters/{id}`
+- `DELETE /audit-dead-letters/{id}?tenant=tenant-a`
 - `POST /audit-dead-letters/{id}/replay`
+- `POST /audit-dead-letters/{id}/replay?tenant=tenant-b`
 - `GET /audit-dead-letters/export.json`
 - `GET /audit-dead-letters/export.manifest`
 - `POST /audit-dead-letters/import.json`
@@ -331,10 +342,10 @@ receiver 验签失败会返回：
 
 - 支持与分流：`SUPPORT.md`
 - 安全策略：`SECURITY.md`
-- 文档索引：`docs/INDEX.md`
-- 发布检查清单：`docs/RELEASE_CHECKLIST.md`
-- 当前已发布版本发布资料：`docs/releases/RELEASE_NOTES_v0.3.0.md`
-- 下一版草案发布资料：`docs/releases/RELEASE_NOTES_v0.4.0.md`
+- GitHub 标签与分流：`docs/GITHUB_LABELS.md`
+- 打 tag 前运行：`python scripts/check_repo_hygiene.py`
+- 维护者流程说明：`docs/MAINTAINER_GUIDE.md`
+- 当前已发布版本执行模板：`docs/RELEASE_EXECUTION_v0.5.0.md`
 
 ## 项目文档
 
@@ -347,8 +358,14 @@ receiver 验签失败会返回：
 - 维护者指南：`docs/MAINTAINER_GUIDE.md`
 - 路线图：`docs/ROADMAP.md`
 - 发布检查清单：`docs/RELEASE_CHECKLIST.md`
-- 当前已发布 release notes：`docs/releases/RELEASE_NOTES_v0.3.0.md`
-- 下一版草案 release notes：`docs/releases/RELEASE_NOTES_v0.4.0.md`
+- 当前已发布 release notes：`docs/releases/RELEASE_NOTES_v0.5.0.md`
+- 当前已发布 release execution guide：`docs/RELEASE_EXECUTION_v0.5.0.md`
+- 当前已发布 release runbook：`docs/RELEASE_RUNBOOK_v0.5.0.md`
+- 当前已发布 release dry run：`docs/RELEASE_DRY_RUN_v0.5.0.md`
+- 当前已发布 release announcement：`docs/RELEASE_ANNOUNCEMENT_v0.5.0.md`
+- 当前已发布 release announcement（zh-CN）：`docs/RELEASE_ANNOUNCEMENT_v0.5.0.zh-CN.md`
+- 当前已发布 GitHub release copy：`docs/GITHUB_RELEASE_COPY_v0.5.0.md`
+- 上一版 release notes 归档：`docs/releases/RELEASE_NOTES_v0.4.0.md`
 
 ## 发布说明
 

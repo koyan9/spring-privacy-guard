@@ -4,7 +4,7 @@
 
 [![Project README](https://img.shields.io/badge/Project-README-0ea5e9)](../../README.md)
 [![Docs Index](https://img.shields.io/badge/Docs-Index-6f42c1)](../../docs/INDEX.md)
-[![Release Notes](https://img.shields.io/badge/Release%20Notes-v0.4.0-1d4ed8)](../../docs/releases/RELEASE_NOTES_v0.4.0.md)
+[![Release Notes](https://img.shields.io/badge/Release%20Notes-v0.5.0-1d4ed8)](../../docs/releases/RELEASE_NOTES_v0.5.0.md)
 
 `samples/privacy-demo` 是 `spring-privacy-guard` 的可运行示例，展示敏感数据脱敏、审计、死信处理、签名告警、receiver 验签和 replay 防护。
 
@@ -18,12 +18,19 @@
 
 ## Current Status
 
-- Latest published project release: `v0.4.0`
-- The sample is already aligned with the current unreleased multi-tenant work:
+- Latest published project release: `v0.5.0`
+- The sample is aligned with the current published multi-tenant work:
   - tenant-aware management flows go through `PrivacyTenantAuditManagementService`
+  - tenant-specific webhook / email / receiver route overrides now prefer `privacy.guard.tenant.policies.<tenantId>.observability.dead-letter.alert.*`, while the legacy `alert.tenant.routes.*` path remains compatible
+  - tenant policies can now also enable or disable logging / webhook / email delivery per tenant, and `/demo-tenants/policies` exposes those overrides directly
+  - the default sample profile now exposes tenant-a / tenant-b receiver routes directly, so `/demo-tenants/policies` and `/demo-tenants/observability` can show tenant-specific receiver namespaces without switching profiles
   - `/demo-tenants/observability` summarizes tenant read/write paths, backlog state, alerting, and receiver replay-store backend
   - `/demo-tenants/observability` now also shows repository tenant capability flags and whether dead-letter import used a native tenant-aware write path
+  - `/demo-tenants/observability` now also distinguishes whether single dead-letter lookup by `id` is repository-native through `repositoryCapabilities.deadLetter.tenantFindByIdNative`
   - `/demo-tenants/observability` also distinguishes exchange-path reads for dead-letter export and manifest generation
+  - `/demo-tenants/observability` now includes `expectedPaths`, which maps capability flags to the read/write paths the current deployment should prefer
+  - `/demo-tenants/policies` now shows the bridged tenant alert webhook / email / receiver route fields that are effective for each configured tenant
+  - single dead-letter delete and replay endpoints can now opt into explicit tenant ownership checks with the `tenant` query parameter
   - built-in `IN_MEMORY` and `JDBC` dead-letter repositories now report `deadLetterReplay.native`
   - `fallback-tenant` can be used as a local comparison profile when you want to see `fallback` counters instead of native tenant SPI paths
   - `custom-tenant-native` can be used as a local custom SPI reference when you want native tenant paths without depending on the built-in repositories
@@ -116,9 +123,12 @@ privacy:
 - `GET /demo-alert-receiver/replay-store?limit=20&offset=0`
 - `GET /demo-alert-receiver/replay-store/stats?expiringWithin=PT5M`
 - `DELETE /demo-alert-receiver/replay-store`
+- `POST /demo-alert-receiver/tenant-a`
+- `POST /demo-alert-receiver/tenant-b`
 
 示例默认将 replay-store namespace 配置为 `demo-default`，因此管理接口会同时展示逻辑 `nonce` 和底层 `storageKey`。
 如果你将同一个 replay-store 后端复用于多个 tenant-specific receiver 部署，建议为每个部署配置不同的 namespace。
+推荐把 tenant-specific receiver path、secret 和 replay namespace 配在 `privacy.guard.tenant.policies.<tenantId>.observability.dead-letter.alert.receiver.*`；旧的 `privacy.guard.audit.dead-letter.observability.alert.tenant.routes.<tenantId>.receiver.*` 仅作为兼容入口保留。
 
 ## 多租户脱敏演示
 
@@ -142,7 +152,9 @@ privacy:
 - 若存在租户标签的死信，还可访问 `GET /audit-dead-letters?tenant=tenant-a`
 - 或 `GET /audit-dead-letters/stats?tenant=tenant-a`
 - 批量管理时可使用 `DELETE /audit-dead-letters?tenant=tenant-a`
+- 单条删除可使用 `DELETE /audit-dead-letters/{id}?tenant=tenant-a`
 - 或 `POST /audit-dead-letters/replay?tenant=tenant-b`
+- 单条重放可使用 `POST /audit-dead-letters/{id}/replay?tenant=tenant-b`
 - 交换链路可使用 `GET /audit-dead-letters/export.json?tenant=tenant-a`
 - `GET /audit-dead-letters/export.manifest?format=json&tenant=tenant-a`
 - `POST /audit-dead-letters/import.json?tenant=tenant-b`
@@ -200,6 +212,8 @@ privacy:
 - `GET /audit-dead-letters/stats?tenant=tenant-a`
 - `DELETE /audit-dead-letters?tenant=tenant-a`
 - `POST /audit-dead-letters/replay?tenant=tenant-b`
+- `DELETE /audit-dead-letters/{id}?tenant=tenant-a`
+- `POST /audit-dead-letters/{id}/replay?tenant=tenant-b`
 - `GET /audit-dead-letters/export.json`
 - `GET /audit-dead-letters/export.csv`
 - `GET /audit-dead-letters/export.manifest?format=json`
@@ -228,6 +242,7 @@ Actuator 指标示例：
 - `GET /actuator/metrics/privacy.audit.deadletters.receiver.replay_store.expiry_seconds?tag=kind:earliest`
 - `GET /actuator/metrics/privacy.audit.tenant.read.path?tag=domain:audit&tag=path:native`
 - `GET /actuator/metrics/privacy.audit.tenant.write.path?tag=domain:audit_write&tag=path:native`
+- `GET /actuator/metrics/privacy.audit.tenant.write.path?tag=domain:audit_batch_write&tag=path:fallback`
 - `GET /demo-tenants/observability`
 
 `/demo-tenants/observability` 现在除了 tenant path 指标，还会返回全局、当前 tenant 以及按已配置 tenant 聚合的 dead-letter backlog 状态视图。
@@ -271,12 +286,16 @@ If you want a helper to boot Redis locally with Docker first, use:
 - `powershell.exe -ExecutionPolicy Bypass -File samples/privacy-demo/scripts/verify-alert-receiver.ps1 -BaseUrl http://localhost:8088 -BearerToken demo-receiver-token -SignatureSecret demo-receiver-secret -AdminToken demo-admin-token`
 - `powershell.exe -ExecutionPolicy Bypass -File samples/privacy-demo/scripts/verify-jdbc-tenant-multi-instance.ps1`
 - `powershell.exe -ExecutionPolicy Bypass -File samples/privacy-demo/scripts/verify-jdbc-tenant-multi-instance.ps1 -Node1BaseUrl http://localhost:8088 -Node2BaseUrl http://localhost:8089 -AdminToken demo-admin-token`
+- `powershell.exe -ExecutionPolicy Bypass -File samples/privacy-demo/scripts/verify-jdbc-tenant-multi-instance.ps1 -ReceiverPath /demo-alert-receiver/tenant-a -BearerToken demo-tenant-a-receiver-token -SignatureSecret demo-tenant-a-receiver-secret -TenantId tenant-a -ExpectedReplayNamespace tenant-a-receiver`
 - `bash samples/privacy-demo/scripts/verify-jdbc-tenant-multi-instance.sh`
 - `bash samples/privacy-demo/scripts/verify-jdbc-tenant-multi-instance.sh --node1-base-url http://localhost:8088 --node2-base-url http://localhost:8089 --admin-token demo-admin-token`
+- `bash samples/privacy-demo/scripts/verify-jdbc-tenant-multi-instance.sh --receiver-path /demo-alert-receiver/tenant-a --bearer-token demo-tenant-a-receiver-token --signature-secret demo-tenant-a-receiver-secret --tenant-id tenant-a --expected-replay-namespace tenant-a-receiver`
 - `powershell.exe -ExecutionPolicy Bypass -File samples/privacy-demo/scripts/verify-redis-tenant-multi-instance.ps1`
 - `powershell.exe -ExecutionPolicy Bypass -File samples/privacy-demo/scripts/verify-redis-tenant-multi-instance.ps1 -Node1BaseUrl http://localhost:8088 -Node2BaseUrl http://localhost:8090 -AdminToken demo-admin-token`
+- `powershell.exe -ExecutionPolicy Bypass -File samples/privacy-demo/scripts/verify-redis-tenant-multi-instance.ps1 -ReceiverPath /demo-alert-receiver/tenant-a -BearerToken demo-tenant-a-receiver-token -SignatureSecret demo-tenant-a-receiver-secret -TenantId tenant-a -ExpectedReplayNamespace tenant-a-receiver`
 - `bash samples/privacy-demo/scripts/verify-redis-tenant-multi-instance.sh`
 - `bash samples/privacy-demo/scripts/verify-redis-tenant-multi-instance.sh --node1-base-url http://localhost:8088 --node2-base-url http://localhost:8090 --admin-token demo-admin-token`
+- `bash samples/privacy-demo/scripts/verify-redis-tenant-multi-instance.sh --receiver-path /demo-alert-receiver/tenant-a --bearer-token demo-tenant-a-receiver-token --signature-secret demo-tenant-a-receiver-secret --tenant-id tenant-a --expected-replay-namespace tenant-a-receiver`
 
 验签失败会返回包含原因码的 JSON 响应，例如：`{"error":"Invalid signature","reason":"INVALID_SIGNATURE"}`。
 
@@ -296,7 +315,9 @@ Useful commands:
 - `bash samples/privacy-demo/scripts/manage-postgres-redis-local.sh`
 - `bash samples/privacy-demo/scripts/manage-postgres-redis-local.sh down`
 - `powershell.exe -ExecutionPolicy Bypass -File samples/privacy-demo/scripts/verify-postgres-redis-tenant-multi-instance.ps1`
+- `powershell.exe -ExecutionPolicy Bypass -File samples/privacy-demo/scripts/verify-postgres-redis-tenant-multi-instance.ps1 -ReceiverPath /demo-alert-receiver/tenant-a -BearerToken demo-tenant-a-receiver-token -SignatureSecret demo-tenant-a-receiver-secret -TenantId tenant-a -ExpectedReplayNamespace tenant-a-receiver`
 - `bash samples/privacy-demo/scripts/verify-postgres-redis-tenant-multi-instance.sh`
+- `bash samples/privacy-demo/scripts/verify-postgres-redis-tenant-multi-instance.sh --receiver-path /demo-alert-receiver/tenant-a --bearer-token demo-tenant-a-receiver-token --signature-secret demo-tenant-a-receiver-secret --tenant-id tenant-a --expected-replay-namespace tenant-a-receiver`
 
 The observability summary should report:
 
@@ -397,6 +418,32 @@ privacy:
               to: ops@example.com
               subject-prefix: [privacy-demo]
 ```
+
+tenant-specific alert route override（推荐路径）：
+
+```yaml
+privacy:
+  guard:
+    tenant:
+      policies:
+        tenant-a:
+          observability:
+            dead-letter:
+              alert:
+                webhook:
+                  url: http://localhost:8088/demo-alert-receiver/tenant-a
+                  bearer-token: demo-tenant-a-receiver-token
+                email:
+                  to: tenant-a-ops@example.com
+                  subject-prefix: "[tenant-a]"
+                receiver:
+                  path-pattern: /demo-alert-receiver/tenant-a
+                  bearer-token: demo-tenant-a-receiver-token
+                  signature-secret: demo-tenant-a-receiver-secret
+                  replay-namespace: tenant-a-receiver
+```
+
+兼容旧配置时，`privacy.guard.audit.dead-letter.observability.alert.tenant.routes.<tenantId>.*` 仍会桥接到同一份 effective tenant alert route policy。
 
 ## 模式切换
 

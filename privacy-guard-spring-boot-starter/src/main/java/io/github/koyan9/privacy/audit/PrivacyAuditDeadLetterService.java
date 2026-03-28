@@ -8,6 +8,7 @@ package io.github.koyan9.privacy.audit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -36,8 +37,12 @@ public class PrivacyAuditDeadLetterService {
         return deadLetterRepository.findByCriteria(normalized);
     }
 
+    public Optional<PrivacyAuditDeadLetterEntry> findById(long id) {
+        return deadLetterRepository.findById(id);
+    }
+
     public boolean replay(long id) {
-        return deadLetterRepository.findById(id)
+        return findById(id)
                 .map(entry -> {
                     if (!claim(entry.id())) {
                         return false;

@@ -24,6 +24,8 @@ import java.util.function.Supplier;
 
 public class PrivacyTenantAuditDeadLetterExchangeService {
 
+    private static final int DEFAULT_EXPORT_PAGE_SIZE = 500;
+
     private final PrivacyAuditDeadLetterExchangeService exchangeService;
     private final PrivacyAuditDeadLetterRepository deadLetterRepository;
     private final PrivacyTenantAuditDeadLetterQueryService tenantQueryService;
@@ -105,25 +107,29 @@ public class PrivacyTenantAuditDeadLetterExchangeService {
     }
 
     public String exportJson(String tenantId, PrivacyAuditDeadLetterQueryCriteria criteria) {
+        return exportJson(tenantId, criteria, DEFAULT_EXPORT_PAGE_SIZE);
+    }
+
+    String exportJson(String tenantId, PrivacyAuditDeadLetterQueryCriteria criteria, int pageSize) {
         String normalizedTenant = normalizeTenant(tenantId);
         if (normalizedTenant == null) {
-            return exchangeService.exportJson(criteria);
+            return exchangeService.exportJson(criteria, pageSize);
         }
-        try {
-            telemetry().recordQueryReadPath("dead_letter_export", readPathKind());
-            return objectMapper.writeValueAsString(tenantQueryService.findByCriteria(normalizedTenant, criteria));
-        } catch (IOException exception) {
-            throw new IllegalStateException("Failed to export tenant-scoped privacy audit dead letters as JSON", exception);
-        }
+        telemetry().recordQueryReadPath("dead_letter_export", readPathKind());
+        return tenantScopedReadExchangeService(normalizedTenant).exportJson(criteria, pageSize);
     }
 
     public String exportCsv(String tenantId, PrivacyAuditDeadLetterQueryCriteria criteria) {
+        return exportCsv(tenantId, criteria, DEFAULT_EXPORT_PAGE_SIZE);
+    }
+
+    String exportCsv(String tenantId, PrivacyAuditDeadLetterQueryCriteria criteria, int pageSize) {
         String normalizedTenant = normalizeTenant(tenantId);
         if (normalizedTenant == null) {
-            return exchangeService.exportCsv(criteria);
+            return exchangeService.exportCsv(criteria, pageSize);
         }
         telemetry().recordQueryReadPath("dead_letter_export", readPathKind());
-        return csvCodec.exportEntries(tenantQueryService.findByCriteria(normalizedTenant, criteria));
+        return tenantScopedReadExchangeService(normalizedTenant).exportCsv(criteria, pageSize);
     }
 
     public PrivacyAuditDeadLetterExportManifest exportManifest(
@@ -131,24 +137,21 @@ public class PrivacyTenantAuditDeadLetterExchangeService {
             PrivacyAuditDeadLetterQueryCriteria criteria,
             String format
     ) {
+        return exportManifest(tenantId, criteria, format, DEFAULT_EXPORT_PAGE_SIZE);
+    }
+
+    PrivacyAuditDeadLetterExportManifest exportManifest(
+            String tenantId,
+            PrivacyAuditDeadLetterQueryCriteria criteria,
+            String format,
+            int pageSize
+    ) {
         String normalizedTenant = normalizeTenant(tenantId);
         if (normalizedTenant == null) {
-            return exchangeService.exportManifest(criteria, format);
+            return exchangeService.exportManifest(criteria, format, pageSize);
         }
         telemetry().recordQueryReadPath("dead_letter_manifest", readPathKind());
-        String normalizedFormat = normalizeFormat(format);
-        List<PrivacyAuditDeadLetterEntry> entries = tenantQueryService.findByCriteria(normalizedTenant, criteria);
-        String content = switch (normalizedFormat) {
-            case "json" -> writeJson(entries);
-            case "csv" -> csvCodec.exportEntries(entries);
-            default -> throw new IllegalArgumentException("Unsupported dead-letter export format: " + format);
-        };
-        return new PrivacyAuditDeadLetterExportManifest(
-                normalizedFormat,
-                entries.size(),
-                Instant.now(),
-                sha256(content)
-        );
+        return tenantScopedReadExchangeService(normalizedTenant).exportManifest(criteria, format, pageSize);
     }
 
     public PrivacyAuditDeadLetterImportResult importJson(
@@ -185,21 +188,13 @@ public class PrivacyTenantAuditDeadLetterExchangeService {
         return importScopedEntries(scopedEntries, normalizedTenant, deduplicate, checksum);
     }
 
-    private List<PrivacyAuditDeadLetterEntry> filteredEntries(String tenantId, PrivacyAuditDeadLetterQueryCriteria criteria) {
-        String normalizedTenant = normalizeTenant(tenantId);
-        if (normalizedTenant == null) {
-            return exchangeService == null ? List.of() : tenantQueryService.findByCriteria(null, criteria);
-        }
-        return tenantQueryService.findByCriteria(normalizedTenant, criteria);
-    }
-
     private PrivacyAuditDeadLetterImportResult importScopedEntries(
             List<PrivacyAuditDeadLetterEntry> scopedEntries,
             String tenantId,
             boolean deduplicate,
             String checksum
     ) {
-        if (tenantWriteRepository != null && deadLetterRepository != null) {
+        if (tenantWriteRepository != null && tenantWriteRepository.supportsTenantImport()) {
             telemetry().recordWritePath("dead_letter_import", "native");
             return exchangeService.importEntries(
                     scopedEntries,
@@ -266,6 +261,26 @@ public class PrivacyTenantAuditDeadLetterExchangeService {
                 .toList();
     }
 
+    private PrivacyAuditDeadLetterExchangeService tenantScopedReadExchangeService(String tenantId) {
+        String detailKey = tenantDetailKey(tenantId);
+        PrivacyAuditDeadLetterRepository tenantScopedRepository = new PrivacyAuditDeadLetterRepository() {
+            @Override
+            public void save(PrivacyAuditDeadLetterEntry entry) {
+                throw new UnsupportedOperationException("Tenant-scoped read repository does not support writes");
+            }
+
+            @Override
+            public List<PrivacyAuditDeadLetterEntry> findByCriteria(PrivacyAuditDeadLetterQueryCriteria criteria) {
+                if (tenantReadRepository != null && tenantReadRepository.supportsTenantExchangeRead()) {
+                    return tenantReadRepository.findByCriteria(tenantId, detailKey, criteria);
+                }
+                return tenantQueryService.findByCriteria(tenantId, criteria);
+            }
+        };
+        // Reuse the shared paged export/manifest implementation with a tenant-scoped read adapter.
+        return new PrivacyAuditDeadLetterExchangeService(tenantScopedRepository, objectMapper, csvCodec);
+    }
+
     private String tenantDetailKey(String tenantId) {
         PrivacyTenantAuditPolicy policy = tenantAuditPolicyResolver.resolve(tenantId);
         if (policy == null) {
@@ -307,15 +322,7 @@ public class PrivacyTenantAuditDeadLetterExchangeService {
     }
 
     private String readPathKind() {
-        return tenantReadRepository != null ? "native" : "fallback";
-    }
-
-    private String writeJson(List<PrivacyAuditDeadLetterEntry> entries) {
-        try {
-            return objectMapper.writeValueAsString(entries);
-        } catch (IOException exception) {
-            throw new IllegalStateException("Failed to export tenant-scoped privacy audit dead letters as JSON", exception);
-        }
+        return tenantReadRepository != null && tenantReadRepository.supportsTenantExchangeRead() ? "native" : "fallback";
     }
 
     private PrivacyTenantAuditTelemetry telemetry() {

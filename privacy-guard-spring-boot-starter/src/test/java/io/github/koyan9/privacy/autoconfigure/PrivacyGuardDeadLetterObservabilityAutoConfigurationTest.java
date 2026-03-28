@@ -39,6 +39,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
 import java.util.Map;
@@ -133,6 +134,58 @@ class PrivacyGuardDeadLetterObservabilityAutoConfigurationTest {
     }
 
     @Test
+    void resolvesTenantAlertMembershipWithTenantPolicyOverrides() {
+        contextRunner
+                .withPropertyValues(
+                        "privacy.guard.audit.dead-letter.repository-type=IN_MEMORY",
+                        "privacy.guard.tenant.enabled=true",
+                        "privacy.guard.tenant.default-tenant=public",
+                        "privacy.guard.tenant.policies.tenant-a.audit.attach-tenant-id=true",
+                        "privacy.guard.tenant.policies.tenant-a.audit.tenant-detail-key=tenant",
+                        "privacy.guard.tenant.policies.tenant-a.observability.dead-letter.alert.enabled=true",
+                        "privacy.guard.tenant.policies.tenant-b.audit.attach-tenant-id=true",
+                        "privacy.guard.tenant.policies.tenant-b.audit.tenant-detail-key=tenant",
+                        "privacy.guard.tenant.policies.tenant-b.observability.dead-letter.alert.enabled=false",
+                        "privacy.guard.audit.dead-letter.observability.alert.enabled=true",
+                        "privacy.guard.audit.dead-letter.observability.alert.tenant.enabled=true",
+                        "privacy.guard.audit.dead-letter.observability.alert.tenant.tenant-ids[0]=tenant-b",
+                        "privacy.guard.audit.dead-letter.observability.alert.check-interval=10ms"
+                )
+                .run(context -> {
+                    PrivacyTenantAuditDeadLetterAlertMonitor monitor =
+                            context.getBean(PrivacyTenantAuditDeadLetterAlertMonitor.class);
+                    @SuppressWarnings("unchecked")
+                    java.util.List<String> tenantIds = (java.util.List<String>) ReflectionTestUtils.getField(monitor, "tenantIds");
+                    assertThat(tenantIds).contains("tenant-a");
+                    assertThat(tenantIds).doesNotContain("tenant-b");
+                });
+    }
+
+    @Test
+    void createsTenantLoggingCallbackWhenGlobalLoggingDisabledButTenantPolicyEnablesIt() {
+        contextRunner
+                .withPropertyValues(
+                        "privacy.guard.audit.dead-letter.repository-type=IN_MEMORY",
+                        "privacy.guard.tenant.enabled=true",
+                        "privacy.guard.tenant.default-tenant=public",
+                        "privacy.guard.tenant.policies.tenant-a.audit.attach-tenant-id=true",
+                        "privacy.guard.tenant.policies.tenant-a.audit.tenant-detail-key=tenant",
+                        "privacy.guard.tenant.policies.tenant-a.observability.dead-letter.alert.logging.enabled=true",
+                        "privacy.guard.audit.dead-letter.observability.alert.enabled=true",
+                        "privacy.guard.audit.dead-letter.observability.alert.tenant.enabled=true",
+                        "privacy.guard.audit.dead-letter.observability.alert.tenant.tenant-ids[0]=tenant-a",
+                        "privacy.guard.audit.dead-letter.observability.alert.logging.enabled=false"
+                )
+                .run(context -> {
+                    assertThat(context).hasSingleBean(LoggingPrivacyTenantAuditDeadLetterAlertCallback.class);
+                    LoggingPrivacyTenantAuditDeadLetterAlertCallback callback =
+                            context.getBean(LoggingPrivacyTenantAuditDeadLetterAlertCallback.class);
+                    assertThat(callback.supportsTenant("tenant-a")).isTrue();
+                    assertThat(callback.supportsTenant("tenant-b")).isFalse();
+                });
+    }
+
+    @Test
     void createsWebhookCallbackWhenConfigured() {
         contextRunner
                 .withPropertyValues(
@@ -161,6 +214,27 @@ class PrivacyGuardDeadLetterObservabilityAutoConfigurationTest {
                         "privacy.guard.audit.dead-letter.observability.alert.webhook.url=https://example.com/privacy-alerts"
                 )
                 .run(context -> assertThat(context.getBeansOfType(PrivacyTenantAuditDeadLetterAlertCallback.class)).isNotEmpty());
+    }
+
+    @Test
+    void createsTenantScopedWebhookCallbackWhenOnlyTenantPolicyWebhookIsConfigured() {
+        contextRunner
+                .withPropertyValues(
+                        "privacy.guard.audit.dead-letter.repository-type=IN_MEMORY",
+                        "privacy.guard.tenant.enabled=true",
+                        "privacy.guard.tenant.default-tenant=public",
+                        "privacy.guard.tenant.policies.tenant-a.audit.attach-tenant-id=true",
+                        "privacy.guard.tenant.policies.tenant-a.audit.tenant-detail-key=tenant",
+                        "privacy.guard.tenant.policies.tenant-a.observability.dead-letter.alert.webhook.url=https://tenant-a.example.com/privacy-alerts",
+                        "privacy.guard.audit.dead-letter.observability.alert.enabled=true",
+                        "privacy.guard.audit.dead-letter.observability.alert.tenant.enabled=true",
+                        "privacy.guard.audit.dead-letter.observability.alert.tenant.tenant-ids[0]=tenant-a"
+                )
+                .run(context -> {
+                    assertThat(context).hasBean("privacyAuditDeadLetterWebhookHttpClient");
+                    assertThat(context).doesNotHaveBean(PrivacyAuditDeadLetterWebhookAlertCallback.class);
+                    assertThat(context.getBeansOfType(PrivacyTenantAuditDeadLetterAlertCallback.class)).isNotEmpty();
+                });
     }
 
     @Test
@@ -306,6 +380,28 @@ class PrivacyGuardDeadLetterObservabilityAutoConfigurationTest {
                 )
                 .withUserConfiguration(MailConfig.class)
                 .run(context -> assertThat(context.getBeansOfType(PrivacyTenantAuditDeadLetterAlertCallback.class)).isNotEmpty());
+    }
+
+    @Test
+    void createsTenantScopedEmailCallbackWhenOnlyTenantPolicyEmailIsConfigured() {
+        contextRunner
+                .withPropertyValues(
+                        "privacy.guard.audit.dead-letter.repository-type=IN_MEMORY",
+                        "privacy.guard.tenant.enabled=true",
+                        "privacy.guard.tenant.default-tenant=public",
+                        "privacy.guard.tenant.policies.tenant-a.audit.attach-tenant-id=true",
+                        "privacy.guard.tenant.policies.tenant-a.audit.tenant-detail-key=tenant",
+                        "privacy.guard.tenant.policies.tenant-a.observability.dead-letter.alert.email.from=privacy@example.com",
+                        "privacy.guard.tenant.policies.tenant-a.observability.dead-letter.alert.email.to=tenant-a-ops@example.com",
+                        "privacy.guard.audit.dead-letter.observability.alert.enabled=true",
+                        "privacy.guard.audit.dead-letter.observability.alert.tenant.enabled=true",
+                        "privacy.guard.audit.dead-letter.observability.alert.tenant.tenant-ids[0]=tenant-a"
+                )
+                .withUserConfiguration(MailConfig.class)
+                .run(context -> {
+                    assertThat(context).doesNotHaveBean(PrivacyAuditDeadLetterEmailAlertCallback.class);
+                    assertThat(context.getBeansOfType(PrivacyTenantAuditDeadLetterAlertCallback.class)).isNotEmpty();
+                });
     }
 
     @Test

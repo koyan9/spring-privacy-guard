@@ -7,6 +7,7 @@ package com.example.privacydemo;
 
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStore;
 import io.github.koyan9.privacy.audit.RedisPrivacyAuditDeadLetterWebhookReplayStore;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -20,6 +21,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.hamcrest.Matchers.hasItem;
 import static org.mockito.Mockito.mock;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -37,6 +39,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @ActiveProfiles("postgres-redis-tenant")
 @Import(PrivacyDemoPostgresRedisTenantProfileTest.RedisConfig.class)
+@Tag("sample")
+@Tag("sample-postgres-redis")
 class PrivacyDemoPostgresRedisTenantProfileTest {
 
     @Autowired
@@ -53,6 +57,18 @@ class PrivacyDemoPostgresRedisTenantProfileTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.instanceId").value("postgres-redis-node-1"));
 
+        mockMvc.perform(get("/demo-tenants/policies")
+                        .header("X-Demo-Admin-Token", "demo-admin-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tenants[?(@.tenantId=='tenant-a')].deadLetterAlertReceiverPathPattern")
+                        .value(hasItem("/demo-alert-receiver/tenant-a")))
+                .andExpect(jsonPath("$.tenants[?(@.tenantId=='tenant-a')].deadLetterAlertReceiverReplayNamespace")
+                        .value(hasItem("tenant-a-receiver")))
+                .andExpect(jsonPath("$.tenants[?(@.tenantId=='tenant-b')].deadLetterAlertReceiverPathPattern")
+                        .value(hasItem("/demo-alert-receiver/tenant-b")))
+                .andExpect(jsonPath("$.tenants[?(@.tenantId=='tenant-b')].deadLetterAlertReceiverReplayNamespace")
+                        .value(hasItem("tenant-b-receiver")));
+
         mockMvc.perform(get("/demo-tenants/observability")
                         .header("X-Demo-Admin-Token", "demo-admin-token"))
                 .andExpect(status().isOk())
@@ -62,11 +78,16 @@ class PrivacyDemoPostgresRedisTenantProfileTest {
                 .andExpect(jsonPath("$.receiverReplayStore.redisKeyPrefix").value("privacy:demo:postgres:webhook:replay:"))
                 .andExpect(jsonPath("$.auditRepositoryType").value("JDBC"))
                 .andExpect(jsonPath("$.deadLetterRepositoryType").value("JDBC"))
+                .andExpect(jsonPath("$.repositoryCapabilities.deadLetter.tenantFindByIdNative").value(true))
+                .andExpect(jsonPath("$.repositoryCapabilities.deadLetter.tenantDeleteByIdNative").value(true))
+                .andExpect(jsonPath("$.repositoryCapabilities.deadLetter.tenantReplayByIdNative").value(true))
                 .andExpect(jsonPath("$.repositoryCapabilities.deadLetter.tenantExchangeReadNative").value(true))
                 .andExpect(jsonPath("$.repositoryCapabilities.deadLetter.tenantImportNative").value(true))
                 .andExpect(jsonPath("$.readPaths.deadLetterExport.native").value(greaterThanOrEqualTo(0.0)))
                 .andExpect(jsonPath("$.readPaths.deadLetterManifest.native").value(greaterThanOrEqualTo(0.0)))
-                .andExpect(jsonPath("$.writePaths.deadLetterImport.native").value(greaterThanOrEqualTo(0.0)));
+                .andExpect(jsonPath("$.writePaths.deadLetterImport.native").value(greaterThanOrEqualTo(0.0)))
+                .andExpect(jsonPath("$.writePaths.deadLetterDeleteById.native").value(greaterThanOrEqualTo(0.0)))
+                .andExpect(jsonPath("$.writePaths.deadLetterReplayById.native").value(greaterThanOrEqualTo(0.0)));
     }
 
     @TestConfiguration(proxyBeanMethods = false)

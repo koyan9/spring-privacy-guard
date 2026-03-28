@@ -115,6 +115,14 @@ The tenant policy carrier records are:
   - `warningThreshold`
   - `downThreshold`
   - `notifyOnRecovery`
+- `PrivacyTenantDeadLetterAlertDeliveryPolicy`
+  - `loggingEnabled`
+  - `webhookEnabled`
+  - `emailEnabled`
+- `PrivacyTenantDeadLetterAlertRoutePolicy`
+  - `webhook`
+  - `email`
+  - `receiver`
 
 Current behavior:
 
@@ -123,9 +131,14 @@ Current behavior:
 - tenant MDC and structured logging key selection can override the global Logback sanitization settings when configured
 - `include-detail-keys` is applied before `exclude-detail-keys`
 - when `attach-tenant-id=true`, the tenant tag is appended after detail sanitization
+- built-in tenant-aware write repositories also materialize the configured `tenantDetailKey` during persistence when the write request carries a tenant ID, even if `attach-tenant-id=false`
 - if the detail map already contains the configured `tenantDetailKey`, the existing value is preserved because the write path uses `putIfAbsent`
 - tenant dead-letter warning/down thresholds override the global tenant health and tenant backlog summary thresholds when configured
 - tenant `notify-on-recovery` overrides the global tenant alert monitor recovery behavior when configured
+- tenant dead-letter alert delivery can be controlled per channel under `privacy.guard.tenant.policies.<tenantId>.observability.dead-letter.alert.{logging,webhook,email}.enabled`
+- tenant dead-letter alert route overrides can be declared under `privacy.guard.tenant.policies.<tenantId>.observability.dead-letter.alert.*`
+- the default tenant alert route resolver bridges the new tenant policy path with the legacy `privacy.guard.audit.dead-letter.observability.alert.tenant.routes.<tenantId>.*` path
+- field precedence for tenant alert route resolution is `tenant policy` > `legacy route override` > global alert defaults
 
 ## Masking and Text Flow
 
@@ -193,7 +206,9 @@ The tenant customization SPI that is marked `@StableSpi` in the current minor li
 - `PrivacyTenantAuditDeadLetterReplayRepository`
 - `PrivacyTenantDeadLetterObservabilityPolicyResolver`
 - `PrivacyTenantLoggingPolicyResolver`
-- carrier types `PrivacyTenantPolicy`, `PrivacyTenantAuditPolicy`, and `PrivacyTenantDeadLetterObservabilityPolicy`
+- `PrivacyTenantDeadLetterAlertDeliveryPolicyResolver`
+- `PrivacyTenantDeadLetterAlertRoutePolicyResolver`
+- carrier types `PrivacyTenantPolicy`, `PrivacyTenantAuditPolicy`, `PrivacyTenantDeadLetterObservabilityPolicy`, `PrivacyTenantDeadLetterAlertDeliveryPolicy`, `PrivacyTenantDeadLetterAlertRoutePolicy`, `PrivacyTenantDeadLetterAlertWebhookPolicy`, `PrivacyTenantDeadLetterAlertEmailPolicy`, and `PrivacyTenantDeadLetterAlertReceiverPolicy`
 
 These are the preferred override points when the property model is not enough.
 The built-in in-memory and JDBC repositories also implement the tenant-native read repository interfaces.
@@ -251,8 +266,10 @@ The tenant-aware service layer is split into focused helpers:
   - `computeStatsForCurrentTenant(criteria)`
 - `PrivacyTenantAuditDeadLetterQueryService`
   - tenant-scoped dead-letter reads and stats
+  - explicit tenant-aware single-entry lookup by `id`
 - `PrivacyTenantAuditDeadLetterOperationsService`
   - tenant-scoped batch delete and replay
+  - explicit tenant-aware single-entry delete and replay by `id`
 - `PrivacyTenantAuditDeadLetterExchangeService`
   - tenant-scoped JSON and CSV export, import, and manifest generation
 - `PrivacyTenantAuditDeadLetterObservationService`
@@ -272,15 +289,22 @@ The persistence side can also opt into tenant-aware write hints:
 
 The important contract boundary is:
 
-- the write path stores tenant information in `PrivacyAuditEvent.details()` and `PrivacyAuditDeadLetterEntry.details()`
+- the effective write path stores tenant information in `PrivacyAuditEvent.details()` and `PrivacyAuditDeadLetterEntry.details()`
 - the read helpers filter by the configured `tenantDetailKey`
 - the criteria records do not gain a tenant field
 
-This keeps the stable contracts small, but it also means tenant filtering is helper-driven rather than repository-native.
-When a repository implements `PrivacyTenantAuditReadRepository` or `PrivacyTenantAuditDeadLetterReadRepository`, the tenant helpers now prefer that native path before falling back to cross-page in-memory filtering.
+This keeps the stable contracts small while still allowing repository-native tenant filtering behind the helper layer.
+When a repository implements `PrivacyTenantAuditReadRepository` or `PrivacyTenantAuditDeadLetterReadRepository`, the tenant helpers prefer that native path before falling back to cross-page filtering over the generic repository contract.
+The dead-letter read SPI can also override tenant-scoped single-entry lookup by `id`; built-in in-memory and JDBC repositories now do so, which keeps tenant-aware single-entry management on a repository-native lookup path.
+That lookup is now exposed as an explicit SPI capability rather than being inferred reflectively, so runtime helper routing and sample capability reporting share the same declared support signal.
+The audit read and write SPI now follow the same pattern: native helper routing and sample capability reporting are driven by explicit SPI capability flags instead of interface presence alone.
+The remaining dead-letter helper surfaces now do the same: generic tenant reads, dead-letter persistence, criteria delete, and criteria replay are all routed through explicit SPI capability flags instead of interface presence alone.
 When a repository implements `PrivacyTenantAuditWriteRepository` or `PrivacyTenantAuditDeadLetterWriteRepository`, the built-in repository publisher, async path, buffered path, and repository-backed dead-letter handler can also pass tenant-aware write hints without changing the stable event types.
 When a repository implements `PrivacyTenantAuditDeadLetterDeleteRepository`, tenant-scoped dead-letter delete operations can also stay repository-native instead of selecting entries first and deleting them one by one.
 Tenant-scoped dead-letter import now also prefers `PrivacyTenantAuditDeadLetterWriteRepository.saveAllTenantAware(...)` when the running repository exposes the tenant-aware write SPI; otherwise it falls back to the generic exchange import path after retagging the imported entries.
+Dead-letter exchange reads and import writes are now also exposed as explicit SPI capabilities, so runtime helper routing and sample capability reporting do not have to infer native support from interface presence alone.
+Single-entry delete and replay by `id` can now also stay tenant-scoped through the helper layer, which keeps ownership checks explicit without changing the stable dead-letter entry contract or the existing global by-id management path.
+Built-in in-memory, JDBC, and sample custom tenant dead-letter repositories now also expose dedicated native capabilities for single-entry delete and replay by `id`, so capability reporting and write-path telemetry can distinguish those flows from criteria-based delete/replay.
 
 ### Management Facade Example
 
@@ -330,7 +354,9 @@ The sample exposes:
   - `GET /audit-dead-letters?tenant=tenant-a`
   - `GET /audit-dead-letters/stats?tenant=tenant-a`
   - `DELETE /audit-dead-letters?tenant=tenant-a`
+  - `DELETE /audit-dead-letters/{id}?tenant=tenant-a`
   - `POST /audit-dead-letters/replay?tenant=tenant-b`
+  - `POST /audit-dead-letters/{id}/replay?tenant=tenant-b`
   - `GET /audit-dead-letters/export.json?tenant=tenant-a`
   - `GET /audit-dead-letters/export.manifest?format=json&tenant=tenant-a`
   - `POST /audit-dead-letters/import.json?tenant=tenant-b`
@@ -339,6 +365,7 @@ The observability endpoint also includes:
 
 - tenant path counters for native vs fallback read/write selection
 - repository capability flags for tenant read/write/delete/replay/import support
+- repository capability flags for tenant-native single-entry dead-letter lookup by `id`
 - a global dead-letter backlog snapshot
 - a current-tenant dead-letter backlog snapshot
 - per-configured-tenant dead-letter backlog snapshots derived from the effective tenant or global warning/down thresholds
@@ -365,8 +392,9 @@ Keep the two tenant channels distinct:
 ## Operational Notes
 
 - In non-servlet execution paths such as scheduled jobs, async consumers, or message listeners, `PrivacyTenantContextFilter` does not run. Supply a custom `PrivacyTenantProvider` or use `PrivacyTenantContextHolder`, `PrivacyTenantContextScope`, and `PrivacyTenantContextSnapshot` explicitly around the work.
-- Built-in tenant-scoped read helpers preserve the stable query contracts by paging the existing repositories and filtering by `details[tenantDetailKey]`. For large JDBC datasets or strict SQL-level tenant isolation, prefer custom repository beans and your own persistence model.
-- Built-in JDBC repositories can also use an optional dedicated tenant column via `privacy.guard.audit.jdbc.tenant-column-name` and `privacy.guard.audit.dead-letter.jdbc.tenant-column-name`. When configured, the repositories copy the configured detail key into that column on write and prefer column-based filtering on read.
+- Built-in tenant-scoped read helpers preserve the stable query contracts while preferring native repository SPI when available. If the running repository does not implement the tenant read SPI, the helper falls back to paging the generic repository and filtering by `details[tenantDetailKey]`. For large JDBC datasets or strict SQL-level tenant isolation, prefer custom repository beans and your own persistence model.
+- Built-in tenant-aware write repositories now materialize the effective tenant detail key into the serialized details payload before persistence, so tenant-native reads remain consistent even when the original event or dead-letter entry did not already contain that key.
+- Built-in JDBC repositories can also use an optional dedicated tenant column via `privacy.guard.audit.jdbc.tenant-column-name` and `privacy.guard.audit.dead-letter.jdbc.tenant-column-name`. When configured, the repositories copy the same effective tenant detail into that column on write and prefer column-based filtering on read.
 - When Micrometer is available, tenant-aware query helpers also emit `privacy.audit.tenant.read.path{domain=*,path=*}` counters so you can see whether reads are using native repository paths or fallback filtering.
 - Tenant-scoped dead-letter export and manifest also emit `privacy.audit.tenant.read.path` using `dead_letter_export` and `dead_letter_manifest` domains so you can distinguish exchange-path coverage from normal query/stats coverage.
 - Tenant-aware write paths also emit `privacy.audit.tenant.write.path{domain=*,path=*}` counters so you can distinguish direct repository writes, buffered batch writes, and dead-letter persistence path selection.
@@ -374,12 +402,14 @@ Keep the two tenant channels distinct:
 - Tenant-scoped dead-letter alert monitoring also emits `privacy.audit.deadletters.alert.tenant.transitions{tenant=*,state=*,recovery=*}` and `privacy.audit.deadletters.alert.tenant.deliveries{tenant=*,channel=*,outcome=*}` when Micrometer is available.
 - Receiver verification continues to expose global reason counters and now also exposes `privacy.audit.deadletters.receiver.route.failures{route=*,reason=*}` for the matched receiver path.
 - Tenant-scoped dead-letter management operations also contribute to `privacy.audit.tenant.write.path`, including criteria delete and criteria replay path selection. Built-in in-memory and JDBC repositories now report `dead_letter_replay=native`; custom repositories that do not implement the replay SPI continue to fall back.
-- If you attach tenant IDs to audit details, keep the same `tenantDetailKey` across write, query, export, and import flows for predictable filtering.
+- Keep the same `tenantDetailKey` across write, query, export, and import flows for predictable filtering, especially if service-level `attachTenantId` is disabled and you rely on tenant-aware repository writes to materialize the key during persistence.
 - Receiver verification and replay-store protection are not tenant-aware by default. If separate tenant-specific receiver deployments share one replay-store backend, configure distinct static `privacy.guard.audit.dead-letter.observability.alert.receiver.replay-store.namespace` values per deployment.
 - Dead-letter alert routing is also not tenant-aware by default. Enable `privacy.guard.audit.dead-letter.observability.alert.tenant.enabled=true` and constrain the monitored tenant list when you want callback fan-out by tenant.
 - The built-in webhook and email alert callbacks remain available for global alerts. When tenant alert monitoring is enabled and webhook/email callbacks are configured, the starter also registers tenant-scoped wrappers that include `tenantId` in the remote notification payload or message body.
-- If one service hosts multiple tenant-specific receiver endpoints, prefer explicit route config under `privacy.guard.audit.dead-letter.observability.alert.tenant.routes.<tenantId>.receiver.*` so the verifier selects secrets by path rather than by unverified headers.
-- Use `privacy.guard.audit.dead-letter.observability.alert.tenant.routes.<tenantId>.webhook.*` or `.email.*` when different tenants should fan out to different remote targets while still sharing the same dead-letter thresholds.
+- Tenant delivery policy can independently disable logging, webhook, or email for a tenant even when the tenant alert monitor stays enabled and the route/target still exists.
+- Prefer `privacy.guard.tenant.policies.<tenantId>.observability.dead-letter.alert.receiver.*` when one service hosts multiple tenant-specific receiver endpoints and the verifier should select secrets by path rather than by unverified headers.
+- Prefer `privacy.guard.tenant.policies.<tenantId>.observability.dead-letter.alert.webhook.*` or `.email.*` when different tenants should fan out to different remote targets while still sharing the same dead-letter thresholds.
+- The legacy `privacy.guard.audit.dead-letter.observability.alert.tenant.routes.<tenantId>.*` path remains supported and is bridged into the same effective tenant alert route policy for backward compatibility.
 - The sample protects management endpoints with `X-Demo-Admin-Token: demo-admin-token`. That header is sample-only and not part of the starter SPI.
 
 ### Non-Web Context Propagation

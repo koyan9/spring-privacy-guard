@@ -177,6 +177,151 @@
       "description": "Tenant-specific override controlling whether tenant dead-letter recovery callbacks are emitted when the backlog returns to CLEAR."
     },
     {
+      "name": "privacy.guard.tenant.policies.*.observability.dead-letter.alert.logging.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Tenant-specific override controlling whether the built-in tenant logging dead-letter alert callback is enabled."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.observability.dead-letter.alert.webhook.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Tenant-specific override controlling whether the built-in tenant webhook dead-letter alert callback is enabled."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.observability.dead-letter.alert.email.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Tenant-specific override controlling whether the built-in tenant email dead-letter alert callback is enabled."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.observability.dead-letter.alert.webhook.url",
+      "type": "java.lang.String",
+      "description": "Tenant-specific webhook URL override for dead-letter alerts. Takes precedence over the legacy alert.tenant.routes path when both are configured."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.observability.dead-letter.alert.webhook.bearer-token",
+      "type": "java.lang.String",
+      "description": "Tenant-specific bearer token override sent with built-in dead-letter webhook alerts."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.observability.dead-letter.alert.webhook.signature-secret",
+      "type": "java.lang.String",
+      "description": "Tenant-specific HMAC secret used to sign built-in dead-letter webhook alerts."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.observability.dead-letter.alert.webhook.signature-algorithm",
+      "type": "java.lang.String",
+      "description": "Tenant-specific HMAC algorithm used to sign built-in dead-letter webhook alerts."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.observability.dead-letter.alert.webhook.signature-header",
+      "type": "java.lang.String",
+      "description": "Tenant-specific HTTP header that carries the built-in webhook alert signature."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.observability.dead-letter.alert.webhook.timestamp-header",
+      "type": "java.lang.String",
+      "description": "Tenant-specific HTTP header that carries the built-in webhook alert timestamp."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.observability.dead-letter.alert.webhook.nonce-header",
+      "type": "java.lang.String",
+      "description": "Tenant-specific HTTP header that carries the built-in webhook alert nonce."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.observability.dead-letter.alert.webhook.max-attempts",
+      "type": "java.lang.Integer",
+      "description": "Tenant-specific maximum number of delivery attempts for the built-in webhook alert callback."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.observability.dead-letter.alert.webhook.backoff",
+      "type": "java.time.Duration",
+      "description": "Tenant-specific delay between built-in webhook alert retry attempts."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.observability.dead-letter.alert.webhook.backoff-policy",
+      "type": "io.github.koyan9.privacy.autoconfigure.PrivacyGuardProperties$AlertWebhook$BackoffPolicy",
+      "description": "Tenant-specific backoff policy used by the built-in webhook alert callback."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.observability.dead-letter.alert.webhook.max-backoff",
+      "type": "java.time.Duration",
+      "description": "Tenant-specific maximum delay between built-in webhook alert retry attempts."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.observability.dead-letter.alert.webhook.jitter",
+      "type": "java.lang.Double",
+      "description": "Tenant-specific jitter factor applied to webhook alert retry delays."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.observability.dead-letter.alert.webhook.connect-timeout",
+      "type": "java.time.Duration",
+      "description": "Tenant-specific connect timeout for the built-in webhook alert HTTP client."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.observability.dead-letter.alert.webhook.read-timeout",
+      "type": "java.time.Duration",
+      "description": "Tenant-specific request timeout for the built-in webhook alert callback."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.observability.dead-letter.alert.email.from",
+      "type": "java.lang.String",
+      "description": "Tenant-specific sender address for the built-in dead-letter email alert callback."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.observability.dead-letter.alert.email.to",
+      "type": "java.lang.String",
+      "description": "Tenant-specific recipient address for the built-in dead-letter email alert callback."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.observability.dead-letter.alert.email.subject-prefix",
+      "type": "java.lang.String",
+      "description": "Tenant-specific subject prefix used by the built-in dead-letter email alert callback."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.observability.dead-letter.alert.receiver.path-pattern",
+      "type": "java.lang.String",
+      "description": "Tenant-specific receiver path pattern used to select verification secrets for incoming webhook alerts."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.observability.dead-letter.alert.receiver.bearer-token",
+      "type": "java.lang.String",
+      "description": "Tenant-specific bearer token override used by the built-in receiver verifier for the matching path."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.observability.dead-letter.alert.receiver.signature-secret",
+      "type": "java.lang.String",
+      "description": "Tenant-specific HMAC secret override used by the built-in receiver verifier for the matching path."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.observability.dead-letter.alert.receiver.signature-algorithm",
+      "type": "java.lang.String",
+      "description": "Tenant-specific HMAC algorithm override used by the built-in receiver verifier for the matching path."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.observability.dead-letter.alert.receiver.signature-header",
+      "type": "java.lang.String",
+      "description": "Tenant-specific signature header override used by the built-in receiver verifier for the matching path."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.observability.dead-letter.alert.receiver.timestamp-header",
+      "type": "java.lang.String",
+      "description": "Tenant-specific timestamp header override used by the built-in receiver verifier for the matching path."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.observability.dead-letter.alert.receiver.nonce-header",
+      "type": "java.lang.String",
+      "description": "Tenant-specific nonce header override used by the built-in receiver verifier for the matching path."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.observability.dead-letter.alert.receiver.max-skew",
+      "type": "java.time.Duration",
+      "description": "Tenant-specific allowed timestamp skew used by the built-in receiver verifier for the matching path."
+    },
+    {
+      "name": "privacy.guard.tenant.policies.*.observability.dead-letter.alert.receiver.replay-namespace",
+      "type": "java.lang.String",
+      "description": "Tenant-specific replay-store namespace override used when the matching receiver route is selected."
+    },
+    {
       "name": "privacy.guard.masking.text.email-pattern",
       "type": "java.lang.String",
       "description": "Overrides the default email detection regex used by TextMaskingService."

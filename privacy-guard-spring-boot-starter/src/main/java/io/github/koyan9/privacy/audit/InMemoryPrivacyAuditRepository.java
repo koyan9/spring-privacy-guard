@@ -6,6 +6,7 @@
 package io.github.koyan9.privacy.audit;
 
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -89,7 +90,7 @@ public class InMemoryPrivacyAuditRepository implements PrivacyAuditRepository, P
 
     @Override
     public void save(PrivacyTenantAuditWriteRequest request) {
-        save(request.event());
+        save(materializeTenantDetails(request));
     }
 
     @Override
@@ -97,7 +98,17 @@ public class InMemoryPrivacyAuditRepository implements PrivacyAuditRepository, P
         if (requests == null || requests.isEmpty()) {
             return;
         }
-        this.events.addAll(requests.stream().map(PrivacyTenantAuditWriteRequest::event).toList());
+        this.events.addAll(requests.stream().map(this::materializeTenantDetails).toList());
+    }
+
+    @Override
+    public boolean supportsTenantRead() {
+        return true;
+    }
+
+    @Override
+    public boolean supportsTenantWrite() {
+        return true;
     }
 
     public void clear() {
@@ -150,5 +161,28 @@ public class InMemoryPrivacyAuditRepository implements PrivacyAuditRepository, P
             return true;
         }
         return tenantId.equals(event.details().get(tenantDetailKey));
+    }
+
+    private PrivacyAuditEvent materializeTenantDetails(PrivacyTenantAuditWriteRequest request) {
+        PrivacyAuditEvent event = request.event();
+        String tenantId = request.tenantId();
+        String tenantDetailKey = request.tenantDetailKey();
+        if (tenantId == null || tenantId.isBlank() || tenantDetailKey == null || tenantDetailKey.isBlank()) {
+            return event;
+        }
+        if (tenantId.equals(event.details().get(tenantDetailKey))) {
+            return event;
+        }
+        Map<String, String> details = new LinkedHashMap<>(event.details());
+        details.putIfAbsent(tenantDetailKey, tenantId);
+        return new PrivacyAuditEvent(
+                event.occurredAt(),
+                event.action(),
+                event.resourceType(),
+                event.resourceId(),
+                event.actor(),
+                event.outcome(),
+                details
+        );
     }
 }

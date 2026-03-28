@@ -158,6 +158,56 @@ public class JdbcPrivacyAuditDeadLetterRepository implements
     }
 
     @Override
+    public boolean supportsTenantRead() {
+        return true;
+    }
+
+    @Override
+    public Optional<PrivacyAuditDeadLetterEntry> findById(
+            String tenantId,
+            String tenantDetailKey,
+            long id
+    ) {
+        if (tenantId == null || tenantId.isBlank() || tenantDetailKey == null || tenantDetailKey.isBlank()) {
+            return findById(id);
+        }
+        List<Object> args = new ArrayList<>();
+        StringBuilder sql = new StringBuilder(
+                "select id, failed_at, attempts, error_type, error_message, occurred_at, action, resource_type, resource_id, actor, outcome, details_json from "
+                        + tableName
+                        + " where id = ?"
+        );
+        args.add(id);
+        appendTenantDetailContains(sql, args, tenantId, tenantDetailKey);
+        List<PrivacyAuditDeadLetterEntry> results = jdbcOperations.query(
+                sql.toString(),
+                (resultSet, rowNum) -> mapEntry(resultSet),
+                args.toArray()
+        );
+        return results.stream().findFirst();
+    }
+
+    @Override
+    public boolean supportsTenantFindById() {
+        return true;
+    }
+
+    @Override
+    public boolean supportsTenantExchangeRead() {
+        return true;
+    }
+
+    @Override
+    public boolean supportsTenantImport() {
+        return true;
+    }
+
+    @Override
+    public boolean supportsTenantWrite() {
+        return true;
+    }
+
+    @Override
     public Optional<PrivacyAuditDeadLetterEntry> findById(long id) {
         List<PrivacyAuditDeadLetterEntry> results = jdbcOperations.query(
                 "select id, failed_at, attempts, error_type, error_message, occurred_at, action, resource_type, resource_id, actor, outcome, details_json from " + tableName + " where id = ?",
@@ -170,6 +220,19 @@ public class JdbcPrivacyAuditDeadLetterRepository implements
     @Override
     public boolean deleteById(long id) {
         Integer updated = jdbcOperations.update("delete from " + tableName + " where id = ?", id);
+        return updated != null && updated > 0;
+    }
+
+    @Override
+    public boolean deleteById(String tenantId, String tenantDetailKey, long id) {
+        if (tenantId == null || tenantId.isBlank() || tenantDetailKey == null || tenantDetailKey.isBlank()) {
+            return deleteById(id);
+        }
+        List<Object> args = new ArrayList<>();
+        StringBuilder sql = new StringBuilder("delete from " + tableName + " where id = ?");
+        args.add(id);
+        appendTenantDetailContains(sql, args, tenantId, tenantDetailKey);
+        Integer updated = jdbcOperations.update(sql.toString(), args.toArray());
         return updated != null && updated > 0;
     }
 
@@ -195,6 +258,16 @@ public class JdbcPrivacyAuditDeadLetterRepository implements
     }
 
     @Override
+    public boolean supportsTenantDelete() {
+        return true;
+    }
+
+    @Override
+    public boolean supportsTenantDeleteById() {
+        return true;
+    }
+
+    @Override
     public PrivacyAuditDeadLetterReplayResult replayByCriteria(
             String tenantId,
             String tenantDetailKey,
@@ -212,7 +285,7 @@ public class JdbcPrivacyAuditDeadLetterRepository implements
                 failedIds.add(entry.id());
                 continue;
             }
-            if (deleteById(entry.id())) {
+            if (deleteById(tenantId, tenantDetailKey, entry.id())) {
                 replayedIds.add(entry.id());
             }
         }
@@ -223,6 +296,30 @@ public class JdbcPrivacyAuditDeadLetterRepository implements
                 List.copyOf(replayedIds),
                 List.copyOf(failedIds)
         );
+    }
+
+    @Override
+    public boolean supportsTenantReplay() {
+        return true;
+    }
+
+    @Override
+    public boolean replayById(
+            String tenantId,
+            String tenantDetailKey,
+            long id,
+            java.util.function.Predicate<PrivacyAuditDeadLetterEntry> replayAction
+    ) {
+        return findById(tenantId, tenantDetailKey, id)
+                .filter(entry -> entry.id() != null)
+                .map(entry -> replayAction.test(entry)
+                        && deleteById(tenantId, tenantDetailKey, entry.id()))
+                .orElse(false);
+    }
+
+    @Override
+    public boolean supportsTenantReplayById() {
+        return true;
     }
 
     private Map<String, Long> queryForGroupedCount(String column, QueryParts queryParts) {
@@ -327,7 +424,7 @@ public class JdbcPrivacyAuditDeadLetterRepository implements
     }
 
     private Object[] toSqlArgs(PrivacyTenantAuditDeadLetterWriteRequest request) {
-        PrivacyAuditDeadLetterEntry entry = request.entry();
+        PrivacyAuditDeadLetterEntry entry = materializeTenantDetails(request);
         if (hasTenantColumn()) {
             return new Object[]{
                     entry.failedAt(),
@@ -357,6 +454,34 @@ public class JdbcPrivacyAuditDeadLetterRepository implements
                 entry.outcome(),
                 toJson(entry)
         };
+    }
+
+    private PrivacyAuditDeadLetterEntry materializeTenantDetails(PrivacyTenantAuditDeadLetterWriteRequest request) {
+        PrivacyAuditDeadLetterEntry entry = request.entry();
+        String tenantId = request.tenantId();
+        String detailKey = normalizeTenantDetailKey(request.tenantDetailKey());
+        if (tenantId == null || tenantId.isBlank()) {
+            return entry;
+        }
+        if (tenantId.equals(entry.details().get(detailKey))) {
+            return entry;
+        }
+        Map<String, String> details = new LinkedHashMap<>(entry.details());
+        details.putIfAbsent(detailKey, tenantId);
+        return new PrivacyAuditDeadLetterEntry(
+                entry.id(),
+                entry.failedAt(),
+                entry.attempts(),
+                entry.errorType(),
+                entry.errorMessage(),
+                entry.occurredAt(),
+                entry.action(),
+                entry.resourceType(),
+                entry.resourceId(),
+                entry.actor(),
+                entry.outcome(),
+                details
+        );
     }
 
     private PrivacyAuditDeadLetterEntry mapEntry(ResultSet resultSet) throws SQLException {

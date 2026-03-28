@@ -12,6 +12,7 @@ import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterWebhookReplayStore;
 import io.github.koyan9.privacy.audit.PrivacyAuditRepository;
 import com.zaxxer.hikari.HikariDataSource;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -22,6 +23,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -29,6 +31,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("jdbc-tenant")
+@Tag("sample")
+@Tag("sample-jdbc")
 class PrivacyDemoJdbcTenantProfileTest {
 
     @Autowired
@@ -86,6 +90,18 @@ class PrivacyDemoJdbcTenantProfileTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.instanceId").value("node-1"));
 
+        mockMvc.perform(get("/demo-tenants/policies")
+                        .header("X-Demo-Admin-Token", "demo-admin-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tenants[?(@.tenantId=='tenant-a')].deadLetterAlertReceiverPathPattern")
+                        .value(hasItem("/demo-alert-receiver/tenant-a")))
+                .andExpect(jsonPath("$.tenants[?(@.tenantId=='tenant-a')].deadLetterAlertReceiverReplayNamespace")
+                        .value(hasItem("tenant-a-receiver")))
+                .andExpect(jsonPath("$.tenants[?(@.tenantId=='tenant-b')].deadLetterAlertReceiverPathPattern")
+                        .value(hasItem("/demo-alert-receiver/tenant-b")))
+                .andExpect(jsonPath("$.tenants[?(@.tenantId=='tenant-b')].deadLetterAlertReceiverReplayNamespace")
+                        .value(hasItem("tenant-b-receiver")));
+
         mockMvc.perform(get("/patients/demo").header("X-Privacy-Tenant", "tenant-a"))
                 .andExpect(status().isOk());
 
@@ -108,6 +124,9 @@ class PrivacyDemoJdbcTenantProfileTest {
                 .andExpect(jsonPath("$.receiverReplayStore.namespace").value("demo-default"))
                 .andExpect(jsonPath("$.auditRepositoryType").value("JDBC"))
                 .andExpect(jsonPath("$.deadLetterRepositoryType").value("JDBC"))
+                .andExpect(jsonPath("$.repositoryCapabilities.deadLetter.tenantFindByIdNative").value(true))
+                .andExpect(jsonPath("$.repositoryCapabilities.deadLetter.tenantDeleteByIdNative").value(true))
+                .andExpect(jsonPath("$.repositoryCapabilities.deadLetter.tenantReplayByIdNative").value(true))
                 .andExpect(jsonPath("$.repositoryCapabilities.deadLetter.tenantExchangeReadNative").value(true))
                 .andExpect(jsonPath("$.repositoryCapabilities.deadLetter.tenantImportNative").value(true))
                 .andExpect(jsonPath("$.readPaths.audit.native").value(greaterThanOrEqualTo(1.0)))
@@ -115,7 +134,9 @@ class PrivacyDemoJdbcTenantProfileTest {
                 .andExpect(jsonPath("$.readPaths.deadLetterExport.native").value(greaterThanOrEqualTo(0.0)))
                 .andExpect(jsonPath("$.readPaths.deadLetterManifest.native").value(greaterThanOrEqualTo(0.0)))
                 .andExpect(jsonPath("$.writePaths.auditWrite.native").value(greaterThanOrEqualTo(1.0)))
-                .andExpect(jsonPath("$.writePaths.deadLetterImport.native").value(greaterThanOrEqualTo(0.0)));
+                .andExpect(jsonPath("$.writePaths.deadLetterImport.native").value(greaterThanOrEqualTo(0.0)))
+                .andExpect(jsonPath("$.writePaths.deadLetterDeleteById.native").value(greaterThanOrEqualTo(0.0)))
+                .andExpect(jsonPath("$.writePaths.deadLetterReplayById.native").value(greaterThanOrEqualTo(0.0)));
 
         mockMvc.perform(get("/actuator/health"))
                 .andExpect(status().isOk())

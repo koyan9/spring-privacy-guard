@@ -18,6 +18,9 @@ The path counters should stay low-cardinality and do not add a `tenant` tag.
 For tenant-scoped backlog state, combine these counters with `PrivacyTenantAuditDeadLetterObservationService` or the sample `/demo-tenants/observability` endpoint.
 Those views reuse the effective tenant or global warning/down thresholds to summarize dead-letter backlog state per tenant without changing the stable dead-letter entry contract.
 If you also enable `privacy.guard.audit.dead-letter.observability.alert.tenant.enabled=true`, the same tenant list can drive callback fan-out through `PrivacyTenantAuditDeadLetterAlertMonitor`.
+Preferred tenant-specific webhook, email, and receiver route overrides now live under `privacy.guard.tenant.policies.<tenantId>.observability.dead-letter.alert.*`.
+The legacy `privacy.guard.audit.dead-letter.observability.alert.tenant.routes.<tenantId>.*` path remains supported and bridges into the same effective tenant route policy.
+Tenant policy can also independently disable logging, webhook, or email delivery per tenant through `privacy.guard.tenant.policies.<tenantId>.observability.dead-letter.alert.{logging,webhook,email}.enabled`.
 
 ## Tenant Health Endpoint
 
@@ -50,6 +53,7 @@ The endpoint reports:
 - `audit_stats`
 - `dead_letter`
 - `dead_letter_stats`
+- `dead_letter_find_by_id`
 - `dead_letter_export`
 - `dead_letter_manifest`
 
@@ -61,6 +65,10 @@ The endpoint reports:
   The helper fell back to cross-page filtering on the existing repository results.
 
 For the exchange domains:
+
+- `dead_letter_find_by_id`
+  `native` means tenant-scoped single-entry lookup by `id` reused a tenant-native dead-letter read repository implementation.
+  `fallback` means the helper first used the generic repository `findById(id)` path and then enforced tenant ownership in the helper layer.
 
 - `dead_letter_export`
   `native` means tenant-scoped export reused a tenant-native dead-letter read repository.
@@ -83,8 +91,12 @@ For the exchange domains:
   Tenant-scoped dead-letter import persistence.
 - `dead_letter_delete`
   Tenant-scoped dead-letter criteria deletes.
+- `dead_letter_delete_by_id`
+  Tenant-scoped single-entry dead-letter deletes.
 - `dead_letter_replay`
   Tenant-scoped dead-letter criteria replay orchestration.
+- `dead_letter_replay_by_id`
+  Tenant-scoped single-entry dead-letter replay orchestration.
 
 `path` currently means:
 
@@ -98,12 +110,18 @@ For the newer operation domains:
 - `dead_letter_delete`
   `native` means the operation used `PrivacyTenantAuditDeadLetterDeleteRepository`.
   `fallback` means the helper first selected tenant-scoped rows and then deleted them one by one.
+- `dead_letter_delete_by_id`
+  `native` means the operation used `PrivacyTenantAuditDeadLetterDeleteRepository.deleteById(...)`.
+  `fallback` means the helper first looked up the tenant-scoped entry by `id` and then reused the global delete-by-id path.
 - `dead_letter_import`
   `native` means the import path used `PrivacyTenantAuditDeadLetterWriteRepository.saveAllTenantAware(...)`.
   `fallback` means the tenant exchange helper retagged the entries and then reused the generic dead-letter import path.
 - `dead_letter_replay`
   `native` means the operation used `PrivacyTenantAuditDeadLetterReplayRepository`.
   `fallback` means the helper first selected tenant-scoped rows and replayed them through the legacy service path because the running repository does not implement the replay SPI.
+- `dead_letter_replay_by_id`
+  `native` means the operation used `PrivacyTenantAuditDeadLetterReplayRepository.replayById(...)`.
+  `fallback` means the helper first looked up the tenant-scoped entry by `id` and then replayed it through the legacy service path.
 
 ## What Good Looks Like
 
@@ -112,8 +130,12 @@ Typical expectations:
 - Built-in in-memory and JDBC repositories both implement the tenant-aware read/write SPI, so those profiles should normally emit `path="native"` for the supported domains.
 - If you enabled tenant-native read SPI in built-in JDBC or custom repositories, `read.path{path="native"}` should dominate over time.
 - If you enabled tenant-aware write SPI via built-in in-memory or JDBC repositories, `write.path{path="native"}` should dominate for the corresponding write domain.
+- Built-in native write paths also materialize the configured tenant detail key during persistence when the write request carries a tenant ID, so tenant-native reads can still work even if service-level audit policy uses `attachTenantId=false`.
 - Built-in in-memory and JDBC dead-letter repositories also implement tenant-native delete SPI, so `write.path{domain="dead_letter_delete",path="native"}` should dominate for tenant criteria deletes.
+- Built-in in-memory and JDBC dead-letter repositories also implement tenant-native delete-by-id SPI, so `write.path{domain="dead_letter_delete_by_id",path="native"}` should dominate for tenant single-entry deletes in those profiles.
 - Built-in in-memory and JDBC dead-letter repositories also implement tenant-native replay SPI, so `write.path{domain="dead_letter_replay",path="native"}` should dominate for tenant criteria replay in those profiles.
+- Built-in in-memory and JDBC dead-letter repositories also implement tenant-native replay-by-id SPI, so `write.path{domain="dead_letter_replay_by_id",path="native"}` should dominate for tenant single-entry replay in those profiles.
+- Built-in in-memory and JDBC dead-letter repositories also implement tenant-native single-entry lookup by `id`, so `read.path{domain="dead_letter_find_by_id",path="native"}` should dominate for tenant-scoped single-entry management flows in those profiles.
 - Tenant alert transitions should accumulate under `privacy.audit.deadletters.alert.tenant.transitions` when backlog state moves between `CLEAR`, `WARNING`, and `DOWN`.
 - Built-in tenant logging/webhook/email callbacks should accumulate delivery outcome counters under `privacy.audit.deadletters.alert.tenant.deliveries`.
 - Receiver route verification failures should show the matched path pattern under `privacy.audit.deadletters.receiver.route.failures`.
@@ -125,6 +147,8 @@ Investigate these patterns:
 
 - `read.path{path="fallback"}` keeps growing after you expected repository-native read support to be active.
   Check whether the repository bean actually implements `PrivacyTenantAuditReadRepository` or `PrivacyTenantAuditDeadLetterReadRepository`.
+- `read.path{domain="dead_letter_find_by_id",path="fallback"}` keeps growing after you expected native tenant ownership lookup for single-entry management.
+  Check whether the running dead-letter repository actually overrides the tenant read SPI lookup by `id`, or whether the deployment is still on a generic-only repository implementation.
 - `write.path{path="fallback"}` keeps growing after you expected tenant-aware persistence hints.
   Check whether the repository bean actually implements `PrivacyTenantAuditWriteRepository` or `PrivacyTenantAuditDeadLetterWriteRepository`.
 - `write.path{domain="dead_letter_delete",path="fallback"}` keeps growing after you expected repository-native tenant delete support.
@@ -136,7 +160,7 @@ Investigate these patterns:
 - `write.path{domain="dead_letter_replay",path="fallback"}` grows steadily.
   Check whether the running repository bean actually implements `PrivacyTenantAuditDeadLetterReplayRepository`.
 - `privacy.audit.deadletters.alert.tenant.deliveries{outcome="failure"}` grows for one tenant.
-  Check the tenant-specific webhook/email route override, remote target health, and the sample or production callback logs for the same tenant.
+  Check the tenant-specific webhook/email route override under the tenant policy path (or the legacy route path), remote target health, and the sample or production callback logs for the same tenant.
 - `privacy.audit.deadletters.receiver.route.failures` grows on one path.
   Check whether the matched route is using the expected bearer token, signature secret, and replay-store namespace.
 - The sample endpoint shows `native` for both the default and `jdbc-tenant` profiles.
@@ -151,6 +175,7 @@ GET /actuator/health
 GET /actuator/metrics/privacy.audit.tenant.read.path
 GET /actuator/metrics/privacy.audit.tenant.read.path?tag=domain:audit&tag=path:native
 GET /actuator/metrics/privacy.audit.tenant.read.path?tag=domain:dead_letter&tag=path:fallback
+GET /actuator/metrics/privacy.audit.tenant.read.path?tag=domain:dead_letter_find_by_id&tag=path:native
 GET /actuator/metrics/privacy.audit.tenant.read.path?tag=domain:dead_letter_export&tag=path:native
 GET /actuator/metrics/privacy.audit.tenant.read.path?tag=domain:dead_letter_manifest&tag=path:native
 GET /actuator/metrics/privacy.audit.tenant.write.path
@@ -244,6 +269,7 @@ Use it with:
 - optionally `X-Privacy-Tenant: tenant-a`
 
 The response summarizes the current read/write path counters, the configured repository types, and the relevant Actuator queries including the tenant health endpoint, which makes it useful for quick local verification before switching to raw Actuator queries.
+It also includes an `expectedPaths` view derived from the declared tenant-native SPI capabilities, which makes it easier to compare “what this deployment should prefer” against the observed native/fallback counters.
 
 If you want to validate shared receiver replay protection with Redis instead of JDBC replay-store tables, use:
 

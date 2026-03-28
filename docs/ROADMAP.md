@@ -1,6 +1,6 @@
 # Roadmap
 
-This document tracks the recommended next development focus for `spring-privacy-guard` after the published `v0.3.0` release on 2026-03-20.
+This document tracks the recommended next development focus for `spring-privacy-guard` after the published `v0.5.0` release on 2026-03-28.
 
 ## Historical Focus
 
@@ -45,17 +45,23 @@ This document tracks the recommended next development focus for `spring-privacy-
 18. Tenant-scoped dead-letter observability policy overrides for warning/down thresholds and recovery notifications
 19. Tenant operational telemetry for alert transitions, delivery outcomes, and receiver route verification failures
 20. PostgreSQL + Redis production-like sample profiles, compose recipe, and verification scripts
+21. Explicit tenant-aware single dead-letter delete and replay helpers for `id`-based management flows, plus sample HTTP coverage
+22. Stable tenant dead-letter alert route policy resolution with bridge support for the legacy tenant route map
+23. Stable tenant dead-letter alert delivery policy resolution for logging / webhook / email channel toggles
+24. Stable tenant dead-letter alert monitoring policy resolution for per-tenant alert-monitor membership control
+25. Explicit tenant-native dead-letter delete-by-id / replay-by-id capability flags and write-path telemetry
+26. Draft `v0.5.0` release notes, execution guide, runbook, GitHub release copy, dry-run record, and announcement set
 
 ## Recommended Next Work
 
-- Expand the multi-tenant policy surface beyond masking/text rules, current logging selection, audit-detail filtering, and dead-letter observability thresholds
-- Add repository-native tenant isolation for audit and dead-letter query/persistence paths beyond the current built-in replay/delete/read/write support
+- Finalize the `v0.5.0` release candidate validation, published version references, and tag-ready release checklist
 - Add more production-oriented samples and rollout guides beyond the current PostgreSQL + Redis reference
-- Prepare the next versioned release notes, execution guide, and runbook after the current unreleased batch stabilizes
+- Explore the next multi-tenant policy surface beyond masking/text, audit-detail filtering, dead-letter alerting, and current logging selection
+- Explore the next repository-native tenant-isolation expansion beyond the current built-in read/write/delete/replay/import and explicit by-id support
 
-## Post-v0.3.0 Themes
+## Post-v0.4.0 Themes
 
 - Expand the new multi-tenant policy surface beyond masking/text rules and tenant-scoped management helpers
-- Add repository-native tenant isolation for audit and dead-letter query/persistence paths beyond the current built-in replay/delete/read/write support
+- Add repository-native tenant isolation for audit and dead-letter query/persistence paths beyond the current built-in read/write/delete/replay and explicit by-id management support
 - Additional observability integrations
 - Broader sample applications and deployment recipes

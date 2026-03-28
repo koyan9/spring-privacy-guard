@@ -246,6 +246,46 @@ class BufferedPrivacyAuditPublisherTest {
         }
     }
 
+    @Test
+    void builtInTenantAwareBatchRepositoryRemainsTenantReadableWhenPolicyDoesNotAttachTenantId() throws Exception {
+        TenantAwareInMemoryRepository repository = new TenantAwareInMemoryRepository(1);
+        ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+        BufferedPrivacyAuditPublisher publisher = new BufferedPrivacyAuditPublisher(
+                repository,
+                executor,
+                2,
+                Duration.ofSeconds(30),
+                2,
+                Duration.ZERO,
+                (event, retryAttempts, exception) -> {
+                },
+                PrivacyTenantContextHolder::getTenantId,
+                tenantId -> new PrivacyTenantAuditPolicy(java.util.Set.of(), java.util.Set.of(), false, "tenant")
+        );
+
+        try {
+            PrivacyTenantContextHolder.setTenantId("tenant-a");
+            publisher.publish(event("first"));
+            PrivacyTenantContextHolder.setTenantId("tenant-b");
+            publisher.publish(event("second"));
+
+            assertTrue(repository.await());
+            assertThat(repository.findByCriteria("tenant-a", "tenant", PrivacyAuditQueryCriteria.recent(10)))
+                    .extracting(PrivacyAuditEvent::resourceId)
+                    .containsExactly("first");
+            assertThat(repository.findByCriteria("tenant-b", "tenant", PrivacyAuditQueryCriteria.recent(10)))
+                    .extracting(PrivacyAuditEvent::resourceId)
+                    .containsExactly("second");
+            assertThat(repository.findAll())
+                    .extracting(event -> event.details().get("tenant"))
+                    .containsExactlyInAnyOrder("tenant-a", "tenant-b");
+        } finally {
+            PrivacyTenantContextHolder.clear();
+            publisher.destroy();
+            executor.shutdownNow();
+        }
+    }
+
     private PrivacyAuditEvent event(String resourceId) {
         return new PrivacyAuditEvent(Instant.now(), "READ", "Patient", resourceId, "actor", "OK", Map.of());
     }
@@ -304,6 +344,11 @@ class BufferedPrivacyAuditPublisherTest {
             latch.countDown();
         }
 
+        @Override
+        public boolean supportsTenantWrite() {
+            return true;
+        }
+
         List<String> tenantIds() {
             return List.copyOf(tenantIds);
         }
@@ -312,4 +357,66 @@ class BufferedPrivacyAuditPublisherTest {
             return latch.await(5, TimeUnit.SECONDS);
         }
     }
+
+    static class TenantAwareInMemoryRepository extends InMemoryPrivacyAuditRepository {
+
+        private final CountDownLatch latch;
+
+        TenantAwareInMemoryRepository(int expectedFlushes) {
+            this.latch = new CountDownLatch(expectedFlushes);
+        }
+
+        @Override
+        public synchronized void saveAllTenantAware(List<PrivacyTenantAuditWriteRequest> requests) {
+            super.saveAllTenantAware(requests);
+            latch.countDown();
+        }
+
+        boolean await() throws InterruptedException {
+            return latch.await(5, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
+    void recordsFallbackBatchWritePathWhenRepositoryDoesNotDeclareNativeCapability() throws Exception {
+        ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        CountDownLatch latch = new CountDownLatch(1);
+        PrivacyAuditRepository repository = new PrivacyAuditRepository() {
+            @Override
+            public void save(PrivacyAuditEvent event) {
+            }
+
+            @Override
+            public void saveAll(List<PrivacyAuditEvent> events) {
+                latch.countDown();
+            }
+        };
+        BufferedPrivacyAuditPublisher publisher = new BufferedPrivacyAuditPublisher(
+                repository,
+                executor,
+                2,
+                Duration.ofSeconds(30),
+                2,
+                Duration.ZERO,
+                (event, retryAttempts, exception) -> {
+                },
+                PrivacyTenantContextHolder::getTenantId,
+                tenantId -> new PrivacyTenantAuditPolicy(java.util.Set.of(), java.util.Set.of(), true, "tenant"),
+                new MicrometerPrivacyTenantAuditTelemetry(meterRegistry)
+        );
+
+        try {
+            publisher.publish(event("first"));
+            publisher.publish(event("second"));
+
+            assertTrue(latch.await(5, TimeUnit.SECONDS));
+            assertEquals(1.0d, meterRegistry.get("privacy.audit.tenant.write.path").tag("domain", "audit_batch_write").tag("path", "fallback").counter().count());
+        } finally {
+            PrivacyTenantContextHolder.clear();
+            publisher.destroy();
+            executor.shutdownNow();
+        }
+    }
+
 }

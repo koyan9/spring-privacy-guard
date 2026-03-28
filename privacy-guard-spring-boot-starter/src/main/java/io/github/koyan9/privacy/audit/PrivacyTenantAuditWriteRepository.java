@@ -22,4 +22,8 @@ public interface PrivacyTenantAuditWriteRepository {
             save(request);
         }
     }
+
+    default boolean supportsTenantWrite() {
+        return false;
+    }
 }

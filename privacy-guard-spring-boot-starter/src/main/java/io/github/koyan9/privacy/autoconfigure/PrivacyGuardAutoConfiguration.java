@@ -45,6 +45,15 @@ import io.github.koyan9.privacy.audit.PrivacyTenantAuditPolicy;
 import io.github.koyan9.privacy.audit.PrivacyTenantAuditPolicyResolver;
 import io.github.koyan9.privacy.audit.PrivacyTenantAuditDeadLetterReadRepository;
 import io.github.koyan9.privacy.audit.PrivacyTenantAuditTelemetry;
+import io.github.koyan9.privacy.audit.PrivacyTenantDeadLetterAlertDeliveryPolicy;
+import io.github.koyan9.privacy.audit.PrivacyTenantDeadLetterAlertDeliveryPolicyResolver;
+import io.github.koyan9.privacy.audit.PrivacyTenantDeadLetterAlertMonitoringPolicy;
+import io.github.koyan9.privacy.audit.PrivacyTenantDeadLetterAlertMonitoringPolicyResolver;
+import io.github.koyan9.privacy.audit.PrivacyTenantDeadLetterAlertEmailPolicy;
+import io.github.koyan9.privacy.audit.PrivacyTenantDeadLetterAlertReceiverPolicy;
+import io.github.koyan9.privacy.audit.PrivacyTenantDeadLetterAlertRoutePolicy;
+import io.github.koyan9.privacy.audit.PrivacyTenantDeadLetterAlertRoutePolicyResolver;
+import io.github.koyan9.privacy.audit.PrivacyTenantDeadLetterAlertWebhookPolicy;
 import io.github.koyan9.privacy.audit.PrivacyTenantDeadLetterObservabilityPolicy;
 import io.github.koyan9.privacy.audit.PrivacyTenantDeadLetterObservabilityPolicyResolver;
 import io.github.koyan9.privacy.audit.RepositoryBackedPrivacyAuditDeadLetterHandler;
@@ -150,6 +159,78 @@ public class PrivacyGuardAutoConfiguration {
                 return PrivacyTenantDeadLetterObservabilityPolicy.none();
             }
             return tenantPolicies.getOrDefault(normalizedTenantId, PrivacyTenantDeadLetterObservabilityPolicy.none());
+        };
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public PrivacyTenantDeadLetterAlertRoutePolicyResolver privacyTenantDeadLetterAlertRoutePolicyResolver(
+            PrivacyGuardProperties properties
+    ) {
+        Map<String, PrivacyTenantDeadLetterAlertRoutePolicy> tenantPolicies =
+                buildTenantDeadLetterAlertRoutePolicies(properties.getTenant());
+        Map<String, PrivacyTenantDeadLetterAlertRoutePolicy> legacyPolicies =
+                buildLegacyTenantDeadLetterAlertRoutePolicies(
+                        properties.getAudit().getDeadLetter().getObservability().getAlert().getTenant()
+                );
+        return tenantId -> {
+            String normalizedTenantId = normalizeTenantId(tenantId);
+            if (normalizedTenantId == null) {
+                return PrivacyTenantDeadLetterAlertRoutePolicy.none();
+            }
+            PrivacyTenantDeadLetterAlertRoutePolicy merged = PrivacyTenantDeadLetterAlertRoutePolicy.merge(
+                    tenantPolicies.get(normalizedTenantId),
+                    legacyPolicies.get(normalizedTenantId)
+            );
+            return merged.hasOverrides() ? merged : PrivacyTenantDeadLetterAlertRoutePolicy.none();
+        };
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public PrivacyTenantDeadLetterAlertDeliveryPolicyResolver privacyTenantDeadLetterAlertDeliveryPolicyResolver(
+            PrivacyGuardProperties properties
+    ) {
+        Map<String, PrivacyTenantDeadLetterAlertDeliveryPolicy> tenantPolicies =
+                buildTenantDeadLetterAlertDeliveryPolicies(properties.getTenant());
+        Map<String, PrivacyTenantDeadLetterAlertDeliveryPolicy> legacyPolicies =
+                buildLegacyTenantDeadLetterAlertDeliveryPolicies(
+                        properties.getAudit().getDeadLetter().getObservability().getAlert().getTenant()
+                );
+        return tenantId -> {
+            String normalizedTenantId = normalizeTenantId(tenantId);
+            if (normalizedTenantId == null) {
+                return PrivacyTenantDeadLetterAlertDeliveryPolicy.none();
+            }
+            PrivacyTenantDeadLetterAlertDeliveryPolicy merged = PrivacyTenantDeadLetterAlertDeliveryPolicy.merge(
+                    tenantPolicies.get(normalizedTenantId),
+                    legacyPolicies.get(normalizedTenantId)
+            );
+            return merged.hasOverrides() ? merged : PrivacyTenantDeadLetterAlertDeliveryPolicy.none();
+        };
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public PrivacyTenantDeadLetterAlertMonitoringPolicyResolver privacyTenantDeadLetterAlertMonitoringPolicyResolver(
+            PrivacyGuardProperties properties
+    ) {
+        Map<String, PrivacyTenantDeadLetterAlertMonitoringPolicy> tenantPolicies =
+                buildTenantDeadLetterAlertMonitoringPolicies(properties.getTenant());
+        Map<String, PrivacyTenantDeadLetterAlertMonitoringPolicy> legacyPolicies =
+                buildLegacyTenantDeadLetterAlertMonitoringPolicies(
+                        properties.getAudit().getDeadLetter().getObservability().getAlert().getTenant()
+                );
+        return tenantId -> {
+            String normalizedTenantId = normalizeTenantId(tenantId);
+            if (normalizedTenantId == null) {
+                return PrivacyTenantDeadLetterAlertMonitoringPolicy.none();
+            }
+            PrivacyTenantDeadLetterAlertMonitoringPolicy merged = PrivacyTenantDeadLetterAlertMonitoringPolicy.merge(
+                    tenantPolicies.get(normalizedTenantId),
+                    legacyPolicies.get(normalizedTenantId)
+            );
+            return merged.hasOverrides() ? merged : PrivacyTenantDeadLetterAlertMonitoringPolicy.none();
         };
     }
 
@@ -392,6 +473,229 @@ public class PrivacyGuardAutoConfiguration {
             }
         }
         return Map.copyOf(policies);
+    }
+
+    private Map<String, PrivacyTenantDeadLetterAlertRoutePolicy> buildTenantDeadLetterAlertRoutePolicies(
+            PrivacyGuardProperties.Tenant tenant
+    ) {
+        if (tenant == null || !tenant.isEnabled() || tenant.getPolicies().isEmpty()) {
+            return Map.of();
+        }
+        Map<String, PrivacyTenantDeadLetterAlertRoutePolicy> policies = new java.util.LinkedHashMap<>();
+        for (Map.Entry<String, PrivacyGuardProperties.TenantPolicy> entry : tenant.getPolicies().entrySet()) {
+            String tenantId = normalizeTenantId(entry.getKey());
+            PrivacyGuardProperties.TenantPolicy tenantPolicy = entry.getValue();
+            if (tenantId == null || tenantPolicy == null) {
+                continue;
+            }
+            PrivacyTenantDeadLetterAlertRoutePolicy policy = toTenantDeadLetterAlertRoutePolicy(
+                    tenantPolicy.getObservability().getDeadLetter().getAlert()
+            );
+            if (policy.hasOverrides()) {
+                policies.put(tenantId, policy);
+            }
+        }
+        return Map.copyOf(policies);
+    }
+
+    private Map<String, PrivacyTenantDeadLetterAlertDeliveryPolicy> buildTenantDeadLetterAlertDeliveryPolicies(
+            PrivacyGuardProperties.Tenant tenant
+    ) {
+        if (tenant == null || !tenant.isEnabled() || tenant.getPolicies().isEmpty()) {
+            return Map.of();
+        }
+        Map<String, PrivacyTenantDeadLetterAlertDeliveryPolicy> policies = new java.util.LinkedHashMap<>();
+        for (Map.Entry<String, PrivacyGuardProperties.TenantPolicy> entry : tenant.getPolicies().entrySet()) {
+            String tenantId = normalizeTenantId(entry.getKey());
+            PrivacyGuardProperties.TenantPolicy tenantPolicy = entry.getValue();
+            if (tenantId == null || tenantPolicy == null) {
+                continue;
+            }
+            PrivacyTenantDeadLetterAlertDeliveryPolicy policy = toTenantDeadLetterAlertDeliveryPolicy(
+                    tenantPolicy.getObservability().getDeadLetter().getAlert()
+            );
+            if (policy.hasOverrides()) {
+                policies.put(tenantId, policy);
+            }
+        }
+        return Map.copyOf(policies);
+    }
+
+    private Map<String, PrivacyTenantDeadLetterAlertMonitoringPolicy> buildTenantDeadLetterAlertMonitoringPolicies(
+            PrivacyGuardProperties.Tenant tenant
+    ) {
+        if (tenant == null || !tenant.isEnabled() || tenant.getPolicies().isEmpty()) {
+            return Map.of();
+        }
+        Map<String, PrivacyTenantDeadLetterAlertMonitoringPolicy> policies = new java.util.LinkedHashMap<>();
+        for (Map.Entry<String, PrivacyGuardProperties.TenantPolicy> entry : tenant.getPolicies().entrySet()) {
+            String tenantId = normalizeTenantId(entry.getKey());
+            PrivacyGuardProperties.TenantPolicy tenantPolicy = entry.getValue();
+            if (tenantId == null || tenantPolicy == null) {
+                continue;
+            }
+            PrivacyTenantDeadLetterAlertMonitoringPolicy policy = toTenantDeadLetterAlertMonitoringPolicy(
+                    tenantPolicy.getObservability().getDeadLetter().getAlert()
+            );
+            if (policy.hasOverrides()) {
+                policies.put(tenantId, policy);
+            }
+        }
+        return Map.copyOf(policies);
+    }
+
+    private Map<String, PrivacyTenantDeadLetterAlertRoutePolicy> buildLegacyTenantDeadLetterAlertRoutePolicies(
+            PrivacyGuardProperties.AlertTenant tenantAlert
+    ) {
+        if (tenantAlert == null || tenantAlert.getRoutes().isEmpty()) {
+            return Map.of();
+        }
+        Map<String, PrivacyTenantDeadLetterAlertRoutePolicy> policies = new java.util.LinkedHashMap<>();
+        for (Map.Entry<String, PrivacyGuardProperties.AlertTenantRoute> entry : tenantAlert.getRoutes().entrySet()) {
+            String tenantId = normalizeTenantId(entry.getKey());
+            PrivacyTenantDeadLetterAlertRoutePolicy policy = toTenantDeadLetterAlertRoutePolicy(entry.getValue());
+            if (tenantId != null && policy.hasOverrides()) {
+                policies.put(tenantId, policy);
+            }
+        }
+        return Map.copyOf(policies);
+    }
+
+    private Map<String, PrivacyTenantDeadLetterAlertMonitoringPolicy> buildLegacyTenantDeadLetterAlertMonitoringPolicies(
+            PrivacyGuardProperties.AlertTenant tenantAlert
+    ) {
+        if (tenantAlert == null || tenantAlert.getRoutes().isEmpty()) {
+            return Map.of();
+        }
+        Map<String, PrivacyTenantDeadLetterAlertMonitoringPolicy> policies = new java.util.LinkedHashMap<>();
+        for (Map.Entry<String, PrivacyGuardProperties.AlertTenantRoute> entry : tenantAlert.getRoutes().entrySet()) {
+            String tenantId = normalizeTenantId(entry.getKey());
+            PrivacyTenantDeadLetterAlertMonitoringPolicy policy = toTenantDeadLetterAlertMonitoringPolicy(entry.getValue());
+            if (tenantId != null && policy.hasOverrides()) {
+                policies.put(tenantId, policy);
+            }
+        }
+        return Map.copyOf(policies);
+    }
+
+    private Map<String, PrivacyTenantDeadLetterAlertDeliveryPolicy> buildLegacyTenantDeadLetterAlertDeliveryPolicies(
+            PrivacyGuardProperties.AlertTenant tenantAlert
+    ) {
+        if (tenantAlert == null || tenantAlert.getRoutes().isEmpty()) {
+            return Map.of();
+        }
+        Map<String, PrivacyTenantDeadLetterAlertDeliveryPolicy> policies = new java.util.LinkedHashMap<>();
+        for (Map.Entry<String, PrivacyGuardProperties.AlertTenantRoute> entry : tenantAlert.getRoutes().entrySet()) {
+            String tenantId = normalizeTenantId(entry.getKey());
+            PrivacyTenantDeadLetterAlertDeliveryPolicy policy = toTenantDeadLetterAlertDeliveryPolicy(entry.getValue());
+            if (tenantId != null && policy.hasOverrides()) {
+                policies.put(tenantId, policy);
+            }
+        }
+        return Map.copyOf(policies);
+    }
+
+    private PrivacyTenantDeadLetterAlertRoutePolicy toTenantDeadLetterAlertRoutePolicy(
+            PrivacyGuardProperties.AlertTenantRoute route
+    ) {
+        if (route == null) {
+            return PrivacyTenantDeadLetterAlertRoutePolicy.none();
+        }
+        return new PrivacyTenantDeadLetterAlertRoutePolicy(
+                toTenantDeadLetterAlertWebhookPolicy(route.getWebhook()),
+                toTenantDeadLetterAlertEmailPolicy(route.getEmail()),
+                toTenantDeadLetterAlertReceiverPolicy(route.getReceiver())
+        );
+    }
+
+    private PrivacyTenantDeadLetterAlertDeliveryPolicy toTenantDeadLetterAlertDeliveryPolicy(
+            PrivacyGuardProperties.AlertTenantRoute route
+    ) {
+        if (route == null) {
+            return PrivacyTenantDeadLetterAlertDeliveryPolicy.none();
+        }
+        return new PrivacyTenantDeadLetterAlertDeliveryPolicy(
+                route.getLogging().getEnabled(),
+                route.getWebhook().getEnabled(),
+                route.getEmail().getEnabled()
+        );
+    }
+
+    private PrivacyTenantDeadLetterAlertMonitoringPolicy toTenantDeadLetterAlertMonitoringPolicy(
+            PrivacyGuardProperties.AlertTenantRoute route
+    ) {
+        if (route == null) {
+            return PrivacyTenantDeadLetterAlertMonitoringPolicy.none();
+        }
+        return new PrivacyTenantDeadLetterAlertMonitoringPolicy(route.getEnabled());
+    }
+
+    private PrivacyTenantDeadLetterAlertWebhookPolicy toTenantDeadLetterAlertWebhookPolicy(
+            PrivacyGuardProperties.AlertTenantRouteWebhook webhook
+    ) {
+        if (webhook == null) {
+            return PrivacyTenantDeadLetterAlertWebhookPolicy.none();
+        }
+        return new PrivacyTenantDeadLetterAlertWebhookPolicy(
+                webhook.getUrl(),
+                webhook.getBearerToken(),
+                webhook.getSignatureSecret(),
+                webhook.getSignatureAlgorithm(),
+                webhook.getSignatureHeader(),
+                webhook.getTimestampHeader(),
+                webhook.getNonceHeader(),
+                webhook.getMaxAttempts(),
+                webhook.getBackoff(),
+                toTenantWebhookBackoffPolicy(webhook.getBackoffPolicy()),
+                webhook.getMaxBackoff(),
+                webhook.getJitter(),
+                webhook.getConnectTimeout(),
+                webhook.getReadTimeout()
+        );
+    }
+
+    private PrivacyTenantDeadLetterAlertEmailPolicy toTenantDeadLetterAlertEmailPolicy(
+            PrivacyGuardProperties.AlertTenantRouteEmail email
+    ) {
+        if (email == null) {
+            return PrivacyTenantDeadLetterAlertEmailPolicy.none();
+        }
+        return new PrivacyTenantDeadLetterAlertEmailPolicy(
+                email.getFrom(),
+                email.getTo(),
+                email.getSubjectPrefix()
+        );
+    }
+
+    private PrivacyTenantDeadLetterAlertReceiverPolicy toTenantDeadLetterAlertReceiverPolicy(
+            PrivacyGuardProperties.AlertTenantRouteReceiver receiver
+    ) {
+        if (receiver == null) {
+            return PrivacyTenantDeadLetterAlertReceiverPolicy.none();
+        }
+        return new PrivacyTenantDeadLetterAlertReceiverPolicy(
+                receiver.getPathPattern(),
+                receiver.getBearerToken(),
+                receiver.getSignatureSecret(),
+                receiver.getSignatureAlgorithm(),
+                receiver.getSignatureHeader(),
+                receiver.getTimestampHeader(),
+                receiver.getNonceHeader(),
+                receiver.getMaxSkew(),
+                receiver.getReplayNamespace()
+        );
+    }
+
+    private PrivacyTenantDeadLetterAlertWebhookPolicy.BackoffPolicy toTenantWebhookBackoffPolicy(
+            PrivacyGuardProperties.AlertWebhook.BackoffPolicy backoffPolicy
+    ) {
+        if (backoffPolicy == null) {
+            return null;
+        }
+        return switch (backoffPolicy) {
+            case FIXED -> PrivacyTenantDeadLetterAlertWebhookPolicy.BackoffPolicy.FIXED;
+            case EXPONENTIAL -> PrivacyTenantDeadLetterAlertWebhookPolicy.BackoffPolicy.EXPONENTIAL;
+        };
     }
 
     private PrivacyTenantLoggingPolicy toTenantLoggingPolicy(PrivacyGuardProperties.TenantLogging logging) {

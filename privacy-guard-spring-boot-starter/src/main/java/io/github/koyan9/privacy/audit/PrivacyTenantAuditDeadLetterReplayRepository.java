@@ -18,4 +18,21 @@ public interface PrivacyTenantAuditDeadLetterReplayRepository {
             PrivacyAuditDeadLetterQueryCriteria criteria,
             Predicate<PrivacyAuditDeadLetterEntry> replayAction
     );
+
+    default boolean replayById(
+            String tenantId,
+            String tenantDetailKey,
+            long id,
+            Predicate<PrivacyAuditDeadLetterEntry> replayAction
+    ) {
+        return false;
+    }
+
+    default boolean supportsTenantReplay() {
+        return false;
+    }
+
+    default boolean supportsTenantReplayById() {
+        return false;
+    }
 }

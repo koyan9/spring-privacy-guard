@@ -5,6 +5,7 @@
 
 package com.example.privacydemo;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -19,6 +20,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles({"jdbc-tenant", "jdbc-tenant-node2"})
+@Tag("sample")
+@Tag("sample-jdbc")
+@Tag("sample-multi-instance")
 class PrivacyDemoJdbcTenantNode2ProfileTest {
 
     @Autowired

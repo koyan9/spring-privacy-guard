@@ -21,6 +21,8 @@ import io.github.koyan9.privacy.audit.PrivacyTenantAuditDeadLetterQueryService;
 import io.github.koyan9.privacy.audit.PrivacyTenantAuditDeadLetterReplayRepository;
 import io.github.koyan9.privacy.audit.PrivacyTenantAuditReadRepository;
 import io.github.koyan9.privacy.audit.PrivacyTenantAuditWriteRepository;
+import io.github.koyan9.privacy.audit.PrivacyTenantDeadLetterAlertDeliveryPolicyResolver;
+import io.github.koyan9.privacy.audit.PrivacyTenantDeadLetterAlertRoutePolicyResolver;
 import io.github.koyan9.privacy.audit.PrivacyTenantDeadLetterObservabilityPolicyResolver;
 import io.github.koyan9.privacy.audit.PrivacyAuditRepository;
 import io.github.koyan9.privacy.audit.PrivacyAuditRepositoryType;
@@ -389,6 +391,12 @@ class PrivacyGuardAutoConfigurationTest {
                         "privacy.guard.tenant.policies[tenant-a].observability.dead-letter.warning-threshold=2",
                         "privacy.guard.tenant.policies[tenant-a].observability.dead-letter.down-threshold=4",
                         "privacy.guard.tenant.policies[tenant-a].observability.dead-letter.notify-on-recovery=false",
+                        "privacy.guard.tenant.policies[tenant-a].observability.dead-letter.alert.logging.enabled=true",
+                        "privacy.guard.tenant.policies[tenant-a].observability.dead-letter.alert.webhook.enabled=false",
+                        "privacy.guard.tenant.policies[tenant-a].observability.dead-letter.alert.email.enabled=true",
+                        "privacy.guard.tenant.policies[tenant-a].observability.dead-letter.alert.webhook.url=https://policy-tenant-a.example.com/alerts",
+                        "privacy.guard.tenant.policies[tenant-a].observability.dead-letter.alert.email.to=policy-tenant-a-ops@example.com",
+                        "privacy.guard.tenant.policies[tenant-a].observability.dead-letter.alert.receiver.path-pattern=/receiver/tenant-a-policy",
                         "privacy.guard.tenant.policies[tenant-a].logging.mdc.enabled=true",
                         "privacy.guard.tenant.policies[tenant-a].logging.mdc.include-keys[0]=email",
                         "privacy.guard.tenant.policies[tenant-a].logging.structured.enabled=false",
@@ -437,6 +445,15 @@ class PrivacyGuardAutoConfigurationTest {
                     assertThat(properties.getTenant().getPolicies().get("tenant-a").getObservability().getDeadLetter().getWarningThreshold()).isEqualTo(2L);
                     assertThat(properties.getTenant().getPolicies().get("tenant-a").getObservability().getDeadLetter().getDownThreshold()).isEqualTo(4L);
                     assertThat(properties.getTenant().getPolicies().get("tenant-a").getObservability().getDeadLetter().getNotifyOnRecovery()).isFalse();
+                    assertThat(properties.getTenant().getPolicies().get("tenant-a").getObservability().getDeadLetter().getAlert().getLogging().getEnabled()).isTrue();
+                    assertThat(properties.getTenant().getPolicies().get("tenant-a").getObservability().getDeadLetter().getAlert().getWebhook().getEnabled()).isFalse();
+                    assertThat(properties.getTenant().getPolicies().get("tenant-a").getObservability().getDeadLetter().getAlert().getEmail().getEnabled()).isTrue();
+                    assertThat(properties.getTenant().getPolicies().get("tenant-a").getObservability().getDeadLetter().getAlert().getWebhook().getUrl())
+                            .isEqualTo("https://policy-tenant-a.example.com/alerts");
+                    assertThat(properties.getTenant().getPolicies().get("tenant-a").getObservability().getDeadLetter().getAlert().getEmail().getTo())
+                            .isEqualTo("policy-tenant-a-ops@example.com");
+                    assertThat(properties.getTenant().getPolicies().get("tenant-a").getObservability().getDeadLetter().getAlert().getReceiver().getPathPattern())
+                            .isEqualTo("/receiver/tenant-a-policy");
                     assertThat(properties.getTenant().getPolicies().get("tenant-a").getLogging().getMdc().getEnabled()).isTrue();
                     assertThat(properties.getTenant().getPolicies().get("tenant-a").getLogging().getMdc().getIncludeKeys()).containsExactly("email");
                     assertThat(properties.getTenant().getPolicies().get("tenant-a").getLogging().getStructured().getEnabled()).isFalse();
@@ -469,6 +486,63 @@ class PrivacyGuardAutoConfigurationTest {
                     assertThat(properties.getAudit().getJdbc().getSchemaLocation())
                             .isEqualTo("classpath:META-INF/privacy-guard/privacy-audit-schema-h2.sql");
                     assertThat(properties.getAudit().getJdbc().getDialect()).isEqualTo(PrivacyAuditJdbcDialect.H2);
+                });
+    }
+
+    @Test
+    void bridgesTenantAlertRoutePoliciesWithTenantPolicyPrecedence() {
+        contextRunner
+                .withPropertyValues(
+                        "privacy.guard.tenant.enabled=true",
+                        "privacy.guard.tenant.default-tenant=tenant-a",
+                        "privacy.guard.tenant.policies[tenant-a].observability.dead-letter.alert.webhook.url=https://policy-tenant-a.example.com/alerts",
+                        "privacy.guard.tenant.policies[tenant-a].observability.dead-letter.alert.email.to=policy-tenant-a-ops@example.com",
+                        "privacy.guard.tenant.policies[tenant-a].observability.dead-letter.alert.receiver.path-pattern=/receiver/tenant-a-policy",
+                        "privacy.guard.audit.dead-letter.observability.alert.tenant.routes[tenant-a].webhook.url=https://legacy-tenant-a.example.com/alerts",
+                        "privacy.guard.audit.dead-letter.observability.alert.tenant.routes[tenant-a].webhook.max-attempts=7",
+                        "privacy.guard.audit.dead-letter.observability.alert.tenant.routes[tenant-a].email.to=legacy-tenant-a-ops@example.com",
+                        "privacy.guard.audit.dead-letter.observability.alert.tenant.routes[tenant-a].email.subject-prefix=[legacy-tenant-a]",
+                        "privacy.guard.audit.dead-letter.observability.alert.tenant.routes[tenant-a].receiver.path-pattern=/receiver/tenant-a-legacy",
+                        "privacy.guard.audit.dead-letter.observability.alert.tenant.routes[tenant-a].receiver.replay-namespace=tenant-a-legacy"
+                )
+                .run(context -> {
+                    PrivacyTenantDeadLetterAlertRoutePolicyResolver resolver =
+                            context.getBean(PrivacyTenantDeadLetterAlertRoutePolicyResolver.class);
+
+                    assertThat(resolver.resolve("tenant-a").webhook().url())
+                            .isEqualTo("https://policy-tenant-a.example.com/alerts");
+                    assertThat(resolver.resolve("tenant-a").webhook().maxAttempts())
+                            .isEqualTo(7);
+                    assertThat(resolver.resolve("tenant-a").email().to())
+                            .isEqualTo("policy-tenant-a-ops@example.com");
+                    assertThat(resolver.resolve("tenant-a").email().subjectPrefix())
+                            .isEqualTo("[legacy-tenant-a]");
+                    assertThat(resolver.resolve("tenant-a").receiver().pathPattern())
+                            .isEqualTo("/receiver/tenant-a-policy");
+                    assertThat(resolver.resolve("tenant-a").receiver().replayNamespace())
+                            .isEqualTo("tenant-a-legacy");
+                });
+    }
+
+    @Test
+    void bridgesTenantAlertDeliveryPoliciesWithTenantPolicyPrecedence() {
+        contextRunner
+                .withPropertyValues(
+                        "privacy.guard.tenant.enabled=true",
+                        "privacy.guard.tenant.default-tenant=tenant-a",
+                        "privacy.guard.tenant.policies[tenant-a].observability.dead-letter.alert.logging.enabled=true",
+                        "privacy.guard.tenant.policies[tenant-a].observability.dead-letter.alert.webhook.enabled=false",
+                        "privacy.guard.audit.dead-letter.observability.alert.tenant.routes[tenant-a].logging.enabled=false",
+                        "privacy.guard.audit.dead-letter.observability.alert.tenant.routes[tenant-a].webhook.enabled=true",
+                        "privacy.guard.audit.dead-letter.observability.alert.tenant.routes[tenant-a].email.enabled=true"
+                )
+                .run(context -> {
+                    PrivacyTenantDeadLetterAlertDeliveryPolicyResolver resolver =
+                            context.getBean(PrivacyTenantDeadLetterAlertDeliveryPolicyResolver.class);
+
+                    assertThat(resolver.resolve("tenant-a").loggingEnabled()).isTrue();
+                    assertThat(resolver.resolve("tenant-a").webhookEnabled()).isFalse();
+                    assertThat(resolver.resolve("tenant-a").emailEnabled()).isTrue();
                 });
     }
 

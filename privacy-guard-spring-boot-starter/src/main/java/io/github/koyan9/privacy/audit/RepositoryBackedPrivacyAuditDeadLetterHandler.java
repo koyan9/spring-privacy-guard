@@ -72,7 +72,8 @@ public class RepositoryBackedPrivacyAuditDeadLetterHandler implements PrivacyAud
     @Override
     public void handle(PrivacyAuditEvent event, int attempts, RuntimeException exception) {
         PrivacyAuditDeadLetterEntry entry = PrivacyAuditDeadLetterEntry.from(event, attempts, exception);
-        if (repository instanceof PrivacyTenantAuditDeadLetterWriteRepository tenantAwareRepository) {
+        if (repository instanceof PrivacyTenantAuditDeadLetterWriteRepository tenantAwareRepository
+                && tenantAwareRepository.supportsTenantWrite()) {
             String tenantId = currentTenantId();
             telemetry().recordWritePath("dead_letter_write", "native");
             tenantAwareRepository.save(new PrivacyTenantAuditDeadLetterWriteRequest(

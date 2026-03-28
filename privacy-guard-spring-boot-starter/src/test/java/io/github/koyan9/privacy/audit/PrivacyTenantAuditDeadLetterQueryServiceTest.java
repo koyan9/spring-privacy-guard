@@ -86,6 +86,108 @@ class PrivacyTenantAuditDeadLetterQueryServiceTest {
     }
 
     @Test
+    void findsDeadLetterByIdOnlyWhenTenantOwnsEntry() {
+        PrivacyAuditDeadLetterRepository repository = new PrivacyAuditDeadLetterRepository() {
+            @Override
+            public void save(PrivacyAuditDeadLetterEntry entry) {
+            }
+
+            @Override
+            public java.util.Optional<PrivacyAuditDeadLetterEntry> findById(long id) {
+                if (id == 1L) {
+                    return java.util.Optional.of(entry("A1", "tenant-a"));
+                }
+                return java.util.Optional.empty();
+            }
+        };
+        PrivacyAuditDeadLetterService deadLetterService = new PrivacyAuditDeadLetterService(repository, event -> {
+        });
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        PrivacyTenantAuditDeadLetterQueryService service = new PrivacyTenantAuditDeadLetterQueryService(
+                deadLetterService,
+                new PrivacyAuditDeadLetterStatsService(criteria -> new PrivacyAuditDeadLetterStats(0, Map.of(), Map.of(), Map.of(), Map.of())),
+                () -> "tenant-a",
+                tenantId -> new PrivacyTenantAuditPolicy(java.util.Set.of(), java.util.Set.of(), true, "tenant"),
+                null,
+                new MicrometerPrivacyTenantAuditTelemetry(meterRegistry)
+        );
+
+        assertThat(service.findById("tenant-a", 1L)).isPresent();
+        assertThat(service.findById("tenant-b", 1L)).isEmpty();
+        assertThat(service.findByIdForCurrentTenant(1L)).isPresent();
+        assertThat(meterRegistry.get("privacy.audit.tenant.read.path")
+                .tag("domain", "dead_letter_find_by_id")
+                .tag("path", "fallback")
+                .counter()
+                .count()).isEqualTo(3.0d);
+    }
+
+    @Test
+    void prefersTenantNativeDeadLetterFindByIdWhenRepositoryOverridesLookup() {
+        PrivacyAuditDeadLetterRepository repository = new PrivacyAuditDeadLetterRepository() {
+            @Override
+            public void save(PrivacyAuditDeadLetterEntry entry) {
+            }
+
+            @Override
+            public java.util.Optional<PrivacyAuditDeadLetterEntry> findById(long id) {
+                throw new AssertionError("native tenant lookup should not fall back to generic findById");
+            }
+        };
+        PrivacyAuditDeadLetterService deadLetterService = new PrivacyAuditDeadLetterService(repository, event -> {
+        });
+        PrivacyTenantAuditDeadLetterReadRepository nativeRepository = new PrivacyTenantAuditDeadLetterReadRepository() {
+            @Override
+            public List<PrivacyAuditDeadLetterEntry> findByCriteria(
+                    String tenantId,
+                    String tenantDetailKey,
+                    PrivacyAuditDeadLetterQueryCriteria criteria
+            ) {
+                return List.of();
+            }
+
+            @Override
+            public PrivacyAuditDeadLetterStats computeStats(
+                    String tenantId,
+                    String tenantDetailKey,
+                    PrivacyAuditDeadLetterQueryCriteria criteria
+            ) {
+                return new PrivacyAuditDeadLetterStats(0, Map.of(), Map.of(), Map.of(), Map.of());
+            }
+
+            @Override
+            public java.util.Optional<PrivacyAuditDeadLetterEntry> findById(String tenantId, String tenantDetailKey, long id) {
+                return java.util.Optional.of(entry("native-id", tenantId));
+            }
+
+            @Override
+            public boolean supportsTenantFindById() {
+                return true;
+            }
+        };
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        PrivacyTenantAuditDeadLetterQueryService service = new PrivacyTenantAuditDeadLetterQueryService(
+                deadLetterService,
+                new PrivacyAuditDeadLetterStatsService(criteria -> new PrivacyAuditDeadLetterStats(0, Map.of(), Map.of(), Map.of(), Map.of())),
+                () -> "tenant-a",
+                tenantId -> new PrivacyTenantAuditPolicy(java.util.Set.of(), java.util.Set.of(), true, "tenant"),
+                nativeRepository,
+                new MicrometerPrivacyTenantAuditTelemetry(meterRegistry)
+        );
+
+        assertThat(service.findById("tenant-a", 7L))
+                .isPresent()
+                .get()
+                .extracting(PrivacyAuditDeadLetterEntry::resourceId)
+                .isEqualTo("native-id");
+        assertThat(meterRegistry.get("privacy.audit.tenant.read.path")
+                .tag("domain", "dead_letter_find_by_id")
+                .tag("path", "native")
+                .counter()
+                .count()).isEqualTo(1.0d);
+    }
+
+    @Test
     void prefersTenantNativeDeadLetterReadRepositoryWhenAvailable() {
         PrivacyAuditDeadLetterRepository fallbackRepository = new PrivacyAuditDeadLetterRepository() {
             @Override
@@ -121,6 +223,11 @@ class PrivacyTenantAuditDeadLetterQueryServiceTest {
                     PrivacyAuditDeadLetterQueryCriteria criteria
             ) {
                 return new PrivacyAuditDeadLetterStats(1, Map.of("READ", 1L), Map.of("OK", 1L), Map.of("Patient", 1L), Map.of("TypeA", 1L));
+            }
+
+            @Override
+            public boolean supportsTenantRead() {
+                return true;
             }
         };
         PrivacyTenantAuditDeadLetterQueryService service = new PrivacyTenantAuditDeadLetterQueryService(
@@ -172,6 +279,60 @@ class PrivacyTenantAuditDeadLetterQueryServiceTest {
         service.findByCriteria("tenant-a", PrivacyAuditDeadLetterQueryCriteria.recent(10));
         service.computeStats("tenant-a", PrivacyAuditDeadLetterQueryCriteria.recent(10));
 
+        assertThat(meterRegistry.get("privacy.audit.tenant.read.path").tag("domain", "dead_letter").tag("path", "fallback").counter().count()).isEqualTo(1.0d);
+        assertThat(meterRegistry.get("privacy.audit.tenant.read.path").tag("domain", "dead_letter_stats").tag("path", "fallback").counter().count()).isEqualTo(1.0d);
+    }
+
+    @Test
+    void fallsBackWhenDeadLetterReadRepositoryDoesNotDeclareNativeCapability() {
+        PrivacyAuditDeadLetterRepository repository = new PrivacyAuditDeadLetterRepository() {
+            @Override
+            public void save(PrivacyAuditDeadLetterEntry entry) {
+            }
+
+            @Override
+            public List<PrivacyAuditDeadLetterEntry> findByCriteria(PrivacyAuditDeadLetterQueryCriteria criteria) {
+                return List.of(entry("A1", "tenant-a"), entry("B1", "tenant-b"));
+            }
+        };
+        PrivacyAuditDeadLetterService deadLetterService = new PrivacyAuditDeadLetterService(repository, event -> {
+        });
+        PrivacyAuditDeadLetterStatsService deadLetterStatsService = new PrivacyAuditDeadLetterStatsService(
+                criteria -> new PrivacyAuditDeadLetterStats(2, Map.of("READ", 2L), Map.of("OK", 2L), Map.of("Patient", 2L), Map.of("TypeA", 2L))
+        );
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        PrivacyTenantAuditDeadLetterReadRepository capabilityFalseRepository = new PrivacyTenantAuditDeadLetterReadRepository() {
+            @Override
+            public List<PrivacyAuditDeadLetterEntry> findByCriteria(
+                    String tenantId,
+                    String tenantDetailKey,
+                    PrivacyAuditDeadLetterQueryCriteria criteria
+            ) {
+                throw new AssertionError("query service should fall back when read capability is false");
+            }
+
+            @Override
+            public PrivacyAuditDeadLetterStats computeStats(
+                    String tenantId,
+                    String tenantDetailKey,
+                    PrivacyAuditDeadLetterQueryCriteria criteria
+            ) {
+                throw new AssertionError("stats service should fall back when read capability is false");
+            }
+        };
+        PrivacyTenantAuditDeadLetterQueryService service = new PrivacyTenantAuditDeadLetterQueryService(
+                deadLetterService,
+                deadLetterStatsService,
+                () -> "tenant-a",
+                tenantId -> new PrivacyTenantAuditPolicy(java.util.Set.of(), java.util.Set.of(), true, "tenant"),
+                capabilityFalseRepository,
+                new MicrometerPrivacyTenantAuditTelemetry(meterRegistry)
+        );
+
+        assertThat(service.findByCriteria("tenant-a", PrivacyAuditDeadLetterQueryCriteria.recent(10)))
+                .extracting(PrivacyAuditDeadLetterEntry::resourceId)
+                .containsExactly("A1");
+        assertThat(service.computeStats("tenant-a", PrivacyAuditDeadLetterQueryCriteria.recent(10)).total()).isEqualTo(1);
         assertThat(meterRegistry.get("privacy.audit.tenant.read.path").tag("domain", "dead_letter").tag("path", "fallback").counter().count()).isEqualTo(1.0d);
         assertThat(meterRegistry.get("privacy.audit.tenant.read.path").tag("domain", "dead_letter_stats").tag("path", "fallback").counter().count()).isEqualTo(1.0d);
     }

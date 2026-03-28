@@ -279,6 +279,32 @@ class JdbcPrivacyAuditRepositoryTest {
     }
 
     @Test
+    void writesTenantAwareAuditRequestWithTenantDetailsWhenTenantColumnDisabled() {
+        JdbcOperations jdbcOperations = mock(JdbcOperations.class);
+        JdbcPrivacyAuditRepository repository = new JdbcPrivacyAuditRepository(jdbcOperations, new ObjectMapper(), "privacy_audit_event");
+
+        repository.save(new PrivacyTenantAuditWriteRequest(
+                new PrivacyAuditEvent(
+                        Instant.parse("2026-03-06T00:00:00Z"),
+                        "READ",
+                        "Patient",
+                        "tenant-aware",
+                        "actor",
+                        "OK",
+                        Map.of("phone", "138****8000")
+                ),
+                "tenant-a",
+                "tenant"
+        ));
+
+        verify(jdbcOperations).update(
+                eq("insert into privacy_audit_event (occurred_at, action, resource_type, resource_id, actor, outcome, details_json) values (?, ?, ?, ?, ?, ?, ?)"),
+                any(), any(), any(), any(), any(), any(),
+                argThat((String json) -> json.contains("\"tenant\":\"tenant-a\"") && json.contains("\"phone\":\"138****8000\""))
+        );
+    }
+
+    @Test
     void readsTenantNativeFilteredAuditEventsThroughConfiguredTenantColumn() throws Exception {
         JdbcOperations jdbcOperations = mock(JdbcOperations.class);
         JdbcPrivacyAuditRepository repository = new JdbcPrivacyAuditRepository(

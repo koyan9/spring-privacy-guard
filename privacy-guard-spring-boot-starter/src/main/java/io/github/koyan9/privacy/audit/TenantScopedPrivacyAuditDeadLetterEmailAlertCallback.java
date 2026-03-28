@@ -9,34 +9,57 @@ import io.github.koyan9.privacy.autoconfigure.PrivacyGuardProperties;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.util.StringUtils;
 
-import java.util.Map;
-
 public class TenantScopedPrivacyAuditDeadLetterEmailAlertCallback implements PrivacyTenantAuditDeadLetterAlertCallback {
 
     private final JavaMailSender mailSender;
     private final PrivacyGuardProperties.AlertEmail defaultProperties;
     private final PrivacyTenantAuditTelemetry telemetry;
-    private final Map<String, PrivacyGuardProperties.AlertTenantRoute> routes;
+    private final PrivacyTenantDeadLetterAlertRoutePolicyResolver routePolicyResolver;
+    private final PrivacyTenantDeadLetterAlertDeliveryPolicyResolver deliveryPolicyResolver;
 
     public TenantScopedPrivacyAuditDeadLetterEmailAlertCallback(
             JavaMailSender mailSender,
             PrivacyGuardProperties.AlertEmail defaultProperties,
             PrivacyTenantAuditTelemetry telemetry,
-            Map<String, PrivacyGuardProperties.AlertTenantRoute> routes
+            PrivacyTenantDeadLetterAlertRoutePolicyResolver routePolicyResolver
+    ) {
+        this(
+                mailSender,
+                defaultProperties,
+                telemetry,
+                routePolicyResolver,
+                PrivacyTenantDeadLetterAlertDeliveryPolicyResolver.noop()
+        );
+    }
+
+    public TenantScopedPrivacyAuditDeadLetterEmailAlertCallback(
+            JavaMailSender mailSender,
+            PrivacyGuardProperties.AlertEmail defaultProperties,
+            PrivacyTenantAuditTelemetry telemetry,
+            PrivacyTenantDeadLetterAlertRoutePolicyResolver routePolicyResolver,
+            PrivacyTenantDeadLetterAlertDeliveryPolicyResolver deliveryPolicyResolver
     ) {
         this.mailSender = mailSender;
         this.defaultProperties = defaultProperties;
         this.telemetry = telemetry == null ? PrivacyTenantAuditTelemetry.noop() : telemetry;
-        this.routes = routes == null ? Map.of() : Map.copyOf(routes);
+        this.routePolicyResolver = routePolicyResolver == null
+                ? PrivacyTenantDeadLetterAlertRoutePolicyResolver.noop()
+                : routePolicyResolver;
+        this.deliveryPolicyResolver = deliveryPolicyResolver == null
+                ? PrivacyTenantDeadLetterAlertDeliveryPolicyResolver.noop()
+                : deliveryPolicyResolver;
     }
 
     @Override
     public boolean supportsTenant(String tenantId) {
-        return resolveProperties(tenantId) != null;
+        return resolveEmailEnabled(tenantId) && resolveProperties(tenantId) != null;
     }
 
     @Override
     public void handle(String tenantId, PrivacyAuditDeadLetterAlertEvent event) {
+        if (!resolveEmailEnabled(tenantId)) {
+            return;
+        }
         PrivacyGuardProperties.AlertEmail properties = resolveProperties(tenantId);
         if (properties == null) {
             return;
@@ -51,8 +74,11 @@ public class TenantScopedPrivacyAuditDeadLetterEmailAlertCallback implements Pri
     }
 
     private PrivacyGuardProperties.AlertEmail resolveProperties(String tenantId) {
-        PrivacyGuardProperties.AlertTenantRouteEmail route = tenantRouteEmail(tenantId);
-        boolean routeHasTarget = route != null && StringUtils.hasText(route.getTo());
+        PrivacyTenantDeadLetterAlertRoutePolicy routePolicy = routePolicyResolver.resolve(tenantId);
+        PrivacyTenantDeadLetterAlertEmailPolicy route = routePolicy == null
+                ? PrivacyTenantDeadLetterAlertEmailPolicy.none()
+                : routePolicy.email();
+        boolean routeHasTarget = route != null && StringUtils.hasText(route.to());
         boolean defaultHasTarget = defaultProperties != null
                 && StringUtils.hasText(defaultProperties.getFrom())
                 && StringUtils.hasText(defaultProperties.getTo());
@@ -65,21 +91,21 @@ public class TenantScopedPrivacyAuditDeadLetterEmailAlertCallback implements Pri
         }
 
         PrivacyGuardProperties.AlertEmail resolved = new PrivacyGuardProperties.AlertEmail();
-        resolved.setFrom(firstNonNull(route.getFrom(), defaultProperties.getFrom()));
-        resolved.setTo(firstNonNull(route.getTo(), defaultProperties.getTo()));
-        resolved.setSubjectPrefix(firstNonNull(route.getSubjectPrefix(), defaultProperties.getSubjectPrefix()));
+        resolved.setFrom(firstNonNull(route.from(), defaultProperties.getFrom()));
+        resolved.setTo(firstNonNull(route.to(), defaultProperties.getTo()));
+        resolved.setSubjectPrefix(firstNonNull(route.subjectPrefix(), defaultProperties.getSubjectPrefix()));
         if (!StringUtils.hasText(resolved.getFrom()) || !StringUtils.hasText(resolved.getTo())) {
             return null;
         }
         return resolved;
     }
 
-    private PrivacyGuardProperties.AlertTenantRouteEmail tenantRouteEmail(String tenantId) {
-        if (tenantId == null || tenantId.isBlank()) {
-            return null;
+    private boolean resolveEmailEnabled(String tenantId) {
+        PrivacyTenantDeadLetterAlertDeliveryPolicy policy = deliveryPolicyResolver.resolve(tenantId);
+        if (policy == null) {
+            policy = PrivacyTenantDeadLetterAlertDeliveryPolicy.none();
         }
-        PrivacyGuardProperties.AlertTenantRoute route = routes.get(tenantId.trim());
-        return route == null ? null : route.getEmail();
+        return policy.resolveEmailEnabled(true);
     }
 
     private <T> T firstNonNull(T routeValue, T defaultValue) {

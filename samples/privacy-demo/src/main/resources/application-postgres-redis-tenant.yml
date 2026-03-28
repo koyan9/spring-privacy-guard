@@ -23,6 +23,26 @@ demo:
 
 privacy:
   guard:
+    tenant:
+      policies:
+        tenant-a:
+          observability:
+            dead-letter:
+              alert:
+                receiver:
+                  path-pattern: /demo-alert-receiver/tenant-a
+                  bearer-token: demo-tenant-a-receiver-token
+                  signature-secret: demo-tenant-a-receiver-secret
+                  replay-namespace: tenant-a-receiver
+        tenant-b:
+          observability:
+            dead-letter:
+              alert:
+                receiver:
+                  path-pattern: /demo-alert-receiver/tenant-b
+                  bearer-token: demo-tenant-b-receiver-token
+                  signature-secret: demo-tenant-b-receiver-secret
+                  replay-namespace: tenant-b-receiver
     audit:
       repository-type: JDBC
       jdbc:

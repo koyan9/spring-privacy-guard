@@ -10,6 +10,7 @@ import io.github.koyan9.privacy.core.PrivacyTenantProvider;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -105,7 +106,7 @@ public class PrivacyTenantAuditDeadLetterQueryService {
                 ? PrivacyAuditDeadLetterQueryCriteria.recent(100)
                 : criteria.normalize();
         String detailKey = tenantDetailKey(normalizedTenant);
-        if (tenantAuditDeadLetterReadRepository != null) {
+        if (tenantAuditDeadLetterReadRepository != null && tenantAuditDeadLetterReadRepository.supportsTenantRead()) {
             telemetry().recordQueryReadPath("dead_letter", "native");
             return tenantAuditDeadLetterReadRepository.findByCriteria(normalizedTenant, detailKey, normalized);
         }
@@ -121,6 +122,25 @@ public class PrivacyTenantAuditDeadLetterQueryService {
         return findByCriteria(tenantProvider.currentTenantId(), criteria);
     }
 
+    public Optional<PrivacyAuditDeadLetterEntry> findById(String tenantId, long id) {
+        String normalizedTenant = normalizeTenant(tenantId);
+        if (normalizedTenant == null) {
+            return privacyAuditDeadLetterService.findById(id);
+        }
+        String detailKey = tenantDetailKey(normalizedTenant);
+        if (tenantAuditDeadLetterReadRepository != null && tenantAuditDeadLetterReadRepository.supportsTenantFindById()) {
+            telemetry().recordQueryReadPath("dead_letter_find_by_id", "native");
+            return tenantAuditDeadLetterReadRepository.findById(normalizedTenant, detailKey, id);
+        }
+        telemetry().recordQueryReadPath("dead_letter_find_by_id", "fallback");
+        return privacyAuditDeadLetterService.findById(id)
+                .filter(entry -> normalizedTenant.equals(entry.details().get(detailKey)));
+    }
+
+    public Optional<PrivacyAuditDeadLetterEntry> findByIdForCurrentTenant(long id) {
+        return findById(tenantProvider.currentTenantId(), id);
+    }
+
     public PrivacyAuditDeadLetterStats computeStats(String tenantId, PrivacyAuditDeadLetterQueryCriteria criteria) {
         String normalizedTenant = normalizeTenant(tenantId);
         if (normalizedTenant == null) {
@@ -130,7 +150,7 @@ public class PrivacyTenantAuditDeadLetterQueryService {
                 ? PrivacyAuditDeadLetterQueryCriteria.recent(100)
                 : criteria.normalize();
         String detailKey = tenantDetailKey(normalizedTenant);
-        if (tenantAuditDeadLetterReadRepository != null) {
+        if (tenantAuditDeadLetterReadRepository != null && tenantAuditDeadLetterReadRepository.supportsTenantRead()) {
             telemetry().recordQueryReadPath("dead_letter_stats", "native");
             return tenantAuditDeadLetterReadRepository.computeStats(normalizedTenant, detailKey, normalized);
         }

@@ -20,11 +20,14 @@ class MicrometerPrivacyTenantAuditTelemetryTest {
         telemetry.recordQueryReadPath("audit", "native");
         telemetry.recordQueryReadPath("audit", "fallback");
         telemetry.recordQueryReadPath("dead_letter", "native");
+        telemetry.recordQueryReadPath("dead_letter_find_by_id", "fallback");
         telemetry.recordWritePath("audit_write", "native");
         telemetry.recordWritePath("dead_letter_write", "fallback");
         telemetry.recordWritePath("dead_letter_import", "native");
         telemetry.recordWritePath("dead_letter_delete", "native");
+        telemetry.recordWritePath("dead_letter_delete_by_id", "fallback");
         telemetry.recordWritePath("dead_letter_replay", "fallback");
+        telemetry.recordWritePath("dead_letter_replay_by_id", "native");
         telemetry.recordAlertTransition("tenant-a", "WARNING", false);
         telemetry.recordAlertTransition("tenant-a", "CLEAR", true);
         telemetry.recordAlertDelivery("tenant-a", "webhook", "success");
@@ -44,6 +47,11 @@ class MicrometerPrivacyTenantAuditTelemetryTest {
         assertThat(registry.get("privacy.audit.tenant.read.path")
                 .tag("domain", "dead_letter")
                 .tag("path", "native")
+                .counter()
+                .count()).isEqualTo(1.0d);
+        assertThat(registry.get("privacy.audit.tenant.read.path")
+                .tag("domain", "dead_letter_find_by_id")
+                .tag("path", "fallback")
                 .counter()
                 .count()).isEqualTo(1.0d);
         assertThat(registry.get("privacy.audit.tenant.write.path")
@@ -67,8 +75,18 @@ class MicrometerPrivacyTenantAuditTelemetryTest {
                 .counter()
                 .count()).isEqualTo(1.0d);
         assertThat(registry.get("privacy.audit.tenant.write.path")
+                .tag("domain", "dead_letter_delete_by_id")
+                .tag("path", "fallback")
+                .counter()
+                .count()).isEqualTo(1.0d);
+        assertThat(registry.get("privacy.audit.tenant.write.path")
                 .tag("domain", "dead_letter_replay")
                 .tag("path", "fallback")
+                .counter()
+                .count()).isEqualTo(1.0d);
+        assertThat(registry.get("privacy.audit.tenant.write.path")
+                .tag("domain", "dead_letter_replay_by_id")
+                .tag("path", "native")
                 .counter()
                 .count()).isEqualTo(1.0d);
         assertThat(registry.get("privacy.audit.deadletters.alert.tenant.transitions")

@@ -1,10 +1,13 @@
 param(
     [string]$Node1BaseUrl = 'http://localhost:8088',
     [string]$Node2BaseUrl = 'http://localhost:8091',
+    [string]$ReceiverPath = '/demo-alert-receiver',
     [string]$BearerToken = 'demo-receiver-token',
     [string]$SignatureSecret = 'demo-receiver-secret',
     [string]$SignatureAlgorithm = 'HmacSHA256',
-    [string]$AdminToken = 'demo-admin-token'
+    [string]$AdminToken = 'demo-admin-token',
+    [string]$TenantId = '',
+    [string]$ExpectedReplayNamespace = ''
 )
 
 if ($SignatureAlgorithm -ne 'HmacSHA256') {
@@ -33,17 +36,20 @@ $receiverHeaders = @{
 }
 
 $adminHeaders = @{ 'X-Demo-Admin-Token' = $AdminToken }
+if ($TenantId) {
+    $adminHeaders['X-Privacy-Tenant'] = $TenantId
+}
 
 Write-Host "Checking instance metadata..."
 Invoke-RestMethod -Method Get -Uri "$Node1BaseUrl/demo-tenants/current" | ConvertTo-Json -Depth 5
 Invoke-RestMethod -Method Get -Uri "$Node2BaseUrl/demo-tenants/current" | ConvertTo-Json -Depth 5
 
 Write-Host "Posting signed alert to postgres/redis node 1..."
-Invoke-RestMethod -Method Post -Uri "$Node1BaseUrl/demo-alert-receiver" -Headers $receiverHeaders -ContentType 'application/json' -Body $payload | ConvertTo-Json -Depth 5
+Invoke-RestMethod -Method Post -Uri "$Node1BaseUrl$ReceiverPath" -Headers $receiverHeaders -ContentType 'application/json' -Body $payload | ConvertTo-Json -Depth 5
 
 Write-Host "Replaying the same signed alert against postgres/redis node 2. Expecting replay protection..."
 try {
-    Invoke-RestMethod -Method Post -Uri "$Node2BaseUrl/demo-alert-receiver" -Headers $receiverHeaders -ContentType 'application/json' -Body $payload | ConvertTo-Json -Depth 5
+    Invoke-RestMethod -Method Post -Uri "$Node2BaseUrl$ReceiverPath" -Headers $receiverHeaders -ContentType 'application/json' -Body $payload | ConvertTo-Json -Depth 5
     throw "Expected node 2 to reject the replayed nonce, but the request succeeded."
 } catch {
     $response = $_.Exception.Response
@@ -55,6 +61,18 @@ try {
         throw "Expected HTTP 409 from node 2, received $statusCode"
     }
     Write-Host "Node 2 rejected the replayed nonce with HTTP 409 as expected."
+}
+
+Write-Host "Checking replay-store visibility from postgres/redis node 2..."
+$replayStore = Invoke-RestMethod -Method Get -Uri "$Node2BaseUrl/demo-alert-receiver/replay-store?limit=20&offset=0" -Headers $adminHeaders
+$replayStore | ConvertTo-Json -Depth 5
+
+if ($ExpectedReplayNamespace) {
+    $expectedStorageKey = "$ExpectedReplayNamespace:$nonce"
+    $actualStorageKeys = @($replayStore.entries | ForEach-Object { $_.storageKey })
+    if ($actualStorageKeys -notcontains $expectedStorageKey) {
+        throw "Expected replay-store to contain storage key $expectedStorageKey, actual keys: $($actualStorageKeys -join ', ')"
+    }
 }
 
 Write-Host "Fetching observability summaries..."

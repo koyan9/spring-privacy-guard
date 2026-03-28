@@ -4,6 +4,25 @@ All notable changes to `spring-privacy-guard` will be documented in this file.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-03-28
+
+### Added
+
+- Added stable tenant dead-letter alert route policy carriers and a bridge resolver so per-tenant webhook, email, and receiver route overrides can move under `privacy.guard.tenant.policies.*.observability.dead-letter.alert.*` while remaining backward-compatible with the existing `alert.tenant.routes.*` configuration.
+- Added stable tenant dead-letter alert delivery policy resolution so per-tenant logging, webhook, and email delivery can be enabled or disabled independently of the global dead-letter alert defaults.
+- Added stable tenant dead-letter alert monitoring policy resolution so per-tenant alert monitor membership can be enabled or disabled independently of the global monitored-tenant allowlist.
+- Added explicit tenant-aware single dead-letter delete and replay helpers for `id`-based management flows while preserving the existing global by-id entry points for opt-in global administration.
+- Added tenant-native dead-letter lookup by `id` for built-in repositories and sample custom repositories so tenant-aware single-entry management no longer has to rely on global lookup plus helper-side ownership filtering.
+- Added explicit tenant-native dead-letter delete-by-id and replay-by-id capability flags plus dedicated `dead_letter_delete_by_id` / `dead_letter_replay_by_id` write-path telemetry.
+- Added `dead_letter_find_by_id` tenant read-path telemetry plus sample observability coverage so single-entry dead-letter ownership lookup now reports native vs fallback execution separately from criteria reads and exchange paths.
+- Replaced reflective detection of tenant-native dead-letter by-id lookup with an explicit SPI capability so helper routing and sample capability reporting now use the same declared contract.
+- Added explicit SPI capability flags for tenant-native dead-letter exchange reads and tenant-aware import writes so helper routing and sample capability reporting no longer infer those paths from interface presence alone.
+- Added explicit SPI capability flags for audit tenant reads and writes so query helpers, publishers, and sample capability reporting no longer infer native support from interface presence alone.
+- Added explicit SPI capability flags for dead-letter generic reads, writes, deletes, and replays so helper routing and sample capability reporting no longer infer native support from interface presence alone.
+- Added sample HTTP coverage for tenant-scoped single dead-letter delete and replay operations through both the default in-memory profile and the JDBC tenant profile.
+
+### Changed
+
 - Updated `.github/workflows/release.yml` to use `softprops/action-gh-release@v2.6.1` so future release runs avoid the Node 20 crash observed during the `v0.4.0` publication workflow.
 
 ## [0.4.0] - 2026-03-27

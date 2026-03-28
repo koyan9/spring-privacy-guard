@@ -29,16 +29,22 @@ class TenantScopedPrivacyAuditDeadLetterEmailAlertCallbackTest {
         defaultProperties.setTo("ops@example.com");
         defaultProperties.setSubjectPrefix("[global]");
 
-        PrivacyGuardProperties.AlertTenantRoute route = new PrivacyGuardProperties.AlertTenantRoute();
-        route.getEmail().setTo("tenant-a-ops@example.com");
-        route.getEmail().setSubjectPrefix("[tenant-a]");
-
         TenantScopedPrivacyAuditDeadLetterEmailAlertCallback callback =
                 new TenantScopedPrivacyAuditDeadLetterEmailAlertCallback(
                         mailSender,
                         defaultProperties,
                         new MicrometerPrivacyTenantAuditTelemetry(registry),
-                        Map.of("tenant-a", route)
+                        tenantId -> "tenant-a".equals(tenantId)
+                                ? new PrivacyTenantDeadLetterAlertRoutePolicy(
+                                PrivacyTenantDeadLetterAlertWebhookPolicy.none(),
+                                new PrivacyTenantDeadLetterAlertEmailPolicy(
+                                        null,
+                                        "tenant-a-ops@example.com",
+                                        "[tenant-a]"
+                                ),
+                                PrivacyTenantDeadLetterAlertReceiverPolicy.none()
+                        )
+                                : PrivacyTenantDeadLetterAlertRoutePolicy.none()
                 );
 
         callback.handle("tenant-a", event());
@@ -68,7 +74,7 @@ class TenantScopedPrivacyAuditDeadLetterEmailAlertCallbackTest {
                         mailSender,
                         defaultProperties,
                         new MicrometerPrivacyTenantAuditTelemetry(registry),
-                        Map.of()
+                        PrivacyTenantDeadLetterAlertRoutePolicyResolver.noop()
                 );
 
         callback.handle("tenant-b", event());
@@ -82,6 +88,41 @@ class TenantScopedPrivacyAuditDeadLetterEmailAlertCallbackTest {
                 .tag("outcome", "success")
                 .counter()
                 .count()).isEqualTo(1.0d);
+    }
+
+    @Test
+    void skipsEmailDeliveryWhenTenantDeliveryPolicyDisablesEmail() {
+        CapturingMailSender mailSender = new CapturingMailSender();
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        PrivacyGuardProperties.AlertEmail defaultProperties = new PrivacyGuardProperties.AlertEmail();
+        defaultProperties.setFrom("privacy@example.com");
+        defaultProperties.setTo("ops@example.com");
+
+        TenantScopedPrivacyAuditDeadLetterEmailAlertCallback callback =
+                new TenantScopedPrivacyAuditDeadLetterEmailAlertCallback(
+                        mailSender,
+                        defaultProperties,
+                        new MicrometerPrivacyTenantAuditTelemetry(registry),
+                        tenantId -> new PrivacyTenantDeadLetterAlertRoutePolicy(
+                                PrivacyTenantDeadLetterAlertWebhookPolicy.none(),
+                                new PrivacyTenantDeadLetterAlertEmailPolicy(
+                                        null,
+                                        "tenant-a-ops@example.com",
+                                        "[tenant-a]"
+                                ),
+                                PrivacyTenantDeadLetterAlertReceiverPolicy.none()
+                        ),
+                        tenantId -> new PrivacyTenantDeadLetterAlertDeliveryPolicy(null, null, Boolean.FALSE)
+                );
+
+        assertThat(callback.supportsTenant("tenant-a")).isFalse();
+        callback.handle("tenant-a", event());
+
+        assertThat(mailSender.lastMessage).isNull();
+        assertThat(registry.find("privacy.audit.deadletters.alert.tenant.deliveries")
+                .tag("tenant", "tenant-a")
+                .tag("channel", "email")
+                .counters()).isEmpty();
     }
 
     private PrivacyAuditDeadLetterAlertEvent event() {

@@ -56,6 +56,6 @@
 
 ## Release Checklist
 
-- Drafted from the `0.4.0` section in `CHANGELOG.md`
+- Published from the `0.4.0` section in `CHANGELOG.md`
 - Reviewed against `docs/RELEASE_CHECKLIST.md`
-- Intended for tag `v0.4.0`
+- Serves as the baseline release body for `v0.4.0`

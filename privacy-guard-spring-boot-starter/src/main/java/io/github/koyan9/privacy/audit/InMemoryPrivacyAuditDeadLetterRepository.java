@@ -6,6 +6,7 @@
 package io.github.koyan9.privacy.audit;
 
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -105,8 +106,48 @@ public class InMemoryPrivacyAuditDeadLetterRepository implements
     }
 
     @Override
+    public Optional<PrivacyAuditDeadLetterEntry> findById(
+            String tenantId,
+            String tenantDetailKey,
+            long id
+    ) {
+        if (tenantId == null || tenantId.isBlank() || tenantDetailKey == null || tenantDetailKey.isBlank()) {
+            return findById(id);
+        }
+        return entries.stream()
+                .filter(entry -> entry.id() != null && entry.id() == id)
+                .filter(entry -> tenantId.equals(entry.details().get(tenantDetailKey)))
+                .findFirst();
+    }
+
+    @Override
+    public boolean supportsTenantRead() {
+        return true;
+    }
+
+    @Override
+    public boolean supportsTenantFindById() {
+        return true;
+    }
+
+    @Override
+    public boolean supportsTenantExchangeRead() {
+        return true;
+    }
+
+    @Override
+    public boolean supportsTenantImport() {
+        return true;
+    }
+
+    @Override
+    public boolean supportsTenantWrite() {
+        return true;
+    }
+
+    @Override
     public void save(PrivacyTenantAuditDeadLetterWriteRequest request) {
-        save(request.entry());
+        save(materializeTenantDetails(request));
     }
 
     @Override
@@ -114,7 +155,7 @@ public class InMemoryPrivacyAuditDeadLetterRepository implements
         if (requests == null || requests.isEmpty()) {
             return;
         }
-        this.entries.addAll(requests.stream().map(PrivacyTenantAuditDeadLetterWriteRequest::entry).map(this::assignId).toList());
+        this.entries.addAll(requests.stream().map(this::materializeTenantDetails).map(this::assignId).toList());
     }
 
     @Override
@@ -125,6 +166,18 @@ public class InMemoryPrivacyAuditDeadLetterRepository implements
     @Override
     public boolean deleteById(long id) {
         return entries.removeIf(entry -> entry.id() != null && entry.id() == id);
+    }
+
+    @Override
+    public boolean deleteById(String tenantId, String tenantDetailKey, long id) {
+        if (tenantId == null || tenantId.isBlank() || tenantDetailKey == null || tenantDetailKey.isBlank()) {
+            return deleteById(id);
+        }
+        return findById(tenantId, tenantDetailKey, id)
+                .map(PrivacyAuditDeadLetterEntry::id)
+                .filter(java.util.Objects::nonNull)
+                .map(this::deleteById)
+                .orElse(false);
     }
 
     @Override
@@ -146,6 +199,16 @@ public class InMemoryPrivacyAuditDeadLetterRepository implements
     }
 
     @Override
+    public boolean supportsTenantDelete() {
+        return true;
+    }
+
+    @Override
+    public boolean supportsTenantDeleteById() {
+        return true;
+    }
+
+    @Override
     public PrivacyAuditDeadLetterReplayResult replayByCriteria(
             String tenantId,
             String tenantDetailKey,
@@ -163,7 +226,7 @@ public class InMemoryPrivacyAuditDeadLetterRepository implements
                 failedIds.add(entry.id());
                 continue;
             }
-            if (deleteById(entry.id())) {
+            if (deleteById(tenantId, tenantDetailKey, entry.id())) {
                 replayedIds.add(entry.id());
             }
         }
@@ -174,6 +237,30 @@ public class InMemoryPrivacyAuditDeadLetterRepository implements
                 List.copyOf(replayedIds),
                 List.copyOf(failedIds)
         );
+    }
+
+    @Override
+    public boolean supportsTenantReplay() {
+        return true;
+    }
+
+    @Override
+    public boolean replayById(
+            String tenantId,
+            String tenantDetailKey,
+            long id,
+            java.util.function.Predicate<PrivacyAuditDeadLetterEntry> replayAction
+    ) {
+        return findById(tenantId, tenantDetailKey, id)
+                .filter(entry -> entry.id() != null)
+                .map(entry -> replayAction.test(entry)
+                        && deleteById(tenantId, tenantDetailKey, entry.id()))
+                .orElse(false);
+    }
+
+    @Override
+    public boolean supportsTenantReplayById() {
+        return true;
     }
 
     public void clear() {
@@ -247,6 +334,34 @@ public class InMemoryPrivacyAuditDeadLetterRepository implements
             return true;
         }
         return tenantId.equals(entry.details().get(tenantDetailKey));
+    }
+
+    private PrivacyAuditDeadLetterEntry materializeTenantDetails(PrivacyTenantAuditDeadLetterWriteRequest request) {
+        PrivacyAuditDeadLetterEntry entry = request.entry();
+        String tenantId = request.tenantId();
+        String tenantDetailKey = request.tenantDetailKey();
+        if (tenantId == null || tenantId.isBlank() || tenantDetailKey == null || tenantDetailKey.isBlank()) {
+            return entry;
+        }
+        if (tenantId.equals(entry.details().get(tenantDetailKey))) {
+            return entry;
+        }
+        Map<String, String> details = new LinkedHashMap<>(entry.details());
+        details.putIfAbsent(tenantDetailKey, tenantId);
+        return new PrivacyAuditDeadLetterEntry(
+                entry.id(),
+                entry.failedAt(),
+                entry.attempts(),
+                entry.errorType(),
+                entry.errorMessage(),
+                entry.occurredAt(),
+                entry.action(),
+                entry.resourceType(),
+                entry.resourceId(),
+                entry.actor(),
+                entry.outcome(),
+                details
+        );
     }
 
     private PrivacyAuditDeadLetterEntry assignId(PrivacyAuditDeadLetterEntry entry) {

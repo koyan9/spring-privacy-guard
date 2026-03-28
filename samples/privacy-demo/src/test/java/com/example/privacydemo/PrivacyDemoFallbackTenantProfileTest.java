@@ -7,6 +7,7 @@ package com.example.privacydemo;
 
 import io.github.koyan9.privacy.audit.PrivacyAuditDeadLetterEntry;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -26,6 +27,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("fallback-tenant")
+@Tag("sample")
+@Tag("sample-fallback")
+@Tag("sample-tenant")
 class PrivacyDemoFallbackTenantProfileTest {
 
     @Autowired
@@ -101,16 +105,28 @@ class PrivacyDemoFallbackTenantProfileTest {
                 .andExpect(jsonPath("$.repositoryImplementations.deadLetter").value("FallbackDeadLetterRepository"))
                 .andExpect(jsonPath("$.repositoryCapabilities.audit.tenantReadNative").value(false))
                 .andExpect(jsonPath("$.repositoryCapabilities.audit.tenantWriteNative").value(false))
+                .andExpect(jsonPath("$.repositoryCapabilities.deadLetter.tenantFindByIdNative").value(false))
                 .andExpect(jsonPath("$.repositoryCapabilities.deadLetter.tenantReadNative").value(false))
                 .andExpect(jsonPath("$.repositoryCapabilities.deadLetter.tenantExchangeReadNative").value(false))
                 .andExpect(jsonPath("$.repositoryCapabilities.deadLetter.tenantImportNative").value(false))
                 .andExpect(jsonPath("$.repositoryCapabilities.deadLetter.tenantDeleteNative").value(false))
+                .andExpect(jsonPath("$.repositoryCapabilities.deadLetter.tenantDeleteByIdNative").value(false))
                 .andExpect(jsonPath("$.repositoryCapabilities.deadLetter.tenantReplayNative").value(false))
+                .andExpect(jsonPath("$.repositoryCapabilities.deadLetter.tenantReplayByIdNative").value(false))
+                .andExpect(jsonPath("$.expectedPaths.read.audit").value("fallback"))
+                .andExpect(jsonPath("$.expectedPaths.read.deadLetterExport").value("fallback"))
+                .andExpect(jsonPath("$.expectedPaths.write.auditWrite").value("fallback"))
+                .andExpect(jsonPath("$.expectedPaths.write.deadLetterImport").value("fallback"))
+                .andExpect(jsonPath("$.expectedPaths.write.deadLetterDeleteById").value("fallback"))
+                .andExpect(jsonPath("$.expectedPaths.write.deadLetterReplay").value("fallback"))
+                .andExpect(jsonPath("$.expectedPaths.write.deadLetterReplayById").value("fallback"))
                 .andExpect(jsonPath("$.readPaths.audit.fallback").value(greaterThanOrEqualTo(1.0)))
                 .andExpect(jsonPath("$.readPaths.auditStats.fallback").value(greaterThanOrEqualTo(0.0)))
                 .andExpect(jsonPath("$.readPaths.deadLetterExport.fallback").value(greaterThanOrEqualTo(1.0)))
                 .andExpect(jsonPath("$.readPaths.deadLetterManifest.fallback").value(greaterThanOrEqualTo(1.0)))
                 .andExpect(jsonPath("$.writePaths.auditWrite.fallback").value(greaterThanOrEqualTo(1.0)))
-                .andExpect(jsonPath("$.writePaths.deadLetterImport.fallback").value(greaterThanOrEqualTo(1.0)));
+                .andExpect(jsonPath("$.writePaths.deadLetterImport.fallback").value(greaterThanOrEqualTo(1.0)))
+                .andExpect(jsonPath("$.writePaths.deadLetterDeleteById.fallback").value(greaterThanOrEqualTo(0.0)))
+                .andExpect(jsonPath("$.writePaths.deadLetterReplayById.fallback").value(greaterThanOrEqualTo(0.0)));
     }
 }

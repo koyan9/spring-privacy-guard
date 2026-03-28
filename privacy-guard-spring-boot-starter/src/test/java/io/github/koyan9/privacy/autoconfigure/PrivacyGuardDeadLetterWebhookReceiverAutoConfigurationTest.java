@@ -109,6 +109,28 @@ class PrivacyGuardDeadLetterWebhookReceiverAutoConfigurationTest {
     }
 
     @Test
+    void createsVerificationRouteRegistryFromTenantPolicyReceiverOverrides() {
+        contextRunner
+                .withPropertyValues(
+                        "privacy.guard.tenant.enabled=true",
+                        "privacy.guard.audit.dead-letter.observability.alert.receiver.filter.enabled=true",
+                        "privacy.guard.tenant.policies[tenant-a].observability.dead-letter.alert.receiver.path-pattern=/receiver/tenant-a-policy",
+                        "privacy.guard.tenant.policies[tenant-a].observability.dead-letter.alert.receiver.bearer-token=tenant-a-token",
+                        "privacy.guard.tenant.policies[tenant-a].observability.dead-letter.alert.receiver.signature-secret=tenant-a-secret",
+                        "privacy.guard.tenant.policies[tenant-a].observability.dead-letter.alert.receiver.replay-namespace=tenant-a-policy"
+                )
+                .run(context -> {
+                    assertThat(context).hasSingleBean(PrivacyAuditDeadLetterWebhookVerificationRouteRegistry.class);
+                    PrivacyAuditDeadLetterWebhookVerificationRouteRegistry registry =
+                            context.getBean(PrivacyAuditDeadLetterWebhookVerificationRouteRegistry.class);
+                    assertThat(registry.hasRoutes()).isTrue();
+                    assertThat(registry.pathPatterns()).containsExactly("/receiver/tenant-a-policy");
+                    assertThat(registry.find("/receiver/tenant-a-policy")).isNotNull();
+                    assertThat(registry.find("/receiver/tenant-a-policy").tenantId()).isEqualTo("tenant-a");
+                });
+    }
+
+    @Test
     void backsOffDefaultReplayStoreWhenCustomStoreProvided() {
         contextRunner
                 .withUserConfiguration(CustomReplayStoreConfig.class)

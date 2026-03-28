@@ -40,10 +40,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
                 "privacy.guard.audit.enabled=false",
                 "privacy.guard.audit.dead-letter.observability.alert.receiver.filter.enabled=true",
                 "privacy.guard.audit.dead-letter.observability.alert.receiver.filter.path-pattern=/receiver/default-alerts",
-                "privacy.guard.audit.dead-letter.observability.alert.tenant.routes.tenant-a.receiver.path-pattern=/receiver/tenant-a-alerts",
-                "privacy.guard.audit.dead-letter.observability.alert.tenant.routes.tenant-a.receiver.bearer-token=tenant-a-token",
-                "privacy.guard.audit.dead-letter.observability.alert.tenant.routes.tenant-a.receiver.signature-secret=tenant-a-secret",
-                "privacy.guard.audit.dead-letter.observability.alert.tenant.routes.tenant-a.receiver.replay-namespace=tenant-a-receiver"
+                "privacy.guard.tenant.enabled=true",
+                "privacy.guard.tenant.policies.tenant-a.observability.dead-letter.alert.receiver.path-pattern=/receiver/tenant-a-alerts",
+                "privacy.guard.tenant.policies.tenant-a.observability.dead-letter.alert.receiver.bearer-token=tenant-a-token",
+                "privacy.guard.tenant.policies.tenant-a.observability.dead-letter.alert.receiver.signature-secret=tenant-a-secret",
+                "privacy.guard.tenant.policies.tenant-a.observability.dead-letter.alert.receiver.replay-namespace=tenant-a-receiver"
         }
 )
 @AutoConfigureMockMvc
@@ -106,6 +107,43 @@ class PrivacyGuardWebhookReceiverTenantRouteFilterIntegrationTest {
         assertThat(meterRegistry.get("privacy.audit.deadletters.receiver.route.failures")
                 .tag("route", "/receiver/tenant-a-alerts")
                 .tag("reason", "invalid_signature")
+                .counter()
+                .count()).isEqualTo(1.0d);
+    }
+
+    @Test
+    void rejectsReplayedNonceOnTenantRouteAndRecordsRouteMetric() throws Exception {
+        String body = "{\"state\":\"WARNING\"}";
+        String timestamp = String.valueOf(Instant.now().getEpochSecond());
+        String nonce = "tenant-a-replay";
+        String signature = PrivacyAuditDeadLetterWebhookSignatureSupport.sign(
+                timestamp + "." + nonce + "." + body,
+                "tenant-a-secret",
+                "HmacSHA256"
+        );
+
+        mockMvc.perform(post("/receiver/tenant-a-alerts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer tenant-a-token")
+                        .header("X-Privacy-Alert-Timestamp", timestamp)
+                        .header("X-Privacy-Alert-Nonce", nonce)
+                        .header("X-Privacy-Alert-Signature", signature)
+                        .content(body))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/receiver/tenant-a-alerts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer tenant-a-token")
+                        .header("X-Privacy-Alert-Timestamp", timestamp)
+                        .header("X-Privacy-Alert-Nonce", nonce)
+                        .header("X-Privacy-Alert-Signature", signature)
+                        .content(body))
+                .andExpect(status().isConflict());
+
+        assertThat(replayStore.snapshot()).containsKey("tenant-a-receiver:" + nonce);
+        assertThat(meterRegistry.get("privacy.audit.deadletters.receiver.route.failures")
+                .tag("route", "/receiver/tenant-a-alerts")
+                .tag("reason", "replay_detected")
                 .counter()
                 .count()).isEqualTo(1.0d);
     }

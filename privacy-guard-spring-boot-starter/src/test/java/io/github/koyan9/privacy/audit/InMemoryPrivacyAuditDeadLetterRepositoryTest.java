@@ -14,6 +14,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class InMemoryPrivacyAuditDeadLetterRepositoryTest {
 
@@ -126,6 +127,21 @@ class InMemoryPrivacyAuditDeadLetterRepositoryTest {
     }
 
     @Test
+    void findsTenantNativeDeadLetterById() {
+        InMemoryPrivacyAuditDeadLetterRepository repository = new InMemoryPrivacyAuditDeadLetterRepository();
+        repository.save(new PrivacyAuditDeadLetterEntry(null, Instant.parse("2026-03-06T00:00:00Z"), 3, "TypeA", "one", Instant.parse("2026-03-05T23:00:00Z"), "READ", "Patient", "a1", "alice", "OK", Map.of("tenant", "tenant-a")));
+        repository.save(new PrivacyAuditDeadLetterEntry(null, Instant.parse("2026-03-06T01:00:00Z"), 3, "TypeA", "two", Instant.parse("2026-03-06T00:30:00Z"), "READ", "Patient", "b1", "alice", "OK", Map.of("tenant", "tenant-b")));
+        long tenantAId = repository.findAll().stream()
+                .filter(entry -> "a1".equals(entry.resourceId()))
+                .findFirst()
+                .orElseThrow()
+                .id();
+
+        assertTrue(repository.findById("tenant-a", "tenant", tenantAId).isPresent());
+        assertThat(repository.findById("tenant-b", "tenant", tenantAId)).isEmpty();
+    }
+
+    @Test
     void deletesTenantNativeFilteredDeadLetters() {
         InMemoryPrivacyAuditDeadLetterRepository repository = new InMemoryPrivacyAuditDeadLetterRepository();
         repository.save(new PrivacyAuditDeadLetterEntry(null, Instant.parse("2026-03-06T00:00:00Z"), 3, "TypeA", "one", Instant.parse("2026-03-05T23:00:00Z"), "READ", "Patient", "a1", "alice", "OK", Map.of("tenant", "tenant-a")));
@@ -155,6 +171,22 @@ class InMemoryPrivacyAuditDeadLetterRepositoryTest {
     }
 
     @Test
+    void deletesTenantNativeDeadLetterById() {
+        InMemoryPrivacyAuditDeadLetterRepository repository = new InMemoryPrivacyAuditDeadLetterRepository();
+        repository.save(new PrivacyAuditDeadLetterEntry(null, Instant.parse("2026-03-06T00:00:00Z"), 3, "TypeA", "one", Instant.parse("2026-03-05T23:00:00Z"), "READ", "Patient", "a1", "alice", "OK", Map.of("tenant", "tenant-a")));
+        repository.save(new PrivacyAuditDeadLetterEntry(null, Instant.parse("2026-03-06T01:00:00Z"), 3, "TypeA", "two", Instant.parse("2026-03-06T00:30:00Z"), "READ", "Patient", "b1", "alice", "OK", Map.of("tenant", "tenant-b")));
+        long tenantAId = repository.findAll().stream()
+                .filter(entry -> "a1".equals(entry.resourceId()))
+                .findFirst()
+                .orElseThrow()
+                .id();
+
+        assertThat(repository.deleteById("tenant-b", "tenant", tenantAId)).isFalse();
+        assertThat(repository.deleteById("tenant-a", "tenant", tenantAId)).isTrue();
+        assertThat(repository.findAll()).extracting(PrivacyAuditDeadLetterEntry::resourceId).containsExactly("b1");
+    }
+
+    @Test
     void replaysTenantNativeFilteredDeadLetters() {
         InMemoryPrivacyAuditDeadLetterRepository repository = new InMemoryPrivacyAuditDeadLetterRepository();
         repository.save(new PrivacyAuditDeadLetterEntry(null, Instant.parse("2026-03-06T00:00:00Z"), 3, "TypeA", "one", Instant.parse("2026-03-05T23:00:00Z"), "READ", "Patient", "a1", "alice", "OK", Map.of("tenant", "tenant-a")));
@@ -174,5 +206,52 @@ class InMemoryPrivacyAuditDeadLetterRepositoryTest {
         assertThat(result.replayedIds()).hasSize(1);
         assertThat(result.failedIds()).hasSize(1);
         assertThat(repository.findAll()).extracting(PrivacyAuditDeadLetterEntry::resourceId).containsExactly("b1", "a1");
+    }
+
+    @Test
+    void replaysTenantNativeDeadLetterById() {
+        InMemoryPrivacyAuditDeadLetterRepository repository = new InMemoryPrivacyAuditDeadLetterRepository();
+        repository.save(new PrivacyAuditDeadLetterEntry(null, Instant.parse("2026-03-06T00:00:00Z"), 3, "TypeA", "one", Instant.parse("2026-03-05T23:00:00Z"), "READ", "Patient", "a1", "alice", "OK", Map.of("tenant", "tenant-a")));
+        repository.save(new PrivacyAuditDeadLetterEntry(null, Instant.parse("2026-03-06T01:00:00Z"), 3, "TypeA", "two", Instant.parse("2026-03-06T00:30:00Z"), "READ", "Patient", "b1", "alice", "OK", Map.of("tenant", "tenant-b")));
+        long tenantBId = repository.findAll().stream()
+                .filter(entry -> "b1".equals(entry.resourceId()))
+                .findFirst()
+                .orElseThrow()
+                .id();
+
+        assertThat(repository.replayById("tenant-a", "tenant", tenantBId, entry -> true)).isFalse();
+        assertThat(repository.replayById("tenant-b", "tenant", tenantBId, entry -> true)).isTrue();
+        assertThat(repository.findAll()).extracting(PrivacyAuditDeadLetterEntry::resourceId).containsExactly("a1");
+    }
+
+    @Test
+    void materializesTenantDetailsForTenantAwareBulkWrites() {
+        InMemoryPrivacyAuditDeadLetterRepository repository = new InMemoryPrivacyAuditDeadLetterRepository();
+
+        repository.saveAllTenantAware(List.of(
+                new PrivacyTenantAuditDeadLetterWriteRequest(
+                        new PrivacyAuditDeadLetterEntry(
+                                null,
+                                Instant.parse("2026-03-06T00:00:00Z"),
+                                3,
+                                "TypeA",
+                                "failure",
+                                Instant.parse("2026-03-05T23:00:00Z"),
+                                "READ",
+                                "Patient",
+                                "tenant-aware",
+                                "alice",
+                                "OK",
+                                Map.of("phone", "138****8000")
+                        ),
+                        "tenant-a",
+                        "tenant"
+                )
+        ));
+
+        List<PrivacyAuditDeadLetterEntry> entries = repository.findByCriteria("tenant-a", "tenant", PrivacyAuditDeadLetterQueryCriteria.recent(10));
+
+        assertEquals(List.of("tenant-aware"), entries.stream().map(PrivacyAuditDeadLetterEntry::resourceId).toList());
+        assertEquals("tenant-a", repository.findAll().get(0).details().get("tenant"));
     }
 }

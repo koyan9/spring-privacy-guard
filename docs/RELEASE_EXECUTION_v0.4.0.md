@@ -1,7 +1,7 @@
 # Release Execution Guide: v0.4.0
 
-Draft execution guide for the upcoming `spring-privacy-guard v0.4.0` release.
-Update the validation timestamps and final scope before tagging.
+ Published execution reference for the released `spring-privacy-guard v0.4.0` baseline.
+ Reuse this guide as the starting template when preparing the next versioned release.
 
 ## Release Validation Commands
 

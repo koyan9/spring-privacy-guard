@@ -325,6 +325,7 @@ public class PrivacyGuardProperties {
         private Long warningThreshold;
         private Long downThreshold;
         private Boolean notifyOnRecovery;
+        private final AlertTenantRoute alert = new AlertTenantRoute();
 
         public Long getWarningThreshold() {
             return warningThreshold;
@@ -348,6 +349,10 @@ public class PrivacyGuardProperties {
 
         public void setNotifyOnRecovery(Boolean notifyOnRecovery) {
             this.notifyOnRecovery = notifyOnRecovery;
+        }
+
+        public AlertTenantRoute getAlert() {
+            return alert;
         }
     }
 
@@ -786,9 +791,23 @@ public class PrivacyGuardProperties {
 
     public static class AlertTenantRoute {
 
+        private Boolean enabled;
+        private final TenantAlertLogging logging = new TenantAlertLogging();
         private final AlertTenantRouteWebhook webhook = new AlertTenantRouteWebhook();
         private final AlertTenantRouteEmail email = new AlertTenantRouteEmail();
         private final AlertTenantRouteReceiver receiver = new AlertTenantRouteReceiver();
+
+        public Boolean getEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(Boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public TenantAlertLogging getLogging() {
+            return logging;
+        }
 
         public AlertTenantRouteWebhook getWebhook() {
             return webhook;
@@ -803,8 +822,22 @@ public class PrivacyGuardProperties {
         }
     }
 
+    public static class TenantAlertLogging {
+
+        private Boolean enabled;
+
+        public Boolean getEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(Boolean enabled) {
+            this.enabled = enabled;
+        }
+    }
+
     public static class AlertTenantRouteWebhook {
 
+        private Boolean enabled;
         private String url;
         private String bearerToken;
         private String signatureSecret;
@@ -819,6 +852,14 @@ public class PrivacyGuardProperties {
         private Double jitter;
         private Duration connectTimeout;
         private Duration readTimeout;
+
+        public Boolean getEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(Boolean enabled) {
+            this.enabled = enabled;
+        }
 
         public String getUrl() {
             return url;
@@ -935,9 +976,18 @@ public class PrivacyGuardProperties {
 
     public static class AlertTenantRouteEmail {
 
+        private Boolean enabled;
         private String from;
         private String to;
         private String subjectPrefix;
+
+        public Boolean getEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(Boolean enabled) {
+            this.enabled = enabled;
+        }
 
         public String getFrom() {
             return from;
