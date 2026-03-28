@@ -40,5 +40,5 @@
 ## Release Readiness
 
 - Follow `docs/RELEASE_CHECKLIST.md` before preparing a release
-- Use `docs/releases/RELEASE_NOTES_v0.5.0.md`, `docs/RELEASE_DRY_RUN_v0.5.0.md`, and `docs/RELEASE_EXECUTION_v0.5.0.md` as the current draft release-candidate references
+- Use `docs/releases/RELEASE_NOTES_v0.5.0.md`, `docs/RELEASE_DRY_RUN_v0.5.0.md`, and `docs/RELEASE_EXECUTION_v0.5.0.md` as the latest published release references
 - Keep roadmap discussions aligned with `docs/ROADMAP.md`

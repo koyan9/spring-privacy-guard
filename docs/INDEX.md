@@ -51,7 +51,7 @@
 
 - Latest published release: `v0.5.0`
 - Current branch version: `0.5.0`
-- Current next-work focus now moves to the priorities listed in `docs/ROADMAP.md`
+- Active maintenance currently stops at `v0.5.0`; `docs/ROADMAP.md` is kept only as archived planning context
 - Newly landed in the current development cycle:
   - explicit tenant-aware single dead-letter delete / replay management by `id`
   - tenant-native dead-letter lookup by `id` for built-in and sample custom repositories
@@ -68,7 +68,7 @@
   - sample HTTP coverage for tenant-aware write materialization in `IN_MEMORY` and `JDBC` modes
   - sample HTTP coverage for tenant-scoped dead-letter export / manifest / import with `attachTenantId=false`
   - sample receiver tenant-route coverage for `JDBC`, `postgres-redis`, and shared multi-instance replay-store rehearsal
-- Next planning source: `docs/ROADMAP.md`
+- Archived planning source: `docs/ROADMAP.md`
 
 ## Quick Start Paths
 

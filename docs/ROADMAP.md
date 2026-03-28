@@ -1,6 +1,7 @@
 # Roadmap
 
-This document tracks the recommended next development focus for `spring-privacy-guard` after the published `v0.5.0` release on 2026-03-28.
+This document is retained as an archive of historical planning notes through the published `v0.5.0` release on 2026-03-28.
+Active development and maintenance are currently paused after `v0.5.0`.
 
 ## Historical Focus
 
@@ -52,14 +53,15 @@ This document tracks the recommended next development focus for `spring-privacy-
 25. Explicit tenant-native dead-letter delete-by-id / replay-by-id capability flags and write-path telemetry
 26. Draft `v0.5.0` release notes, execution guide, runbook, GitHub release copy, dry-run record, and announcement set
 
-## Recommended Next Work
+## Archived Next Work
 
-- Finalize the `v0.5.0` release candidate validation, published version references, and tag-ready release checklist
+- No active roadmap is being maintained after the published `v0.5.0` release.
+- The items below are preserved only as historical planning context for any future restart of development.
 - Add more production-oriented samples and rollout guides beyond the current PostgreSQL + Redis reference
 - Explore the next multi-tenant policy surface beyond masking/text, audit-detail filtering, dead-letter alerting, and current logging selection
 - Explore the next repository-native tenant-isolation expansion beyond the current built-in read/write/delete/replay/import and explicit by-id support
 
-## Post-v0.4.0 Themes
+## Archived Themes
 
 - Expand the new multi-tenant policy surface beyond masking/text rules and tenant-scoped management helpers
 - Add repository-native tenant isolation for audit and dead-letter query/persistence paths beyond the current built-in read/write/delete/replay and explicit by-id management support

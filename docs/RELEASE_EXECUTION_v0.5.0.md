@@ -20,7 +20,7 @@ python scripts/check_repo_hygiene.py
 ./mvnw -q -f samples/privacy-demo/pom.xml test
 ```
 
-Focused regression slices for the current draft scope:
+Focused regression slices for the published `v0.5.0` scope:
 
 ```bash
 ./mvnw -q -pl privacy-guard-spring-boot-starter -Dtest=PrivacyTenantAuditDeadLetterOperationsServiceTest,MicrometerPrivacyTenantAuditTelemetryTest test

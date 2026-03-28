@@ -19,7 +19,7 @@
 ## Current Status
 
 - Latest published project release: `v0.5.0`
-- The sample is aligned with the current published multi-tenant work:
+- The sample is aligned with the published multi-tenant work in `v0.5.0`:
   - tenant-aware management flows go through `PrivacyTenantAuditManagementService`
   - tenant-specific webhook / email / receiver route overrides now prefer `privacy.guard.tenant.policies.<tenantId>.observability.dead-letter.alert.*`, while the legacy `alert.tenant.routes.*` path remains compatible
   - tenant policies can now also enable or disable logging / webhook / email delivery per tenant, and `/demo-tenants/policies` exposes those overrides directly

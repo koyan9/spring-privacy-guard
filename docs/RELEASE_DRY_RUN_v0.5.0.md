@@ -8,14 +8,14 @@ Release-preparation dry-run record for the published `v0.5.0` release.
 - Multi-tenant docs: `docs/MULTI_TENANT_GUIDE.md`, `docs/TENANT_OBSERVABILITY_GUIDE.md`
 - Sample docs: `samples/privacy-demo/README.md`
 - Release materials: `docs/releases/RELEASE_NOTES_v0.5.0.md`, `docs/GITHUB_RELEASE_COPY_v0.5.0.md`
-- Announcement drafts: `docs/RELEASE_ANNOUNCEMENT_v0.5.0.md`, `docs/RELEASE_ANNOUNCEMENT_v0.5.0.zh-CN.md`
+- Release announcements: `docs/RELEASE_ANNOUNCEMENT_v0.5.0.md`, `docs/RELEASE_ANNOUNCEMENT_v0.5.0.zh-CN.md`
 - Release workflow: `.github/workflows/release.yml`
 
 ## Checklist Result
 
 ### Code & Tests
 
-- [x] `mvnw.cmd -q install` passes locally for the current draft release candidate
+- [x] `mvnw.cmd -q install` passes locally for the published `v0.5.0` release baseline
 - [x] focused starter tests for tenant alert route, delivery, monitoring, and by-id dead-letter management pass locally
 - [x] focused sample tests for policy/observability views and by-id dead-letter flows pass locally
 
@@ -25,9 +25,9 @@ Release-preparation dry-run record for the published `v0.5.0` release.
 - [x] `README.zh-CN.md` updated where needed
 - [x] `samples/privacy-demo/README.md` updated
 - [x] `CHANGELOG.md` updated
-- [x] draft release notes prepared in `docs/releases/RELEASE_NOTES_v0.5.0.md`
-- [x] draft execution guide, runbook, and GitHub release copy prepared for `v0.5.0`
-- [x] draft release announcement prepared in both English and zh-CN for `v0.5.0`
+- [x] release notes finalized in `docs/releases/RELEASE_NOTES_v0.5.0.md`
+- [x] execution guide, runbook, and GitHub release copy finalized for `v0.5.0`
+- [x] release announcement finalized in both English and zh-CN for `v0.5.0`
 
 ### Release Content
 
@@ -38,7 +38,7 @@ Release-preparation dry-run record for the published `v0.5.0` release.
 
 ## Notes
 
-- The draft `v0.5.0` scope consolidates the post-`v0.4.0` tenant alert policy expansion work and the final by-id tenant-native dead-letter management path.
+- The published `v0.5.0` scope consolidates the post-`v0.4.0` tenant alert policy expansion work and the final by-id tenant-native dead-letter management path.
 - Final release validation should explicitly confirm that the sample policy view, tenant alerting membership list, and by-id write-path telemetry match the documented expectations.
 - Local draft validation was completed on 2026-03-28 with:
   - `mvnw.cmd -q install`

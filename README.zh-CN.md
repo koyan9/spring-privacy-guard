@@ -19,13 +19,13 @@
 
 - 最新已发布版本：`v0.5.0`
 - 当前分支版本：`0.5.0`
-- `v0.5.0` 之后的当前重点：补齐更完整的生产 rollout 指南，并为下一轮 tenant policy / repository-native 能力扩展与后续发布周期做准备
+- 当前维护状态到 `v0.5.0` 为止；`docs/ROADMAP.md` 仅保留为历史规划归档
 - 本轮开发周期刚完成：
 -  单条 dead-letter `lookup / delete / replay` 的 tenant-native 管理闭环
 -  `deleteById` / `replayById` 的 native capability flag 与独立 write-path telemetry
 -  stable tenant alert route / delivery / monitoring policy resolver
 -  sample policy / observability 视图对 effective tenant alert state 的直接展示
-- 当前进度建议优先阅读：已完成与未发布工作看 `CHANGELOG.md`，下一步优先级看 `docs/ROADMAP.md`，文档总览看 `docs/INDEX.md`
+- 当前状态建议优先阅读：已发布能力看 `CHANGELOG.md`，文档总览看 `docs/INDEX.md`，历史规划上下文看 `docs/ROADMAP.md`
 
 ## 模块说明
 
@@ -62,7 +62,7 @@
 <dependency>
     <groupId>io.github.koyan9</groupId>
     <artifactId>spring-privacy-guard-spring-boot-starter</artifactId>
-    <version>0.4.0</version>
+    <version>0.5.0</version>
 </dependency>
 ```
 

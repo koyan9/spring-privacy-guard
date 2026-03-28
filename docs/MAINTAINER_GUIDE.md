@@ -21,8 +21,8 @@ This guide is for maintainers responsible for releases, triage, and repository h
 
 - Latest published release: `v0.5.0`
 - Current branch version: `0.5.0`
-- Current unreleased implementation progress is tracked in `CHANGELOG.md`
-- Current next-work priorities are tracked in `docs/ROADMAP.md`
+- Current published implementation history is tracked in `CHANGELOG.md`
+- `docs/ROADMAP.md` is retained only as archived planning context after `v0.5.0`
 - Current published release materials now live under the `v0.5.0` filenames in `docs/` and `docs/releases/`
 - When maintainers change that status, update `README.md`, `README.zh-CN.md`, `docs/INDEX.md`, and sample docs together
 

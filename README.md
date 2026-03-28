@@ -19,9 +19,9 @@ A Spring Boot starter for masking sensitive data, sanitizing logs, tracing priva
 
 - Latest published release: `v0.5.0`
 - Current branch version: `0.5.0`
-- Current next-work focus after `v0.5.0`: broader production rollout guides, the next iteration of tenant policy surface, and the next versioned release cycle setup
+- Active maintenance currently stops at `v0.5.0`; `docs/ROADMAP.md` is retained only as an archive of historical planning notes.
 - Newly completed in the current development cycle: tenant-native single-entry dead-letter delete / replay, dedicated by-id capability flags and write-path telemetry, stable tenant alert route / delivery / monitoring policy resolution, and expanded sample policy / observability visibility
-- Best sources for current progress: `CHANGELOG.md` for completed/unreleased work, `docs/ROADMAP.md` for next priorities, and `docs/INDEX.md` for the doc map
+- Best sources for current project status: `CHANGELOG.md` for shipped changes, `docs/INDEX.md` for the doc map, and `docs/ROADMAP.md` for archived planning context
 
 ## Modules
 
@@ -53,7 +53,7 @@ Add the starter:
 <dependency>
     <groupId>io.github.koyan9</groupId>
     <artifactId>spring-privacy-guard-spring-boot-starter</artifactId>
-    <version>0.4.0</version>
+    <version>0.5.0</version>
 </dependency>
 ```
 
@@ -87,7 +87,7 @@ Recommended quick-start paths:
 - Multi-tenant integration: read `docs/MULTI_TENANT_GUIDE.md`
 - Tenant observability, health, and alerting: read `docs/TENANT_OBSERVABILITY_GUIDE.md`
 - Runnable demo, receiver verification, and multi-instance rehearsal: read `samples/privacy-demo/README.md`
-- Current unreleased progress and what is landing next: read `CHANGELOG.md` and `docs/ROADMAP.md`
+- Published release scope and archived planning context: read `CHANGELOG.md`, `docs/INDEX.md`, and `docs/ROADMAP.md`
 
 ## Key Config
 
