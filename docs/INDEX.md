@@ -11,6 +11,7 @@
 - Tenant adoption playbook: `docs/TENANT_ADOPTION_PLAYBOOK.md`
 - Tenant observability guide: `docs/TENANT_OBSERVABILITY_GUIDE.md`
 - Maintainer guide: `docs/MAINTAINER_GUIDE.md`
+- Release process: `docs/RELEASE_PROCESS.md`
 - Logic walkthrough: `docs/LOGIC_WALKTHROUGH.md`
 - Changelog: `CHANGELOG.md`
 - Current published release notes: `docs/releases/RELEASE_NOTES_v0.5.0.md`
@@ -21,6 +22,7 @@
 ## Current Release Docs
 
 - Release ops checklist: `docs/RELEASE_CHECKLIST.md`
+- Maven Central release process: `docs/RELEASE_PROCESS.md`
 - Current published release notes: `docs/releases/RELEASE_NOTES_v0.5.0.md`
 - Current published release execution guide: `docs/RELEASE_EXECUTION_v0.5.0.md`
 - Current published release runbook: `docs/RELEASE_RUNBOOK_v0.5.0.md`
@@ -85,6 +87,7 @@
 
 - Roadmap: `docs/ROADMAP.md`
 - Release checklist: `docs/RELEASE_CHECKLIST.md`
+- Release process: `docs/RELEASE_PROCESS.md`
 - Published release notes: `docs/releases/RELEASE_NOTES_v0.5.0.md`
 - Published release execution guide: `docs/RELEASE_EXECUTION_v0.5.0.md`
 - Published release runbook: `docs/RELEASE_RUNBOOK_v0.5.0.md`

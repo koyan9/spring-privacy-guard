@@ -9,6 +9,7 @@ This guide is for maintainers responsible for releases, triage, and repository h
 - `SUPPORT.md`
 - `docs/GITHUB_LABELS.md`
 - `docs/RELEASE_CHECKLIST.md`
+- `docs/RELEASE_PROCESS.md`
 - `docs/RELEASE_EXECUTION_v0.5.0.md`
 - `docs/RELEASE_RUNBOOK_v0.5.0.md`
 - `docs/releases/RELEASE_NOTES_v0.5.0.md`
@@ -36,14 +37,17 @@ This guide is for maintainers responsible for releases, triage, and repository h
 ## Release Workflow
 
 - Follow `docs/RELEASE_CHECKLIST.md` before tagging.
+- Use `docs/RELEASE_PROCESS.md` for Maven Central prerequisites, local settings, and publish commands.
 - Use the latest published versioned execution guide, currently `docs/RELEASE_EXECUTION_v0.5.0.md`, as the step-by-step template until a newer guide is added.
 - Validate `docs/releases/RELEASE_NOTES_<tag>.md` before triggering the release workflow.
 - Run `python scripts/check_repo_hygiene.py` before publishing.
+- Run `./mvnw -q -Pcentral-publish -DskipTests verify` before any real Maven Central deploy attempt.
 
 ## Release Ops
 
 - Confirm the GitHub release exists for the tag and the body matches `docs/releases/RELEASE_NOTES_<tag>.md`.
 - Verify uploaded artifacts include the core and starter jars.
+- For Maven Central publication, confirm direct artifact URLs return `200 OK` before treating the publish as complete.
 - Check CI runs are green for the release commit.
 - If a release must be pulled, delete the GitHub release first, then follow the rollback steps in the matching `docs/RELEASE_EXECUTION_<tag>.md`.
 
@@ -52,6 +56,7 @@ This guide is for maintainers responsible for releases, triage, and repository h
 - **How do I create a release tag?** Follow the latest published execution guide, currently `docs/RELEASE_EXECUTION_v0.5.0.md`, and tag `vX.Y.Z`.
 - **Which workflow inputs do I use?** Use `tag`, `release_name`, and `prerelease` as documented in `.github/workflows/release.yml`.
 - **Where should release notes live?** Put them in `docs/releases/RELEASE_NOTES_<tag>.md` and update `CHANGELOG.md`.
+- **How do I publish to Maven Central?** Follow `docs/RELEASE_PROCESS.md` and use the `central-publish` Maven profile with a local `settings.xml` entry whose server id is `central`.
 - **How do I roll back a bad release?** Remove the GitHub release, delete the tag, and re-run the release process after the fix.
 
 ## Versioning & Tags
@@ -70,6 +75,7 @@ This guide is for maintainers responsible for releases, triage, and repository h
 - CI runs `python scripts/check_repo_hygiene.py --ci` before tests.
 - Keep GitHub Actions pinned to Node 24-ready versions to avoid runner deprecation failures during CI or release execution.
 - Keep `.editorconfig` and `.gitattributes` aligned with repo conventions.
+- Do not keep plaintext Central Portal tokens or `gpg.passphrase` values in repository files.
 - Fix trailing whitespace before merging (run `git diff --check`).
 
 ## Samples and Validation

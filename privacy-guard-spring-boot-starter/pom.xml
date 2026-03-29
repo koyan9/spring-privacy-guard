@@ -16,6 +16,8 @@
 
     <artifactId>spring-privacy-guard-spring-boot-starter</artifactId>
     <packaging>jar</packaging>
+    <name>spring-privacy-guard-spring-boot-starter</name>
+    <description>Spring Boot starter for privacy-safe JSON masking, log sanitization, audit persistence, dead-letter handling, and alert delivery.</description>
 
     <dependencies>
         <dependency>
@@ -111,5 +113,4 @@
         </plugins>
     </build>
 </project>
-
 

@@ -16,6 +16,8 @@
 
     <artifactId>spring-privacy-guard-core</artifactId>
     <packaging>jar</packaging>
+    <name>spring-privacy-guard-core</name>
+    <description>Core masking annotations, sensitive types, text sanitization, and privacy SPI contracts for spring-privacy-guard.</description>
 
     <dependencies>
         <dependency>
