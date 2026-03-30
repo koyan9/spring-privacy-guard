@@ -40,7 +40,7 @@
   - the sample now includes a PostgreSQL + Redis production-like rollout recipe with two-node overlays and verification helpers
 - Recommended doc path for this sample:
   - project status and progress: `../../CHANGELOG.md`
-  - next development priorities: `../../docs/ROADMAP.md`
+  - archived planning context: `../../docs/ROADMAP.md`
   - tenant integration details: `../../docs/MULTI_TENANT_GUIDE.md`
   - tenant observability and rollout checks: `../../docs/TENANT_OBSERVABILITY_GUIDE.md`
 

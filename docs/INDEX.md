@@ -119,5 +119,5 @@
 
 1. Read `docs/RELEASE_CHECKLIST.md`
 2. Use `docs/releases/RELEASE_NOTES_v0.5.0.md` as the latest published release reference
-3. Reuse `docs/RELEASE_EXECUTION_v0.5.0.md` and `docs/RELEASE_RUNBOOK_v0.5.0.md` as the latest published reference when preparing the next versioned release
-4. Reuse the `v0.5.0` announcement files and `docs/GITHUB_RELEASE_COPY_v0.5.0.md` as the published baseline release copy
+3. Reuse `docs/RELEASE_EXECUTION_v0.5.0.md` and `docs/RELEASE_RUNBOOK_v0.5.0.md` as the published historical operator reference for `v0.5.0`
+4. Reuse the `v0.5.0` announcement files and `docs/GITHUB_RELEASE_COPY_v0.5.0.md` as the published baseline release copy archive

@@ -647,7 +647,7 @@ Recent release-readiness and post-release polish:
 9. Tenant operational telemetry for alert transitions, tenant delivery outcomes, and receiver route verification failures
 10. PostgreSQL + Redis production-like sample profiles, compose recipe, and verification scripts
 
-Post-release themes and longer-term follow-up stay in `docs/ROADMAP.md`.
+Historical planning context remains archived in `docs/ROADMAP.md`.
 
 ## Project Docs
 

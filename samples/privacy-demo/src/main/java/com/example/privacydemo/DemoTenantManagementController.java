@@ -33,6 +33,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -594,16 +595,51 @@ class DemoTenantManagementController {
     }
 
     private List<String> effectiveTenantAlertTenantIds() {
-        return io.github.koyan9.privacy.autoconfigure.PrivacyGuardDeadLetterObservabilityAutoConfiguration.resolveTenantAlertTenantIds(
-                properties,
-                alertMonitoringPolicyResolver()
-        );
+        LinkedHashSet<String> tenantIds = new LinkedHashSet<>();
+        List<String> configuredTenantIds = properties.getAudit().getDeadLetter().getObservability().getAlert().getTenant().getTenantIds();
+        tenantIds.addAll(configuredTenantIds);
+        boolean hasExplicitTenantIds = !tenantIds.isEmpty();
+        if (!hasExplicitTenantIds) {
+            tenantIds.addAll(resolveTenantMetricIds());
+        }
+        LinkedHashSet<String> candidates = new LinkedHashSet<>(tenantIds);
+        candidates.addAll(resolveTenantMetricIds());
+        candidates.addAll(properties.getAudit().getDeadLetter().getObservability().getAlert().getTenant().getRoutes().keySet());
+        PrivacyTenantDeadLetterAlertMonitoringPolicyResolver monitoringPolicyResolver = alertMonitoringPolicyResolver();
+        for (String candidate : candidates) {
+            if (candidate == null || candidate.isBlank()) {
+                continue;
+            }
+            PrivacyTenantDeadLetterAlertMonitoringPolicy policy = monitoringPolicyResolver.resolve(candidate);
+            if (policy == null || !policy.hasOverrides()) {
+                continue;
+            }
+            if (policy.resolveEnabled(!hasExplicitTenantIds || tenantIds.contains(candidate))) {
+                tenantIds.add(candidate);
+            } else {
+                tenantIds.remove(candidate);
+            }
+        }
+        tenantIds.removeIf(value -> value == null || value.isBlank());
+        return List.copyOf(tenantIds);
     }
 
     private List<String> tenantAlertRouteTenantIds() {
-        java.util.LinkedHashSet<String> tenantIds = new java.util.LinkedHashSet<>(effectiveTenantAlertTenantIds());
+        LinkedHashSet<String> tenantIds = new LinkedHashSet<>(effectiveTenantAlertTenantIds());
         tenantIds.addAll(properties.getTenant().getPolicies().keySet());
         tenantIds.addAll(properties.getAudit().getDeadLetter().getObservability().getAlert().getTenant().getRoutes().keySet());
+        tenantIds.removeIf(value -> value == null || value.isBlank());
+        return List.copyOf(tenantIds);
+    }
+
+    private List<String> resolveTenantMetricIds() {
+        LinkedHashSet<String> tenantIds = new LinkedHashSet<>();
+        tenantIds.addAll(properties.getAudit().getDeadLetter().getObservability().getMetrics().getTenantIds());
+        String defaultTenant = properties.getTenant().getDefaultTenant();
+        if (defaultTenant != null && !defaultTenant.isBlank()) {
+            tenantIds.add(defaultTenant.trim());
+        }
+        tenantIds.addAll(properties.getTenant().getPolicies().keySet());
         tenantIds.removeIf(value -> value == null || value.isBlank());
         return List.copyOf(tenantIds);
     }

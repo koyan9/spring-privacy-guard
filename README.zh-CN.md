@@ -94,7 +94,7 @@ privacy:
 - 多租户接入：`docs/MULTI_TENANT_GUIDE.md`
 - 租户可观测性与 rollout：`docs/TENANT_OBSERVABILITY_GUIDE.md`
 - 可运行 sample 与多实例演练：`samples/privacy-demo/README.md`
-- 当前进度与下一步计划：`CHANGELOG.md`、`docs/ROADMAP.md`
+- 当前进度与历史规划归档：`CHANGELOG.md`、`docs/ROADMAP.md`
 
 ## 常用配置
 
